@@ -105,14 +105,18 @@ const Food = () => {
   });
   const [shoppingList, setShoppingList] = useState([]);
   const [weightHistory, setWeightHistory] = useState([]);
+  const [availableLabels, setAvailableLabels] = useState([]);
   const [showRecipeModal, setShowRecipeModal] = useState(false);
   const [showWeightModal, setShowWeightModal] = useState(false);
   const [showWeightHistory, setShowWeightHistory] = useState(false);
   const [showShoppingModal, setShowShoppingModal] = useState(false);
   const [showShoppingList, setShowShoppingList] = useState(false);
+  const [showLabelsModal, setShowLabelsModal] = useState(false);
   const [currentMealType, setCurrentMealType] = useState('breakfast');
   const [editingRecipe, setEditingRecipe] = useState(null);
   const [editingItem, setEditingItem] = useState(null);
+  const [selectedLabels, setSelectedLabels] = useState([]);
+  const [newLabelInput, setNewLabelInput] = useState('');
   const [saving, setSaving] = useState(false);
 
   const { register: registerRecipe, handleSubmit: handleSubmitRecipe, reset: resetRecipe, formState: { errors: recipeErrors } } = useForm();
@@ -145,6 +149,7 @@ const Food = () => {
         setMealPlan(data.mealPlan || { breakfast: [], snacks: [], meal: [], dinner: [] });
         setShoppingList(data.shoppingList || []);
         setWeightHistory(data.weightHistory || []);
+        setAvailableLabels(data.availableLabels || []);
       }
     } catch (error) {
       console.error('Failed to load food data:', error);
@@ -283,7 +288,9 @@ const Food = () => {
 
   const handleAddShoppingItem = async (data) => {
     const newItem = {
-      ...data,
+      title: data.title,
+      label1: selectedLabels[0] || '',
+      label2: selectedLabels[1] || '',
       purchased: false,
       id: editingItem?.id || Date.now().toString()
     };
@@ -300,9 +307,7 @@ const Food = () => {
     setShoppingList(updatedList);
     await saveFoodData({ shoppingList: updatedList });
     toast.success(editingItem ? 'Item updated' : 'Item added');
-    setShowShoppingModal(false);
-    setEditingItem(null);
-    resetItem();
+    handleCloseShoppingModal();
   };
 
   const handleTogglePurchased = async (id) => {
@@ -325,6 +330,51 @@ const Food = () => {
     setShoppingList(updatedList);
     await saveFoodData({ shoppingList: updatedList });
     toast.success('Shopping list reset');
+  };
+
+  const handleCloseShoppingModal = () => {
+    setShowShoppingModal(false);
+    setEditingItem(null);
+    setSelectedLabels([]);
+    resetItem({ title: '' });
+  };
+
+  const handleAddLabel = async () => {
+    const trimmedLabel = newLabelInput.trim();
+    if (!trimmedLabel) {
+      toast.error('Label name is required');
+      return;
+    }
+
+    if (availableLabels.includes(trimmedLabel)) {
+      toast.error('Label already exists');
+      return;
+    }
+
+    const updatedLabels = [...availableLabels, trimmedLabel];
+    setAvailableLabels(updatedLabels);
+    await saveFoodData({ availableLabels: updatedLabels });
+    setNewLabelInput('');
+    toast.success('Label added');
+  };
+
+  const handleDeleteLabel = async (labelToDelete) => {
+    const updatedLabels = availableLabels.filter(label => label !== labelToDelete);
+    setAvailableLabels(updatedLabels);
+    await saveFoodData({ availableLabels: updatedLabels });
+    toast.success('Label deleted');
+  };
+
+  const handleToggleLabel = (label) => {
+    if (selectedLabels.includes(label)) {
+      setSelectedLabels(selectedLabels.filter(l => l !== label));
+    } else {
+      if (selectedLabels.length >= 2) {
+        toast.error('You can only select up to 2 labels');
+        return;
+      }
+      setSelectedLabels([...selectedLabels, label]);
+    }
   };
 
   const currentWeight = weightHistory.length > 0 ? weightHistory[0].weight : null;
@@ -459,7 +509,7 @@ const Food = () => {
       <div className="card">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Shopping List</h2>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             {shoppingList.length > 0 && (
               <>
                 <button
@@ -489,9 +539,16 @@ const Food = () => {
               </>
             )}
             <button
+              onClick={() => setShowLabelsModal(true)}
+              className="text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 text-sm font-medium"
+            >
+              Manage Labels
+            </button>
+            <button
               onClick={() => {
                 setEditingItem(null);
-                resetItem();
+                setSelectedLabels([]);
+                resetItem({ title: '' });
                 setShowShoppingModal(true);
               }}
               className="btn-primary text-sm py-1 px-3"
@@ -523,7 +580,9 @@ const Food = () => {
                         onTogglePurchased={handleTogglePurchased}
                         onEdit={(item) => {
                           setEditingItem(item);
-                          resetItem(item);
+                          resetItem({ title: item.title });
+                          const labels = [item.label1, item.label2].filter(Boolean);
+                          setSelectedLabels(labels);
                           setShowShoppingModal(true);
                         }}
                         onDelete={handleDeleteShoppingItem}
@@ -654,7 +713,7 @@ const Food = () => {
               <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">
                 {editingItem ? 'Edit Item' : 'Add Item'}
               </h3>
-              <button onClick={() => setShowShoppingModal(false)} className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
+              <button onClick={handleCloseShoppingModal} className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
                 <X className="w-6 h-6" />
               </button>
             </div>
@@ -670,17 +729,51 @@ const Food = () => {
               </div>
 
               <div>
-                <label className="label">Label 1 (optional)</label>
-                <input type="text" className="input-field" {...registerItem('label1')} />
-              </div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="label mb-0">Labels (select up to 2)</label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowLabelsModal(true);
+                    }}
+                    className="text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 text-xs font-medium"
+                  >
+                    Manage Labels
+                  </button>
+                </div>
 
-              <div>
-                <label className="label">Label 2 (optional)</label>
-                <input type="text" className="input-field" {...registerItem('label2')} />
+                {availableLabels.length === 0 ? (
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    No labels available. Click "Manage Labels" to create some.
+                  </p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {availableLabels.map((label) => (
+                      <button
+                        key={label}
+                        type="button"
+                        onClick={() => handleToggleLabel(label)}
+                        className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                          selectedLabels.includes(label)
+                            ? 'bg-primary-600 text-white dark:bg-primary-500'
+                            : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {selectedLabels.length > 0 && (
+                  <div className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                    Selected: {selectedLabels.join(', ')}
+                  </div>
+                )}
               </div>
 
               <div className="flex gap-3">
-                <button type="button" onClick={() => setShowShoppingModal(false)} className="btn-secondary flex-1">
+                <button type="button" onClick={handleCloseShoppingModal} className="btn-secondary flex-1">
                   Cancel
                 </button>
                 <button type="submit" className="btn-primary flex-1">
@@ -688,6 +781,72 @@ const Food = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Labels Management Modal */}
+      {showLabelsModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg w-full max-w-md p-6 border border-transparent dark:border-gray-700">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">Manage Labels</h3>
+              <button onClick={() => setShowLabelsModal(false)} className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={newLabelInput}
+                  onChange={(e) => setNewLabelInput(e.target.value)}
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddLabel();
+                    }
+                  }}
+                  placeholder="Enter label name"
+                  className="input-field flex-1"
+                />
+                <button
+                  onClick={handleAddLabel}
+                  className="btn-primary px-4"
+                >
+                  Add
+                </button>
+              </div>
+
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                {availableLabels.length === 0 ? (
+                  <p className="text-gray-400 dark:text-gray-500 text-center py-4">No labels yet</p>
+                ) : (
+                  availableLabels.map((label) => (
+                    <div
+                      key={label}
+                      className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700 rounded border border-gray-200 dark:border-gray-600"
+                    >
+                      <span className="text-gray-900 dark:text-gray-100">{label}</span>
+                      <button
+                        onClick={() => handleDeleteLabel(label)}
+                        className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <button
+                onClick={() => setShowLabelsModal(false)}
+                className="btn-secondary w-full"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

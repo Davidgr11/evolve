@@ -15,65 +15,59 @@ export const useTheme = () => {
 
 export const ThemeProvider = ({ children }) => {
   const { user } = useAuth();
-  const [theme, setTheme] = useState(() => {
-    // Load theme from localStorage immediately to prevent flash
-    const savedTheme = localStorage.getItem('theme');
-    return savedTheme || 'light';
-  });
+  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light');
+  const [colorTheme, setColorThemeState] = useState(() => localStorage.getItem('colorTheme') || 'blue');
 
-  // Apply theme class to document on mount and when theme changes
+  // Apply dark/light class
   useEffect(() => {
     if (theme === 'dark') {
       document.documentElement.classList.add('dark');
     } else {
       document.documentElement.classList.remove('dark');
     }
-    // Save to localStorage
     localStorage.setItem('theme', theme);
   }, [theme]);
 
-  // Load theme from Firestore when user logs in
+  // Apply color theme attribute
   useEffect(() => {
-    if (user) {
-      loadThemeFromFirestore();
-    }
+    document.documentElement.setAttribute('data-color-theme', colorTheme);
+    localStorage.setItem('colorTheme', colorTheme);
+  }, [colorTheme]);
+
+  // Load preferences from Firestore when user logs in
+  useEffect(() => {
+    if (user) loadFromFirestore();
   }, [user]);
 
-  const loadThemeFromFirestore = async () => {
+  const loadFromFirestore = async () => {
     try {
-      const settingsDoc = await getDoc(doc(db, `users/${user.uid}/settings`, 'profile'));
-      if (settingsDoc.exists() && settingsDoc.data().theme) {
-        const firestoreTheme = settingsDoc.data().theme;
-        // Only update if different from current theme
-        if (firestoreTheme !== theme) {
-          setTheme(firestoreTheme);
-        }
+      const snap = await getDoc(doc(db, `users/${user.uid}/settings`, 'profile'));
+      if (snap.exists()) {
+        const data = snap.data();
+        if (data.theme && data.theme !== theme) setTheme(data.theme);
+        if (data.colorTheme && data.colorTheme !== colorTheme) setColorThemeState(data.colorTheme);
       }
-    } catch (error) {
-      console.error('Failed to load theme from Firestore:', error);
+    } catch (err) {
+      console.error('Failed to load theme:', err);
     }
   };
 
   const toggleTheme = async () => {
     const newTheme = theme === 'light' ? 'dark' : 'light';
     setTheme(newTheme);
-
-    // Save to Firestore if user is logged in
     if (user) {
-      try {
-        await setDoc(doc(db, `users/${user.uid}/settings`, 'profile'), {
-          theme: newTheme
-        }, { merge: true });
-      } catch (error) {
-        console.error('Failed to save theme to Firestore:', error);
-      }
+      try { await setDoc(doc(db, `users/${user.uid}/settings`, 'profile'), { theme: newTheme }, { merge: true }); } catch {}
     }
   };
 
-  const value = {
-    theme,
-    toggleTheme
+  const setColorTheme = async (color) => {
+    setColorThemeState(color);
+    if (user) {
+      try { await setDoc(doc(db, `users/${user.uid}/settings`, 'profile'), { colorTheme: color }, { merge: true }); } catch {}
+    }
   };
+
+  const value = { theme, toggleTheme, colorTheme, setColorTheme };
 
   return (
     <ThemeContext.Provider value={value}>

@@ -1,321 +1,167 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { db, storage } from '../utils/firebase';
-import { collection, getDocs, doc, setDoc, deleteDoc, updateDoc, getDoc, writeBatch } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, deleteDoc, updateDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import imageCompression from 'browser-image-compression';
 import { useForm } from 'react-hook-form';
 import toast from 'react-hot-toast';
 import confetti from 'canvas-confetti';
-import { Plus, Edit, Trash2, X, Target, GripVertical } from 'lucide-react';
+import { Plus, Edit, Trash2, X, CheckCircle, TrendingUp, Sparkles, LogOut } from 'lucide-react';
+import { useTheme } from '../contexts/ThemeContext';
 import ImageUpload from '../components/ImageUpload';
 import ConfirmModal from '../components/ConfirmModal';
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  TouchSensor
-} from '@dnd-kit/core';
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  useSortable,
-  rectSortingStrategy
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
 
-// Sortable Goal Item Component
-const SortableGoalItem = ({ goal, index, editMode, onEdit, onDelete, isEditMode }) => {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging
-  } = useSortable({ id: goal.id });
+// --- Circular progress ring (SVG) ---
+const ProgressRing = ({ size, progress, isAccomplished }) => {
+  const sw = 4;
+  const r = (size - sw * 2) / 2;
+  const circ = 2 * Math.PI * r;
+  const offset = circ - (Math.min(100, progress) / 100) * circ;
+  const color = isAccomplished ? '#22c55e' : '#60a5fa';
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1
-  };
+  return (
+    <svg width={size} height={size} className="absolute inset-0" style={{ zIndex: 2 }}>
+      <circle
+        cx={size / 2} cy={size / 2} r={r}
+        fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth={sw}
+      />
+      <circle
+        cx={size / 2} cy={size / 2} r={r}
+        fill="none" stroke={color} strokeWidth={sw}
+        strokeDasharray={circ}
+        strokeDashoffset={isAccomplished ? 0 : offset}
+        strokeLinecap="round"
+        transform={`rotate(-90 ${size / 2} ${size / 2})`}
+        style={{ transition: 'stroke-dashoffset 1s ease' }}
+      />
+    </svg>
+  );
+};
 
-  // Dynamic grid pattern: creates a collage effect with variety on mobile and desktop
-  const getGridClass = () => {
-    const pattern = index % 6;
-    switch (pattern) {
-      case 0:
-        return 'col-span-1 row-span-1'; // Normal
-      case 1:
-        return 'col-span-2 row-span-1'; // Wide (both mobile and desktop)
-      case 2:
-        return 'col-span-1 row-span-1'; // Normal
-      case 3:
-        return 'col-span-1 row-span-2'; // Tall (both mobile and desktop)
-      case 4:
-        return 'col-span-1 row-span-1'; // Normal
-      case 5:
-        return 'col-span-2 row-span-2'; // Large (both mobile and desktop)
-      default:
-        return 'col-span-1 row-span-1';
-    }
-  };
+// --- Goal Circle ---
+const SIZES = [120, 152, 176];
 
-  const heightClass = () => {
-    const pattern = index % 6;
-    if (pattern === 3 || pattern === 5) {
-      return 'h-full'; // Tall items fill the grid cell
-    }
-    return 'h-40';
-  };
+const GoalCircle = ({ goal, index, onClick }) => {
+  const size = SIZES[index % 3];
+  const imgSize = size - 8;
+  const isAccomplished = goal.status === 'accomplished';
+  const isMeasurable = goal.type === 'measurable';
+  const progress = isMeasurable && goal.target > 0
+    ? Math.min(100, Math.round((goal.currentValue || 0) / goal.target * 100))
+    : isAccomplished ? 100 : 0;
+  const delay = `${(index * 0.55) % 3.5}s`;
 
   return (
     <div
-      ref={setNodeRef}
-      style={style}
-      className={`relative group ${getGridClass()}`}
+      className="goal-circle cursor-pointer flex-shrink-0 relative select-none"
+      style={{ width: size, height: size, animationDelay: delay }}
+      onClick={() => onClick(goal)}
     >
-      <div className="relative h-full">
-        <img
-          src={goal.imageUrl}
-          alt={goal.description || 'Goal image'}
-          className={`w-full ${heightClass()} object-cover rounded-lg ${
-            goal.status === 'accomplished' ? 'opacity-75' : ''
-          }`}
-        />
-        {goal.status === 'accomplished' && (
-          <div className="absolute inset-0 bg-green-500 bg-opacity-30 dark:bg-green-600 dark:bg-opacity-40 rounded-lg"></div>
-        )}
+      <ProgressRing size={size} progress={progress} isAccomplished={isAccomplished} />
 
-        {/* Drag Handle - Visible in edit mode */}
-        {editMode && (
-          <div
-            {...attributes}
-            {...listeners}
-            className="absolute top-2 left-2 bg-gray-800 dark:bg-gray-700 bg-opacity-75 text-white p-2 rounded-lg cursor-grab active:cursor-grabbing hover:bg-opacity-90 transition-opacity touch-none"
-          >
-            <GripVertical className="w-5 h-5" />
-          </div>
-        )}
-      </div>
+      <img
+        src={goal.imageUrl}
+        alt={goal.description || 'Goal'}
+        className="absolute rounded-full object-cover shadow-md"
+        style={{ top: 4, left: 4, width: imgSize, height: imgSize, zIndex: 1 }}
+        draggable={false}
+      />
 
-      {/* Description on hover */}
-      {goal.description && !editMode && (
-        <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-75 transition-all rounded-lg flex items-center justify-center p-2">
-          <p className="text-white text-sm opacity-0 group-hover:opacity-100 transition-opacity text-center">
-            {goal.description}
-          </p>
+      {isAccomplished && (
+        <div
+          className="absolute rounded-full bg-green-500/40 flex items-center justify-center"
+          style={{ top: 4, left: 4, width: imgSize, height: imgSize, zIndex: 3 }}
+        >
+          <CheckCircle
+            className="text-white drop-shadow"
+            style={{ width: size * 0.28, height: size * 0.28 }}
+          />
         </div>
       )}
 
-      {/* Edit buttons */}
-      {editMode && (
-        <div className="absolute top-2 right-2 flex gap-1">
-          <button
-            onClick={() => onEdit(goal)}
-            className="bg-blue-500 hover:bg-blue-600 text-white p-1.5 rounded-full shadow-lg"
-          >
-            <Edit className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => onDelete(goal)}
-            className="bg-red-500 hover:bg-red-600 text-white p-1.5 rounded-full shadow-lg"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
+      {isMeasurable && !isAccomplished && progress > 0 && (
+        <div
+          className="absolute bottom-0 right-0 bg-blue-500 text-white rounded-full flex items-center justify-center font-bold shadow"
+          style={{ width: 22, height: 22, fontSize: 8, zIndex: 4 }}
+        >
+          {progress}%
         </div>
       )}
     </div>
   );
 };
 
+// --- Main Goals Page ---
+const COLOR_THEMES = [
+  { id: 'blue',   label: 'Blue',   bg: '#3b82f6', appBg: '#c2dce8' },
+  { id: 'purple', label: 'Purple', bg: '#8b5cf6', appBg: '#dcd4f0' },
+  { id: 'green',  label: 'Green',  bg: '#22c55e', appBg: '#c2e8d0' },
+];
+
 const Goals = () => {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+  const { colorTheme, setColorTheme } = useTheme();
   const [goals, setGoals] = useState([]);
   const [showGoalModal, setShowGoalModal] = useState(false);
-  const [editMode, setEditMode] = useState(false);
   const [editingGoal, setEditingGoal] = useState(null);
   const [uploading, setUploading] = useState(false);
-  const [completedCount, setCompletedCount] = useState(0);
   const [deleteConfirm, setDeleteConfirm] = useState({ isOpen: false, goal: null });
-  const [yearlyVersion, setYearlyVersion] = useState('');
-  const [showYearlyVersionModal, setShowYearlyVersionModal] = useState(false);
-  const [allYearlyVersions, setAllYearlyVersions] = useState([]);
-  const [showHistoryModal, setShowHistoryModal] = useState(false);
-  const [deleteVersionConfirm, setDeleteVersionConfirm] = useState({ isOpen: false, year: null });
+  const [selectedGoal, setSelectedGoal] = useState(null);
+  const [goalType, setGoalType] = useState('binary');
+  const [claudeLoading, setClaudeLoading] = useState(false);
+  const [claudeRec, setClaudeRec] = useState('');
+  const [progressInput, setProgressInput] = useState('');
+  const [savingProgress, setSavingProgress] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [profilePhoto, setProfilePhoto] = useState(null);
 
-  const { register, handleSubmit, reset, formState: { errors } } = useForm();
-  const { register: registerVersion, handleSubmit: handleSubmitVersion, reset: resetVersion } = useForm();
+  const { register, handleSubmit, reset, setValue } = useForm();
 
-  // Drag and drop sensors with mobile support
-  const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(TouchSensor, {
-      activationConstraint: {
-        delay: 250,
-        tolerance: 5
-      }
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates
-    })
-  );
+  const completedCount = goals.filter(g => g.status === 'accomplished').length;
 
   useEffect(() => {
-    loadGoals();
-    loadYearlyVersion();
-    loadAllYearlyVersions();
+    if (user) {
+      loadGoals();
+      loadProfilePhoto();
+    }
   }, [user]);
+
+  const loadProfilePhoto = async () => {
+    try {
+      const snap = await getDocs(collection(db, `users/${user.uid}/settings`));
+      snap.docs.forEach(d => { if (d.id === 'profile' && d.data().photoUrl) setProfilePhoto(d.data().photoUrl); });
+    } catch {}
+  };
+
+  // Reset Claude recommendation when switching goal
+  useEffect(() => {
+    setClaudeRec('');
+    if (selectedGoal) {
+      setProgressInput(String(selectedGoal.currentValue || 0));
+    }
+  }, [selectedGoal?.id]);
 
   const loadGoals = async () => {
     try {
-      const goalsRef = collection(db, `users/${user.uid}/goals`);
-      const snapshot = await getDocs(goalsRef);
-      const goalsData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-
-      // Sort by order field (if it exists), otherwise by creation date
+      const snapshot = await getDocs(collection(db, `users/${user.uid}/goals`));
+      const goalsData = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
       goalsData.sort((a, b) => {
-        if (a.order !== undefined && b.order !== undefined) {
-          return a.order - b.order;
-        }
+        if (a.order !== undefined && b.order !== undefined) return a.order - b.order;
         return new Date(a.createdAt || 0) - new Date(b.createdAt || 0);
       });
-
       setGoals(goalsData);
-
-      // Count completed goals
-      const completed = goalsData.filter(g => g.status === 'accomplished').length;
-      setCompletedCount(completed);
-    } catch (error) {
-      console.error('Failed to load goals:', error);
-    }
-  };
-
-  const loadYearlyVersion = async () => {
-    try {
-      const currentYear = new Date().getFullYear();
-      const versionDoc = await getDoc(doc(db, `users/${user.uid}/yearlyVersions`, currentYear.toString()));
-      if (versionDoc.exists()) {
-        setYearlyVersion(versionDoc.data().versionText || '');
-      }
-    } catch (error) {
-      console.error('Failed to load yearly version:', error);
-    }
-  };
-
-  const loadAllYearlyVersions = async () => {
-    try {
-      const versionsRef = collection(db, `users/${user.uid}/yearlyVersions`);
-      const snapshot = await getDocs(versionsRef);
-      const versionsData = snapshot.docs.map(doc => ({
-        year: doc.id,
-        versionText: doc.data().versionText
-      })).sort((a, b) => parseInt(b.year) - parseInt(a.year)); // Sort by year descending
-      setAllYearlyVersions(versionsData);
-    } catch (error) {
-      console.error('Failed to load all yearly versions:', error);
-    }
-  };
-
-  const handleSaveYearlyVersion = async (data) => {
-    try {
-      const year = data.year || new Date().getFullYear().toString();
-      await setDoc(doc(db, `users/${user.uid}/yearlyVersions`, year), {
-        versionText: data.versionText,
-        updatedAt: new Date().toISOString()
-      });
-
-      // If it's the current year, update the state
-      if (year === new Date().getFullYear().toString()) {
-        setYearlyVersion(data.versionText);
-      }
-
-      toast.success('Yearly version saved');
-      setShowYearlyVersionModal(false);
-      loadAllYearlyVersions(); // Reload all versions
-    } catch (error) {
-      toast.error('Failed to save yearly version');
-      console.error(error);
-    }
-  };
-
-  const handleDeleteYearlyVersion = async (year) => {
-    try {
-      await deleteDoc(doc(db, `users/${user.uid}/yearlyVersions`, year));
-
-      // If it's the current year, clear the state
-      if (year === new Date().getFullYear().toString()) {
-        setYearlyVersion('');
-      }
-
-      toast.success('Yearly version deleted');
-      loadAllYearlyVersions(); // Reload all versions
-      setDeleteVersionConfirm({ isOpen: false, year: null });
-    } catch (error) {
-      toast.error('Failed to delete yearly version');
-      console.error(error);
-    }
-  };
-
-  const handleDragEnd = async (event) => {
-    const { active, over } = event;
-
-    if (over && active.id !== over.id) {
-      const oldIndex = goals.findIndex(goal => goal.id === active.id);
-      const newIndex = goals.findIndex(goal => goal.id === over.id);
-
-      const reorderedGoals = arrayMove(goals, oldIndex, newIndex);
-      setGoals(reorderedGoals);
-
-      // Update order in Firestore
-      try {
-        const batch = writeBatch(db);
-        reorderedGoals.forEach((goal, index) => {
-          const goalRef = doc(db, `users/${user.uid}/goals`, goal.id);
-          batch.update(goalRef, { order: index });
-        });
-        await batch.commit();
-      } catch (error) {
-        console.error('Failed to update goal order:', error);
-        toast.error('Failed to save new order');
-        loadGoals(); // Reload to restore original order
-      }
+    } catch (err) {
+      console.error('Failed to load goals:', err);
     }
   };
 
   const triggerConfetti = () => {
-    const duration = 3 * 1000;
-    const animationEnd = Date.now() + duration;
-    const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 0 };
-
-    function randomInRange(min, max) {
-      return Math.random() * (max - min) + min;
-    }
-
-    const interval = setInterval(function() {
-      const timeLeft = animationEnd - Date.now();
-
-      if (timeLeft <= 0) {
-        return clearInterval(interval);
-      }
-
-      const particleCount = 50 * (timeLeft / duration);
-      confetti(Object.assign({}, defaults, {
-        particleCount,
-        origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 }
-      }));
-      confetti(Object.assign({}, defaults, {
-        particleCount,
-        origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 }
-      }));
+    const end = Date.now() + 3000;
+    const iv = setInterval(() => {
+      if (Date.now() > end) return clearInterval(iv);
+      const t = (end - Date.now()) / 3000;
+      confetti({ startVelocity: 30, spread: 360, ticks: 60, particleCount: 50 * t, origin: { x: Math.random(), y: Math.random() - 0.2 } });
     }, 250);
   };
 
@@ -324,132 +170,84 @@ const Goals = () => {
     const file = fileInput?.files?.[0];
 
     if (editingGoal) {
-      // Update existing goal
       try {
         setUploading(true);
         const wasExpecting = editingGoal.status === 'expecting';
-        const isNowAccomplished = data.status === 'accomplished';
-
         let imageUrl = editingGoal.imageUrl;
         let imagePath = editingGoal.imagePath;
 
-        // Check if user uploaded a new image
         if (file) {
-          if (file.size > 2 * 1024 * 1024) {
-            toast.error('Image must be less than 2MB');
-            setUploading(false);
-            return;
-          }
-
-          // Compress new image
-          const options = {
-            maxSizeMB: 1,
-            maxWidthOrHeight: 1024,
-            useWebWorker: true
-          };
-          const compressedFile = await imageCompression(file, options);
-
-          // Upload new image to Firebase Storage
-          const timestamp = Date.now();
-          const newImagePath = `users/${user.uid}/goals/${timestamp}_${file.name}`;
-          const storageRef = ref(storage, newImagePath);
-          await uploadBytes(storageRef, compressedFile);
-          const newImageUrl = await getDownloadURL(storageRef);
-
-          // Delete old image from storage
+          if (file.size > 2 * 1024 * 1024) { toast.error('Image must be < 2MB'); return; }
+          const compressed = await imageCompression(file, { maxSizeMB: 1, maxWidthOrHeight: 1024, useWebWorker: true });
+          const ts = Date.now();
+          const newPath = `users/${user.uid}/goals/${ts}_${file.name}`;
+          await uploadBytes(ref(storage, newPath), compressed);
+          imageUrl = await getDownloadURL(ref(storage, newPath));
           if (editingGoal.imagePath) {
-            try {
-              const oldImageRef = ref(storage, editingGoal.imagePath);
-              await deleteObject(oldImageRef);
-            } catch (error) {
-              console.error('Failed to delete old image:', error);
-              // Continue anyway, don't block the update
-            }
+            try { await deleteObject(ref(storage, editingGoal.imagePath)); } catch {}
           }
-
-          imageUrl = newImageUrl;
-          imagePath = newImagePath;
+          imagePath = newPath;
         }
 
+        const isMeasurable = goalType === 'measurable';
         await updateDoc(doc(db, `users/${user.uid}/goals`, editingGoal.id), {
           description: data.description,
           status: data.status,
+          type: goalType,
           imageUrl,
-          imagePath
+          imagePath,
+          ...(isMeasurable && { target: Number(data.target) || 0, unit: data.unit || '' }),
         });
 
-        // Trigger confetti if changed from expecting to accomplished
-        if (wasExpecting && isNowAccomplished) {
+        if (wasExpecting && data.status === 'accomplished') {
           triggerConfetti();
           toast.success('Goal accomplished! 🎉');
         } else {
           toast.success('Goal updated');
         }
-
+        closeGoalModal();
         loadGoals();
-        setShowGoalModal(false);
-        setEditingGoal(null);
-        reset();
-      } catch (error) {
+      } catch (err) {
         toast.error('Failed to update goal');
-        console.error(error);
+        console.error(err);
       } finally {
         setUploading(false);
       }
       return;
     }
 
-    if (!file) {
-      toast.error('Please select an image');
-      return;
-    }
-
-    if (goals.length >= 20) {
-      toast.error('Maximum 20 goals allowed');
-      return;
-    }
-
-    if (file.size > 2 * 1024 * 1024) {
-      toast.error('Image must be less than 2MB');
-      return;
-    }
+    // Create new
+    if (!file) { toast.error('Please select an image'); return; }
+    if (goals.length >= 20) { toast.error('Maximum 20 goals'); return; }
+    if (file.size > 2 * 1024 * 1024) { toast.error('Image must be < 2MB'); return; }
 
     setUploading(true);
-
     try {
-      // Compress image
-      const options = {
-        maxSizeMB: 1,
-        maxWidthOrHeight: 1024,
-        useWebWorker: true
-      };
-      const compressedFile = await imageCompression(file, options);
+      const compressed = await imageCompression(file, { maxSizeMB: 1, maxWidthOrHeight: 1024, useWebWorker: true });
+      const ts = Date.now();
+      const imagePath = `users/${user.uid}/goals/${ts}_${file.name}`;
+      await uploadBytes(ref(storage, imagePath), compressed);
+      const imageUrl = await getDownloadURL(ref(storage, imagePath));
 
-      // Upload to Firebase Storage
-      const timestamp = Date.now();
-      const imagePath = `users/${user.uid}/goals/${timestamp}_${file.name}`;
-      const storageRef = ref(storage, imagePath);
-      await uploadBytes(storageRef, compressedFile);
-      const imageUrl = await getDownloadURL(storageRef);
-
-      // Save to Firestore
-      const goalDoc = doc(db, `users/${user.uid}/goals`, `${timestamp}`);
-      await setDoc(goalDoc, {
+      const isMeasurable = goalType === 'measurable';
+      await setDoc(doc(db, `users/${user.uid}/goals`, `${ts}`), {
         imageUrl,
         imagePath,
         description: data.description || '',
-        status: data.status || 'expecting',
+        status: 'expecting',
+        type: goalType,
+        currentValue: 0,
         createdAt: new Date().toISOString(),
-        order: goals.length // Add to end of list
+        order: goals.length,
+        ...(isMeasurable && { target: Number(data.target) || 0, unit: data.unit || '' }),
       });
 
-      toast.success('Goal added successfully');
+      toast.success('Goal added!');
+      closeGoalModal();
       loadGoals();
-      setShowGoalModal(false);
-      reset();
-    } catch (error) {
+    } catch (err) {
       toast.error('Failed to add goal');
-      console.error(error);
+      console.error(err);
     } finally {
       setUploading(false);
     }
@@ -457,458 +255,593 @@ const Goals = () => {
 
   const handleDeleteGoal = async (goal) => {
     try {
-      // Delete from storage
-      const imageRef = ref(storage, goal.imagePath);
-      await deleteObject(imageRef);
-
-      // Delete from Firestore
+      if (goal.imagePath) {
+        try { await deleteObject(ref(storage, goal.imagePath)); } catch {}
+      }
       await deleteDoc(doc(db, `users/${user.uid}/goals`, goal.id));
-
       toast.success('Goal deleted');
+      setSelectedGoal(null);
       loadGoals();
-    } catch (error) {
+    } catch {
       toast.error('Failed to delete goal');
-      console.error(error);
     }
   };
 
-  const handleEditGoalDescription = (goal) => {
+  const handleMarkDone = async (goal) => {
+    const newStatus = goal.status === 'accomplished' ? 'expecting' : 'accomplished';
+    try {
+      await updateDoc(doc(db, `users/${user.uid}/goals`, goal.id), { status: newStatus });
+      if (newStatus === 'accomplished') {
+        triggerConfetti();
+        toast.success('Goal accomplished! 🎉');
+      } else {
+        toast.success('Marked as in progress');
+      }
+      const updated = { ...goal, status: newStatus };
+      setSelectedGoal(updated);
+      setGoals(prev => prev.map(g => g.id === goal.id ? updated : g));
+    } catch {
+      toast.error('Failed to update goal');
+    }
+  };
+
+  const handleSaveProgress = async () => {
+    if (!selectedGoal) return;
+    const value = parseFloat(progressInput);
+    if (isNaN(value) || value < 0) { toast.error('Enter a valid number'); return; }
+    setSavingProgress(true);
+    try {
+      const isNowDone = value >= (selectedGoal.target || 0);
+      const updateData = { currentValue: value, ...(isNowDone && { status: 'accomplished' }) };
+      await updateDoc(doc(db, `users/${user.uid}/goals`, selectedGoal.id), updateData);
+      const updated = { ...selectedGoal, currentValue: value, ...(isNowDone && { status: 'accomplished' }) };
+      setSelectedGoal(updated);
+      setGoals(prev => prev.map(g => g.id === selectedGoal.id ? updated : g));
+      if (isNowDone) { triggerConfetti(); toast.success('Goal reached! 🎉'); }
+      else toast.success('Progress saved');
+    } catch {
+      toast.error('Failed to save progress');
+    } finally {
+      setSavingProgress(false);
+    }
+  };
+
+  const handleGetRecommendation = async (goal) => {
+    const apiKey = import.meta.env.VITE_CLAUDE_API_KEY;
+    if (!apiKey || apiKey === 'your_claude_api_key_here') {
+      toast.error('Add your Claude API key to the .env file');
+      return;
+    }
+    setClaudeLoading(true);
+    setClaudeRec('');
+    try {
+      const isMeasurable = goal.type === 'measurable';
+      const progress = isMeasurable && goal.target > 0
+        ? Math.round((goal.currentValue || 0) / goal.target * 100)
+        : null;
+
+      const prompt = isMeasurable
+        ? `My goal: "${goal.description}". Target: ${goal.target} ${goal.unit || ''}. Current: ${goal.currentValue || 0} ${goal.unit || ''} (${progress}%). Give me ONE specific, actionable recommendation to make faster progress. Be direct — max 3 sentences.`
+        : `My goal: "${goal.description}". Not completed yet. Give me ONE specific, actionable first step to accomplish this. Be direct — max 3 sentences.`;
+
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true',
+        },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 150,
+          messages: [{ role: 'user', content: prompt }],
+        }),
+      });
+
+      if (!response.ok) throw new Error(`API error ${response.status}`);
+      const data = await response.json();
+      setClaudeRec(data.content[0].text);
+    } catch (err) {
+      toast.error('Failed to get recommendation');
+      console.error(err);
+    } finally {
+      setClaudeLoading(false);
+    }
+  };
+
+  const openEditModal = (goal) => {
     setEditingGoal(goal);
-    reset({ description: goal.description || '', status: goal.status });
+    const type = goal.type || 'binary';
+    setGoalType(type);
+    reset({
+      description: goal.description || '',
+      status: goal.status,
+      goalType: type,
+      target: goal.target || '',
+      unit: goal.unit || '',
+    });
+    setSelectedGoal(null);
     setShowGoalModal(true);
   };
 
   const handleAddNewGoal = () => {
     setEditingGoal(null);
-    reset({ description: '', status: 'expecting' });
+    setGoalType('binary');
+    reset({ description: '', status: 'expecting', goalType: 'binary', target: '', unit: '' });
     setShowGoalModal(true);
   };
 
+  const closeGoalModal = () => {
+    setShowGoalModal(false);
+    setEditingGoal(null);
+    setGoalType('binary');
+    reset();
+  };
+
   return (
+    <>
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Goals & Progress</h1>
-        <img
-          src="/Evolve.svg"
-          alt="Evolve"
-          className="w-8 h-8"
-        />
-      </div>
-
-      {/* Yearly Version Section */}
-      <div className="card">
-        {completedCount > 0 && (
-          <div className="flex items-center gap-3 bg-green-50 dark:bg-green-900/30 p-4 rounded-lg mb-4 border border-green-100 dark:border-green-800">
-            <Target className="w-8 h-8 text-green-600 dark:text-green-400" />
-            <div>
-              <p className="text-2xl font-bold text-green-700 dark:text-green-400">{completedCount}</p>
-              <p className="text-sm text-green-600 dark:text-green-300">Goal{completedCount !== 1 ? 's' : ''} Accomplished</p>
-            </div>
-          </div>
-        )}
-
+      {/* Header */}
+      <div className="flex justify-between items-end">
         <div>
-          <div className="flex justify-between items-center mb-2">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-              {new Date().getFullYear()} Version of Me
-            </h3>
-            <div className="flex gap-2">
-              {!yearlyVersion && (
-                <button
-                  onClick={() => {
-                    resetVersion({
-                      versionText: '',
-                      year: new Date().getFullYear().toString()
-                    });
-                    setShowYearlyVersionModal(true);
-                  }}
-                  className="text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 text-sm font-medium"
-                >
-                  <Edit className="w-4 h-4 inline mr-1" />
-                  Add
-                </button>
-              )}
-              {allYearlyVersions.length > 0 && (
-                <button
-                  onClick={() => setShowHistoryModal(true)}
-                  className="text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 text-sm font-medium"
-                >
-                  History
-                </button>
-              )}
-            </div>
-          </div>
-
-          {yearlyVersion ? (
-            <div className="bg-gradient-to-r from-primary-50 to-accent-50 dark:from-primary-900/30 dark:to-accent-900/30 p-6 rounded-lg border border-primary-100 dark:border-primary-800">
-              <Target className="w-6 h-6 text-primary-600 dark:text-primary-400 mb-2" />
-              <p className="text-lg font-medium text-gray-800 dark:text-gray-200 italic">"{yearlyVersion}"</p>
-            </div>
-          ) : (
-            <div className="bg-gray-50 dark:bg-gray-700 p-5 rounded-lg text-center border border-gray-200 dark:border-gray-600">
-              <p className="text-gray-500 dark:text-gray-400 mb-2">
-                Define who you want to become this year
-              </p>
-              <button
-                onClick={() => {
-                  resetVersion({
-                    versionText: '',
-                    year: new Date().getFullYear().toString()
-                  });
-                  setShowYearlyVersionModal(true);
-                }}
-                className="btn-primary text-sm"
-              >
-                Add {new Date().getFullYear()} Version
-              </button>
-            </div>
-          )}
+          <p className="text-xs font-semibold uppercase tracking-widest text-blue-500 dark:text-blue-400 mb-1">
+            {new Date().getFullYear()}
+          </p>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 leading-tight">
+            My Goals
+          </h1>
         </div>
-      </div>
-
-      {/* Goals */}
-      <div className="card">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
-            My {new Date().getFullYear()} Goals
-          </h2>
-          {goals.length > 0 && (
-            <button
-              onClick={() => setEditMode(!editMode)}
-              className="text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 text-sm font-medium"
-            >
-              {editMode ? 'Done' : 'Edit'}
+        <div className="flex items-center gap-2">
+          {goals.length < 20 && (
+            <button onClick={handleAddNewGoal} className="btn-primary flex items-center gap-1.5 text-sm">
+              <Plus className="w-4 h-4" /> Add Goal
             </button>
           )}
+          {/* Avatar */}
+          <button
+            onClick={() => setShowProfileModal(true)}
+            className="w-9 h-9 rounded-full overflow-hidden flex-shrink-0 ring-2 ring-white/70 dark:ring-gray-700 hover:ring-blue-300 transition-all shadow-sm"
+          >
+            {profilePhoto ? (
+              <img src={profilePhoto} alt="Profile" className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center">
+                <span className="text-sm font-bold text-blue-600 dark:text-blue-300">
+                  {(user?.displayName || user?.email || '?')[0].toUpperCase()}
+                </span>
+              </div>
+            )}
+          </button>
         </div>
+      </div>
+
+      {/* Stats */}
+      {goals.length > 0 && (
+        <div className="liquid-glass-panel rounded-2xl px-6 py-4">
+          <div className="relative z-10 flex items-center justify-around">
+            <div className="text-center">
+              <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">{goals.length}</p>
+              <p className="text-[10px] uppercase tracking-widest text-gray-400 dark:text-gray-500 mt-0.5">Total</p>
+            </div>
+            <div className="w-px h-10 bg-gray-200 dark:bg-gray-600" />
+            <div className="text-center">
+              <p className="text-3xl font-bold text-primary-600 dark:text-primary-400">{completedCount}</p>
+              <p className="text-[10px] uppercase tracking-widest text-gray-400 dark:text-gray-500 mt-0.5">Accomplished</p>
+            </div>
+            <div className="w-px h-10 bg-gray-200 dark:bg-gray-600" />
+            <div className="text-center">
+              <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">{goals.length - completedCount}</p>
+              <p className="text-[10px] uppercase tracking-widest text-gray-400 dark:text-gray-500 mt-0.5">In progress</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Galaxy canvas */}
+      <div>
 
         {goals.length === 0 ? (
-          <div className="text-center py-12">
-            <Target className="w-16 h-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
+          <div className="text-center py-16">
+            <div className="w-20 h-20 rounded-full bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center mx-auto mb-4">
+              <TrendingUp className="w-10 h-10 text-blue-400" />
+            </div>
             <h3 className="text-lg font-medium text-gray-600 dark:text-gray-400 mb-2">No goals yet</h3>
-            <p className="text-gray-500 dark:text-gray-400 mb-4">
-              Add images that represent your goals and dreams
+            <p className="text-gray-500 dark:text-gray-400 mb-5 text-sm">
+              Add your first goal to start tracking progress
             </p>
-            <button
-              onClick={handleAddNewGoal}
-              className="btn-primary"
-            >
-              Add Goal
+            <button onClick={handleAddNewGoal} className="btn-primary">
+              Add First Goal
             </button>
           </div>
         ) : (
-          <>
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragEnd={handleDragEnd}
-            >
-              <SortableContext
-                items={goals.map(goal => goal.id)}
-                strategy={rectSortingStrategy}
-              >
-                <div className="grid grid-cols-2 md:grid-cols-4 auto-rows-[160px] gap-4 mb-4 grid-flow-dense">
-                  {goals.map((goal, index) => (
-                    <SortableGoalItem
-                      key={goal.id}
-                      goal={goal}
-                      index={index}
-                      editMode={editMode}
-                      onEdit={handleEditGoalDescription}
-                      onDelete={(goal) => setDeleteConfirm({ isOpen: true, goal })}
-                      isEditMode={false}
-                    />
-                  ))}
-                </div>
-              </SortableContext>
-            </DndContext>
-            {goals.length < 20 && (
-              <button
-                onClick={handleAddNewGoal}
-                className="btn-secondary w-full flex items-center justify-center gap-2"
-              >
-                <Plus className="w-5 h-5" />
-                Add Goal
-              </button>
-            )}
-          </>
+          <div className="flex flex-wrap gap-8 justify-center items-end py-6 min-h-[180px]">
+            {goals.map((goal, index) => (
+              <GoalCircle
+                key={goal.id}
+                goal={goal}
+                index={index}
+                onClick={setSelectedGoal}
+              />
+            ))}
+          </div>
         )}
       </div>
+    </div>
 
-      {/* Goal Modal */}
-      {showGoalModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-lg w-full max-w-md p-6 max-h-[90vh] overflow-y-auto border border-transparent dark:border-gray-700">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">
-                {editingGoal ? 'Edit Goal' : 'Add Goal'}
-              </h3>
+      {/* Goal Detail Panel (bottom sheet) */}
+      {selectedGoal && (
+        <div
+          className="fixed z-50 flex items-end justify-center liquid-glass-overlay"
+          style={{ top: 0, left: 0, right: 0, bottom: 0, margin: 0 }}
+          onClick={() => setSelectedGoal(null)}
+        >
+          <div
+            className="liquid-glass-panel w-full max-w-lg rounded-t-2xl p-5 overflow-y-auto mb-20"
+            style={{ maxHeight: 'calc(85vh - 80px)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* All content above the ::before specular layer */}
+            <div className="relative z-10">
+
+            {/* Handle */}
+            <div className="w-10 h-1 bg-white/60 rounded-full mx-auto mb-4" />
+
+            {/* Header row: close + edit + delete */}
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex gap-2">
+                <button
+                  onClick={() => openEditModal(selectedGoal)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 text-sm font-medium transition-colors"
+                >
+                  <Edit className="w-4 h-4" /> Edit
+                </button>
+                <button
+                  onClick={() => {
+                    setSelectedGoal(null);
+                    setDeleteConfirm({ isOpen: true, goal: selectedGoal });
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600 text-sm font-medium transition-colors"
+                >
+                  <Trash2 className="w-4 h-4" /> Delete
+                </button>
+              </div>
               <button
-                onClick={() => {
-                  setShowGoalModal(false);
-                  setEditingGoal(null);
-                  reset();
-                }}
-                className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+                onClick={() => setSelectedGoal(null)}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1"
               >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Goal image + info */}
+            <div className="flex items-start gap-4 mb-5">
+              <img
+                src={selectedGoal.imageUrl}
+                alt={selectedGoal.description || 'Goal'}
+                className="w-20 h-20 rounded-full object-cover flex-shrink-0 border-2 border-blue-200 dark:border-blue-700 shadow"
+              />
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-gray-900 dark:text-gray-100 leading-snug">
+                  {selectedGoal.description || 'No description'}
+                </p>
+                <div className="flex items-center gap-2 mt-2 flex-wrap">
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                    selectedGoal.status === 'accomplished'
+                      ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+                      : 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+                  }`}>
+                    {selectedGoal.status === 'accomplished' ? 'Accomplished' : 'In Progress'}
+                  </span>
+                  <span className="text-xs text-gray-400 dark:text-gray-500 capitalize">
+                    {selectedGoal.type === 'measurable' ? 'Measurable' : 'Binary'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Measurable progress section */}
+            {selectedGoal.type === 'measurable' && (selectedGoal.target || 0) > 0 && (
+              <div className="mb-5 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800">
+                <div className="flex justify-between text-sm mb-2">
+                  <span className="text-gray-600 dark:text-gray-400 font-medium">Progress</span>
+                  <span className="font-semibold text-gray-800 dark:text-gray-200">
+                    {selectedGoal.currentValue || 0} / {selectedGoal.target} {selectedGoal.unit || ''}
+                  </span>
+                </div>
+                <div className="h-2.5 bg-blue-100 dark:bg-blue-900/40 rounded-full overflow-hidden mb-3">
+                  <div
+                    className="h-full bg-gradient-to-r from-blue-400 to-pistachio-400 rounded-full transition-all duration-700"
+                    style={{ width: `${Math.min(100, Math.round((selectedGoal.currentValue || 0) / selectedGoal.target * 100))}%` }}
+                  />
+                </div>
+                {selectedGoal.status !== 'accomplished' && (
+                  <div className="flex gap-2">
+                    <input
+                      type="number"
+                      className="input-field flex-1"
+                      placeholder={`Current value${selectedGoal.unit ? ` (${selectedGoal.unit})` : ''}`}
+                      value={progressInput}
+                      onChange={(e) => setProgressInput(e.target.value)}
+                    />
+                    <button
+                      onClick={handleSaveProgress}
+                      disabled={savingProgress}
+                      className="btn-primary px-5 whitespace-nowrap"
+                    >
+                      {savingProgress ? '...' : 'Save'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Binary toggle */}
+            {(selectedGoal.type || 'binary') === 'binary' && (
+              <div className="mb-5">
+                <button
+                  onClick={() => handleMarkDone(selectedGoal)}
+                  className={`w-full py-2.5 rounded-xl font-medium transition-colors ${
+                    selectedGoal.status === 'accomplished'
+                      ? 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'
+                      : 'btn-primary shadow'
+                  }`}
+                >
+                  {selectedGoal.status === 'accomplished' ? 'Mark as Pending' : '✓ Mark as Accomplished'}
+                </button>
+              </div>
+            )}
+
+            {/* Claude recommendation */}
+            <div className="border-t border-gray-100 dark:border-gray-700 pt-4 mb-4">
+              <button
+                onClick={() => handleGetRecommendation(selectedGoal)}
+                disabled={claudeLoading}
+                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-gradient-to-r from-blue-50 to-pistachio-50 dark:from-blue-900/20 dark:to-pistachio-900/20 border border-blue-100 dark:border-blue-800 text-blue-700 dark:text-blue-300 hover:from-blue-100 hover:to-pistachio-100 dark:hover:from-blue-900/30 dark:hover:to-pistachio-900/30 transition-colors font-medium text-sm disabled:opacity-60"
+              >
+                <Sparkles className="w-4 h-4" />
+                {claudeLoading ? 'Getting recommendation...' : 'Get AI Recommendation'}
+              </button>
+              {claudeRec && (
+                <div className="mt-3 p-3 bg-gradient-to-r from-blue-50 to-pistachio-50 dark:from-blue-900/20 dark:to-pistachio-900/20 rounded-xl border border-blue-100 dark:border-blue-800">
+                  <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{claudeRec}</p>
+                </div>
+              )}
+            </div>
+
+            </div>{/* end relative z-10 */}
+          </div>
+        </div>
+      )}
+
+      {/* Add / Edit Goal Modal */}
+      {showGoalModal && (
+        <div
+          className="fixed z-50 liquid-glass-overlay"
+          style={{ top: 0, left: 0, right: 0, bottom: 0, margin: 0 }}
+          onClick={closeGoalModal}
+        >
+          {/* Inner flex container offset upward to center above the navbar */}
+          <div className="flex items-center justify-center h-full pb-20 px-4">
+          <div
+            className="liquid-glass-panel rounded-2xl w-full max-w-md p-6 overflow-y-auto"
+            style={{ maxHeight: 'calc(90vh - 80px)' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="relative z-10">
+            <div className="flex justify-between items-center mb-5">
+              <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">
+                {editingGoal ? 'Edit Goal' : 'New Goal'}
+              </h3>
+              <button onClick={closeGoalModal} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
                 <X className="w-6 h-6" />
               </button>
             </div>
 
             <form onSubmit={handleSubmit(handleSaveGoal)} className="space-y-4">
+              {/* Goal type selector */}
               <div>
-                <label className="label">Goal Image (max 2MB) {!editingGoal && '*'}</label>
+                <label className="label">Goal Type</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { value: 'binary', label: 'Yes / No', desc: 'A single achievement' },
+                    { value: 'measurable', label: 'Progress', desc: 'Track a number' },
+                  ].map(opt => (
+                    <label
+                      key={opt.value}
+                      className={`cursor-pointer p-3 rounded-xl border-2 text-center transition-colors ${
+                        goalType === opt.value
+                          ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                          : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        value={opt.value}
+                        className="sr-only"
+                        onChange={() => { setGoalType(opt.value); setValue('goalType', opt.value); }}
+                        checked={goalType === opt.value}
+                        readOnly
+                      />
+                      <p className="font-medium text-sm text-gray-900 dark:text-gray-100">{opt.label}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{opt.desc}</p>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Measurable target + unit */}
+              {goalType === 'measurable' && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="label">Target *</label>
+                    <input
+                      type="number"
+                      className="input-field"
+                      placeholder="100"
+                      {...register('target', { required: goalType === 'measurable' })}
+                    />
+                  </div>
+                  <div>
+                    <label className="label">Unit</label>
+                    <input
+                      type="text"
+                      className="input-field"
+                      placeholder="km, books, $…"
+                      {...register('unit')}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Image */}
+              <div>
+                <label className="label">Goal Image (max 2MB){!editingGoal && ' *'}</label>
                 <ImageUpload
                   id="goal-image-input"
                   disabled={uploading}
-                  label={editingGoal ? "Replace goal image (optional)" : "Upload your goal image"}
+                  label={editingGoal ? 'Replace image (optional)' : 'Upload goal image'}
                   existingImageUrl={editingGoal?.imageUrl}
                 />
                 {!editingGoal && (
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                    {20 - goals.length} slots remaining
-                  </p>
+                  <p className="text-xs text-gray-400 mt-1">{20 - goals.length} slots remaining</p>
                 )}
               </div>
 
+              {/* Description */}
               <div>
-                <label className="label">Description (optional)</label>
+                <label className="label">Description</label>
                 <textarea
                   className="input-field"
-                  rows="3"
-                  placeholder="What does this goal represent for you?"
+                  rows="2"
+                  placeholder="What does this goal mean to you?"
                   {...register('description')}
                   disabled={uploading}
                 />
               </div>
 
-              <div>
-                <label className="label">Status</label>
-                <select
-                  className="input-field"
-                  {...register('status')}
-                  disabled={uploading}
-                >
-                  <option value="expecting">Expecting</option>
-                  <option value="accomplished">Accomplished</option>
-                </select>
-              </div>
-
-              <div className="flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowGoalModal(false);
-                    setEditingGoal(null);
-                    reset();
-                  }}
-                  className="btn-secondary flex-1"
-                  disabled={uploading}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="btn-primary flex-1"
-                  disabled={uploading}
-                >
-                  {uploading ? 'Uploading...' : (editingGoal ? 'Update' : 'Add Goal')}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Yearly Version Modal */}
-      {showYearlyVersionModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-lg w-full max-w-md p-6 border border-transparent dark:border-gray-700">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">
-                Your Yearly Vision
-              </h3>
-              <button
-                onClick={() => setShowYearlyVersionModal(false)}
-                className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSubmitVersion(handleSaveYearlyVersion)} className="space-y-4">
-              <div>
-                <label className="label">Year</label>
-                <input
-                  type="number"
-                  className="input-field"
-                  placeholder="2026"
-                  min="2020"
-                  max="2050"
-                  {...registerVersion('year', { required: true })}
-                />
-              </div>
-
-              <div>
-                <label className="label">Version of You</label>
-                <textarea
-                  className="input-field"
-                  rows="3"
-                  placeholder="E.g., 'Confident, healthy, and thriving' or 'The best version of myself'"
-                  {...registerVersion('versionText', { required: true })}
-                />
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                  Describe who you want to become this year in a short phrase
-                </p>
-              </div>
-
-              <div className="flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => setShowYearlyVersionModal(false)}
-                  className="btn-secondary flex-1"
-                >
-                  Cancel
-                </button>
-                <button type="submit" className="btn-primary flex-1">
-                  Save
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* History Modal */}
-      {showHistoryModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-lg w-full max-w-2xl p-6 max-h-[80vh] overflow-y-auto border border-transparent dark:border-gray-700">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">
-                Yearly Versions History
-              </h3>
-              <button
-                onClick={() => setShowHistoryModal(false)}
-                className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-
-            <button
-              onClick={() => {
-                resetVersion({
-                  versionText: '',
-                  year: (new Date().getFullYear() + 1).toString()
-                });
-                setShowHistoryModal(false);
-                setShowYearlyVersionModal(true);
-              }}
-              className="btn-primary w-full mb-4 flex items-center justify-center gap-2"
-            >
-              <Plus className="w-5 h-5" />
-              Add New Year
-            </button>
-
-            <div className="space-y-3">
-              {allYearlyVersions.length === 0 ? (
-                <div className="text-center py-8">
-                  <p className="text-gray-500 dark:text-gray-400">No yearly versions yet</p>
+              {/* Status (edit only) */}
+              {editingGoal && (
+                <div>
+                  <label className="label">Status</label>
+                  <select className="input-field" {...register('status')} disabled={uploading}>
+                    <option value="expecting">In Progress</option>
+                    <option value="accomplished">Accomplished</option>
+                  </select>
                 </div>
-              ) : (
-                allYearlyVersions.map((version) => (
-                  <div
-                    key={version.year}
-                    className={`p-4 rounded-lg border ${
-                      version.year === new Date().getFullYear().toString()
-                        ? 'bg-primary-50 dark:bg-primary-900/20 border-primary-200 dark:border-primary-800'
-                        : 'bg-gray-50 dark:bg-gray-700/50 border-gray-200 dark:border-gray-600'
-                    }`}
-                  >
-                    <div className="flex justify-between items-start gap-3">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                          <p className="text-lg font-bold text-gray-900 dark:text-gray-100">
-                            {version.year}
-                          </p>
-                          {version.year === new Date().getFullYear().toString() && (
-                            <span className="text-xs px-2 py-1 rounded-full bg-primary-600 dark:bg-primary-500 text-white font-medium">
-                              Current
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-base font-medium text-gray-800 dark:text-gray-200 italic">
-                          "{version.versionText}"
-                        </p>
-                      </div>
-                      <div className="flex gap-2 flex-shrink-0">
-                        <button
-                          onClick={() => {
-                            resetVersion({
-                              versionText: version.versionText,
-                              year: version.year
-                            });
-                            setShowHistoryModal(false);
-                            setShowYearlyVersionModal(true);
-                          }}
-                          className="text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 p-2"
-                          title="Edit"
-                        >
-                          <Edit className="w-5 h-5" />
-                        </button>
-                        <button
-                          onClick={() => {
-                            setShowHistoryModal(false);
-                            setDeleteVersionConfirm({ isOpen: true, year: version.year });
-                          }}
-                          className="text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 p-2"
-                          title="Delete"
-                        >
-                          <Trash2 className="w-5 h-5" />
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))
               )}
-            </div>
 
-            <div className="mt-6">
-              <button
-                onClick={() => setShowHistoryModal(false)}
-                className="btn-secondary w-full"
-              >
-                Close
-              </button>
-            </div>
+              <div className="flex gap-3 pt-1">
+                <button type="button" onClick={closeGoalModal} className="btn-secondary flex-1" disabled={uploading}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn-primary flex-1" disabled={uploading}>
+                  {uploading ? 'Uploading...' : editingGoal ? 'Update' : 'Add Goal'}
+                </button>
+              </div>
+            </form>
+            </div>{/* end relative z-10 */}
+          </div>
           </div>
         </div>
       )}
 
-      {/* Delete Version Confirmation Modal */}
-      <ConfirmModal
-        isOpen={deleteVersionConfirm.isOpen}
-        onClose={() => setDeleteVersionConfirm({ isOpen: false, year: null })}
-        onConfirm={() => handleDeleteYearlyVersion(deleteVersionConfirm.year)}
-        title="Delete Yearly Version"
-        message={`Are you sure you want to delete the ${deleteVersionConfirm.year} version? This action cannot be undone.`}
-        confirmText="Delete"
-        cancelText="Cancel"
-        confirmColor="red"
-      />
-
-      {/* Delete Goal Confirmation Modal */}
+      {/* Delete confirmation */}
       <ConfirmModal
         isOpen={deleteConfirm.isOpen}
         onClose={() => setDeleteConfirm({ isOpen: false, goal: null })}
-        onConfirm={() => handleDeleteGoal(deleteConfirm.goal)}
+        onConfirm={() => {
+          handleDeleteGoal(deleteConfirm.goal);
+          setDeleteConfirm({ isOpen: false, goal: null });
+        }}
         title="Delete Goal"
         message="Are you sure you want to delete this goal? This action cannot be undone."
         confirmText="Delete"
         cancelText="Cancel"
         confirmColor="red"
       />
-    </div>
+
+      {/* Profile Modal */}
+      {showProfileModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center liquid-glass-overlay px-4"
+          onClick={() => setShowProfileModal(false)}
+        >
+          <div
+            className="liquid-glass-panel rounded-2xl w-full max-w-sm p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="relative z-10">
+              {/* Close */}
+              <button
+                onClick={() => setShowProfileModal(false)}
+                className="absolute top-0 right-0 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              {/* Avatar + user info */}
+              <div className="flex flex-col items-center gap-2 mb-6">
+                <div className="w-16 h-16 rounded-full overflow-hidden ring-2 ring-white/70 dark:ring-gray-700 shadow-md">
+                  {profilePhoto ? (
+                    <img src={profilePhoto} alt="Profile" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center">
+                      <span className="text-2xl font-bold text-blue-600 dark:text-blue-300">
+                        {(user?.displayName || user?.email || '?')[0].toUpperCase()}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                {user?.displayName && (
+                  <p className="text-base font-semibold text-gray-900 dark:text-gray-100">{user.displayName}</p>
+                )}
+                <p className="text-sm text-gray-500 dark:text-gray-400">{user?.email}</p>
+              </div>
+
+              {/* Color theme picker */}
+              <div className="mb-6">
+                <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 dark:text-gray-400 mb-3">
+                  Color theme
+                </p>
+                <div className="flex gap-3 justify-center">
+                  {COLOR_THEMES.map((t) => (
+                    <button
+                      key={t.id}
+                      onClick={() => setColorTheme(t.id)}
+                      className={`flex flex-col items-center gap-1.5 group`}
+                    >
+                      <div
+                        className={`w-10 h-10 rounded-full shadow-md transition-all ${
+                          colorTheme === t.id
+                            ? 'ring-2 ring-offset-2 ring-gray-400 scale-110'
+                            : 'opacity-70 hover:opacity-100 hover:scale-105'
+                        }`}
+                        style={{ background: `linear-gradient(135deg, ${t.appBg} 40%, ${t.bg} 100%)` }}
+                      />
+                      <span className={`text-[10px] font-medium ${
+                        colorTheme === t.id ? 'text-gray-800 dark:text-gray-100' : 'text-gray-400 dark:text-gray-500'
+                      }`}>
+                        {t.label}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Sign out */}
+              <button
+                onClick={() => { logout(); setShowProfileModal(false); }}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-500 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 font-medium text-sm transition-colors"
+              >
+                <LogOut className="w-4 h-4" />
+                Sign out
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 };
 

@@ -107,8 +107,17 @@ const RoutineModal = ({ routine, onClose, onSave }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
-      <div className="bg-white dark:bg-gray-800 rounded-lg w-full max-w-2xl my-8 border border-transparent dark:border-gray-700">
+    <div
+      className="fixed z-50 liquid-glass-overlay"
+      style={{ top: 0, left: 0, right: 0, bottom: 0, margin: 0 }}
+      onClick={onClose}
+    >
+      <div className="flex items-center justify-center h-full pb-20 px-4">
+      <div
+        className="liquid-glass-panel rounded-2xl w-full max-w-2xl overflow-hidden"
+        style={{ maxHeight: 'calc(90vh - 80px)' }}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex justify-between items-center p-6 border-b border-gray-200 dark:border-gray-700">
           <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">
             {routine ? 'Edit Routine' : 'Create Routine'}
@@ -118,7 +127,7 @@ const RoutineModal = ({ routine, onClose, onSave }) => {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="p-6 max-h-[70vh] overflow-y-auto">
+        <form onSubmit={handleSubmit(onSubmit)} className="p-6 overflow-y-auto" style={{ maxHeight: 'calc(90vh - 160px)' }}>
           <div className="space-y-4">
             {/* Routine Name */}
             <div>
@@ -277,6 +286,7 @@ const RoutineModal = ({ routine, onClose, onSave }) => {
             </button>
           </div>
         </form>
+      </div>
       </div>
     </div>
   );

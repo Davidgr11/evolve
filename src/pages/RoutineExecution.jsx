@@ -154,6 +154,12 @@ const RoutineExecution = () => {
         await setDoc(statsRef, newStats);
       }
 
+      // Update routine's lastRun and totalRuns
+      await updateDoc(doc(db, `users/${user.uid}/routines`, routineId), {
+        lastRun: new Date().toISOString(),
+        totalRuns: increment(1)
+      });
+
       toast.success('Routine completed successfully!');
       navigate('/move');
     } catch (error) {
@@ -179,7 +185,7 @@ const RoutineExecution = () => {
   const currentExercise = routine.exercises[currentExerciseIndex];
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 p-4">
+    <div className="min-h-screen app-bg dark:bg-gray-900 text-gray-900 dark:text-gray-100 p-4">
       <div className="max-w-2xl mx-auto">
         {/* Header */}
         <div className="flex justify-between items-center mb-6">
@@ -266,8 +272,12 @@ const RoutineExecution = () => {
 
       {/* Statistics Modal */}
       {showStatsModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-lg w-full max-w-md p-6 border border-transparent dark:border-gray-700">
+        <div
+          className="fixed z-50 liquid-glass-overlay"
+          style={{ top: 0, left: 0, right: 0, bottom: 0, margin: 0 }}
+        >
+          <div className="flex items-center justify-center h-full pb-20 px-4">
+          <div className="liquid-glass-panel rounded-2xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-xl font-bold mb-4 text-gray-900 dark:text-gray-100">Workout Complete!</h2>
 
             <form onSubmit={handleSubmit(onSubmitStats)} className="space-y-4">
@@ -314,6 +324,7 @@ const RoutineExecution = () => {
                 Save & Complete
               </button>
             </form>
+          </div>
           </div>
         </div>
       )}

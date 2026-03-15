@@ -624,12 +624,12 @@ const Goals = () => {
           {/* Inner flex container offset upward to center above the navbar */}
           <div className="flex items-center justify-center h-full pb-20 px-4">
           <div
-            className="liquid-glass-panel rounded-2xl w-full max-w-md p-6 overflow-y-auto"
+            className="liquid-glass-panel rounded-2xl w-full max-w-md flex flex-col"
             style={{ maxHeight: 'calc(90vh - 80px)' }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="relative z-10">
-            <div className="flex justify-between items-center mb-5">
+            {/* Sticky header */}
+            <div className="relative z-10 flex justify-between items-center px-6 pt-6 pb-4 flex-shrink-0 border-b border-white/30 dark:border-white/10">
               <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">
                 {editingGoal ? 'Edit Goal' : 'New Goal'}
               </h3>
@@ -638,6 +638,8 @@ const Goals = () => {
               </button>
             </div>
 
+            {/* Scrollable body */}
+            <div className="relative z-10 overflow-y-auto px-6 py-4">
             <form onSubmit={handleSubmit(handleSaveGoal)} className="space-y-4">
               {/* Goal type selector */}
               <div>
@@ -731,7 +733,7 @@ const Goals = () => {
                 </div>
               )}
 
-              <div className="flex gap-3 pt-1">
+              <div className="flex gap-3 pt-1 pb-2">
                 <button type="button" onClick={closeGoalModal} className="btn-secondary flex-1" disabled={uploading}>
                   Cancel
                 </button>
@@ -740,7 +742,7 @@ const Goals = () => {
                 </button>
               </div>
             </form>
-            </div>{/* end relative z-10 */}
+            </div>
           </div>
           </div>
         </div>

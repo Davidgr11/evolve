@@ -5,7 +5,7 @@ import { collection, getDocs, doc, setDoc, deleteDoc, updateDoc } from 'firebase
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import imageCompression from 'browser-image-compression';
 import { useForm } from 'react-hook-form';
-import toast from 'react-hot-toast';
+import toast from '../utils/toast';
 import confetti from 'canvas-confetti';
 import { Plus, Edit, Trash2, X, CheckCircle, TrendingUp, Sparkles, LogOut } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
@@ -115,6 +115,7 @@ const Goals = () => {
   const [savingProgress, setSavingProgress] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [profilePhoto, setProfilePhoto] = useState(null);
+  const [loadingGoals, setLoadingGoals] = useState(true);
 
   const { register, handleSubmit, reset, setValue } = useForm();
 
@@ -143,6 +144,7 @@ const Goals = () => {
   }, [selectedGoal?.id]);
 
   const loadGoals = async () => {
+    setLoadingGoals(true);
     try {
       const snapshot = await getDocs(collection(db, `users/${user.uid}/goals`));
       const goalsData = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -153,6 +155,8 @@ const Goals = () => {
       setGoals(goalsData);
     } catch (err) {
       console.error('Failed to load goals:', err);
+    } finally {
+      setLoadingGoals(false);
     }
   };
 
@@ -422,17 +426,17 @@ const Goals = () => {
           <div className="relative z-10 flex items-center justify-around">
             <div className="text-center">
               <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">{goals.length}</p>
-              <p className="text-[10px] uppercase tracking-widest text-gray-400 dark:text-gray-500 mt-0.5">Total</p>
+              <p className="text-xs uppercase tracking-widest text-gray-400 dark:text-gray-500 mt-0.5">Total</p>
             </div>
             <div className="w-px h-10 bg-gray-200 dark:bg-gray-600" />
             <div className="text-center">
               <p className="text-3xl font-bold text-primary-600 dark:text-primary-400">{completedCount}</p>
-              <p className="text-[10px] uppercase tracking-widest text-gray-400 dark:text-gray-500 mt-0.5">Accomplished</p>
+              <p className="text-xs uppercase tracking-widest text-gray-400 dark:text-gray-500 mt-0.5">Accomplished</p>
             </div>
             <div className="w-px h-10 bg-gray-200 dark:bg-gray-600" />
             <div className="text-center">
               <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">{goals.length - completedCount}</p>
-              <p className="text-[10px] uppercase tracking-widest text-gray-400 dark:text-gray-500 mt-0.5">In progress</p>
+              <p className="text-xs uppercase tracking-widest text-gray-400 dark:text-gray-500 mt-0.5">In progress</p>
             </div>
           </div>
         </div>
@@ -441,7 +445,11 @@ const Goals = () => {
       {/* Galaxy canvas */}
       <div>
 
-        {goals.length === 0 ? (
+        {loadingGoals ? (
+          <div className="flex justify-center items-center py-16">
+            <div className="w-10 h-10 border-4 border-blue-300 border-t-blue-500 rounded-full animate-spin" />
+          </div>
+        ) : goals.length === 0 ? (
           <div className="text-center py-16">
             <div className="w-20 h-20 rounded-full bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center mx-auto mb-4">
               <TrendingUp className="w-10 h-10 text-blue-400" />
@@ -821,7 +829,7 @@ const Goals = () => {
                         }`}
                         style={{ background: `linear-gradient(135deg, ${t.appBg} 40%, ${t.bg} 100%)` }}
                       />
-                      <span className={`text-[10px] font-medium ${
+                      <span className={`text-xs font-medium ${
                         colorTheme === t.id ? 'text-gray-800 dark:text-gray-100' : 'text-gray-400 dark:text-gray-500'
                       }`}>
                         {t.label}

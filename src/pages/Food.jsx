@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../utils/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import toast from 'react-hot-toast';
+import toast from '../utils/toast';
+import ConfirmModal from '../components/ConfirmModal';
 import {
   Plus, X, Scale, Trash2, Edit, Sparkles, GripVertical,
   ChevronDown, ChevronUp, RotateCcw
@@ -22,12 +23,19 @@ import {
 import { format, parseISO } from 'date-fns';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
+const toLocalDateStr = (d) => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
 const getWeekStart = (date = new Date()) => {
   const d = new Date(date);
   const day = d.getDay();
   const diff = day === 0 ? -6 : 1 - day;
   d.setDate(d.getDate() + diff);
-  return d.toISOString().split('T')[0];
+  return toLocalDateStr(d);
 };
 
 const getWeekDays = (weekStart) => {
@@ -35,7 +43,7 @@ const getWeekDays = (weekStart) => {
   for (let i = 0; i < 7; i++) {
     const d = new Date(weekStart + 'T12:00:00');
     d.setDate(d.getDate() + i);
-    days.push(d.toISOString().split('T')[0]);
+    days.push(toLocalDateStr(d));
   }
   return days;
 };
@@ -43,7 +51,12 @@ const getWeekDays = (weekStart) => {
 const DAY_LABELS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 const RATING_EMOJI = ['😵', '😞', '😐', '🙂', '🥗'];
 const RATING_COLOR = (r) =>
-  ['bg-red-400', 'bg-orange-400', 'bg-yellow-400', 'bg-green-400', 'bg-green-600'][r - 1] || 'bg-gray-200';
+  ['bg-red-400', 'bg-orange-400', 'bg-yellow-400', 'bg-lime-400', 'bg-green-400'][r - 1] || 'bg-gray-200';
+
+const LABEL_COLORS = [
+  '#ef4444', '#f97316', '#eab308', '#22c55e',
+  '#3b82f6', '#8b5cf6', '#ec4899', '#64748b',
+];
 
 const MEAL_SLOTS = ['Breakfast', 'Snack AM', 'Lunch', 'Snack PM', 'Dinner'];
 
@@ -57,7 +70,7 @@ const parseTextToSlots = (text) => {
 };
 
 // ─── SortableShoppingItem ────────────────────────────────────────────────────
-const SortableShoppingItem = ({ item, onToggle, onEdit, onDelete }) => {
+const SortableShoppingItem = ({ item, onToggle, onEdit, onDelete, labelColorMap = {} }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id });
   return (
     <div
@@ -82,9 +95,17 @@ const SortableShoppingItem = ({ item, onToggle, onEdit, onDelete }) => {
           {item.title}
         </p>
         {(item.label1 || item.label2) && (
-          <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
-            {[item.label1, item.label2].filter(Boolean).join(' · ')}
-          </p>
+          <div className="flex gap-1 mt-1 flex-wrap">
+            {[item.label1, item.label2].filter(Boolean).map(l => (
+              <span
+                key={l}
+                className="text-xs font-medium px-2 py-0.5 rounded-full text-white"
+                style={{ backgroundColor: labelColorMap[l] || '#64748b' }}
+              >
+                {l}
+              </span>
+            ))}
+          </div>
         )}
       </div>
       <button onClick={() => onEdit(item)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1">
@@ -119,6 +140,11 @@ const Food = () => {
   const [mealLoading, setMealLoading] = useState(false);
   const [editingMealOption, setEditingMealOption] = useState(null); // { slotName, optionIdx }
   const [editingMealText, setEditingMealText] = useState('');
+  const [deleteMealConfirm, setDeleteMealConfirm] = useState(null); // { slotName, optionIdx }
+  const [showAiModal, setShowAiModal] = useState(false);
+  const [mealNote, setMealNote] = useState('');
+  const [showNoteModal, setShowNoteModal] = useState(false);
+  const [noteInput, setNoteInput] = useState('');
 
   // ── Shopping
   const [shoppingList, setShoppingList] = useState([]);
@@ -130,6 +156,8 @@ const Food = () => {
   const [shoppingForm, setShoppingForm] = useState({ title: '' });
   const [selectedLabels, setSelectedLabels] = useState([]);
   const [newLabelInput, setNewLabelInput] = useState('');
+  const [newLabelColor, setNewLabelColor] = useState(LABEL_COLORS[4]);
+  const [editingLabel, setEditingLabel] = useState(null); // { originalName, name, color }
 
   // ── Weight
   const [weightHistory, setWeightHistory] = useState([]);
@@ -167,7 +195,11 @@ const Food = () => {
 
         setShoppingList(data.shoppingList || []);
         setWeightHistory(data.weightHistory || []);
-        setAvailableLabels(data.availableLabels || []);
+        const rawLabels = data.availableLabels || [];
+        setAvailableLabels(rawLabels.map(l =>
+          typeof l === 'string' ? { name: l, color: '#64748b' } : l
+        ));
+        setMealNote(data.mealNote || '');
         // Support both old (suggestions string) and new (slots array) format
         const mp = data.mealPlan || null;
         if (mp) {
@@ -278,6 +310,7 @@ Reply in plain text only, no markdown, no asterisks. 1 sentence on what the patt
     if (!apiKey || apiKey === 'your_claude_api_key_here') { toast.error('Add your Claude API key'); return; }
     if (!mealPrompt.trim()) { toast.error('Enter ingredients or instructions first'); return; }
 
+    setShowAiModal(false);
     setMealLoading(true);
     try {
       const prompt = `You are a nutrition assistant creating a weekly meal rotation.
@@ -348,6 +381,10 @@ Dinner: option1 / option2 / option3`;
     setMealPlan(updated);
     setEditingMealOption(null);
     await save({ mealPlan: updated });
+  };
+
+  const saveMealNote = async (note) => {
+    await save({ mealNote: note });
   };
 
   const removeMealOption = async (slotName, optionIdx) => {
@@ -455,20 +492,34 @@ Dinner: option1 / option2 / option3`;
 
   const handleAddLabel = async () => {
     const t = newLabelInput.trim();
-    if (!t || availableLabels.includes(t)) return;
-    const updated = [...availableLabels, t];
+    if (!t || availableLabels.some(l => l.name === t)) return;
+    const updated = [...availableLabels, { name: t, color: newLabelColor }];
     setAvailableLabels(updated);
     await save({ availableLabels: updated });
     setNewLabelInput('');
+    setNewLabelColor(LABEL_COLORS[4]);
   };
 
-  const handleDeleteLabel = async (label) => {
-    const updated = availableLabels.filter(l => l !== label);
+  const handleSaveLabelEdit = async () => {
+    if (!editingLabel || !editingLabel.name.trim()) return;
+    const updated = availableLabels.map(l =>
+      l.name === editingLabel.originalName
+        ? { name: editingLabel.name.trim(), color: editingLabel.color }
+        : l
+    );
+    setAvailableLabels(updated);
+    await save({ availableLabels: updated });
+    setEditingLabel(null);
+  };
+
+  const handleDeleteLabel = async (labelName) => {
+    const updated = availableLabels.filter(l => l.name !== labelName);
     setAvailableLabels(updated);
     await save({ availableLabels: updated });
   };
 
   // ── derived
+  const labelColorMap = Object.fromEntries(availableLabels.map(l => [l.name, l.color]));
   const weekDays = getWeekDays(currentWeek.weekStart);
   const today = new Date().toISOString().split('T')[0];
   const purchasedCount = shoppingList.filter(i => i.purchased).length;
@@ -539,7 +590,7 @@ Dinner: option1 / option2 / option3`;
                   >
                     {entry ? RATING_EMOJI[entry.rating - 1] : isToday ? '＋' : ''}
                   </button>
-                  <span className={`text-[10px] font-bold uppercase ${isToday ? 'text-blue-500' : 'text-gray-400 dark:text-gray-500'}`}>
+                  <span className={`text-xs font-bold uppercase ${isToday ? 'text-blue-500' : 'text-gray-400 dark:text-gray-500'}`}>
                     {DAY_LABELS[i]}
                   </span>
                 </div>
@@ -554,98 +605,96 @@ Dinner: option1 / option2 / option3`;
           )}
         </div>
 
-        {/* ── Meal Ideas ── */}
+        {/* ── Meal Plan ── */}
         <div>
-          <p className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-4">Meal Plan</p>
-
-          <div className="flex gap-2 mb-3">
-            <textarea
-              value={mealPrompt}
-              onChange={e => setMealPrompt(e.target.value)}
-              placeholder="Ingredients, goals, restrictions... e.g. chicken, rice, eggs · lose weight · no gluten"
-              rows={2}
-              className="flex-1 px-4 py-2.5 rounded-xl bg-white/70 dark:bg-gray-800/70 border border-white/60 dark:border-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none"
-            />
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Meal Plan</p>
             <button
-              onClick={handleGenerateMeal}
-              disabled={mealLoading || !mealPrompt.trim()}
-              className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-white/70 dark:bg-gray-800/70 border border-blue-100 dark:border-blue-800 text-blue-600 dark:text-blue-400 hover:bg-white dark:hover:bg-gray-800 transition-colors text-sm font-medium disabled:opacity-60 shadow-sm whitespace-nowrap self-start"
+              onClick={() => setShowAiModal(true)}
+              disabled={mealLoading}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/70 dark:bg-gray-800/70 border border-blue-100 dark:border-blue-800 text-blue-600 dark:text-blue-400 hover:bg-white dark:hover:bg-gray-800 transition-colors text-sm font-medium disabled:opacity-60 shadow-sm"
             >
               <Sparkles className="w-3.5 h-3.5" />
-              {mealLoading ? '...' : 'Generate plan'}
+              {mealLoading ? 'Generating...' : 'Get AI help'}
             </button>
           </div>
 
           {mealPlan && (
-            <>
-              <button
-                onClick={() => setShowMealPlan(!showMealPlan)}
-                className="flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 mb-3"
-              >
-                {showMealPlan ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                {showMealPlan ? 'Hide plan' : 'View plan'}
-                <span className="text-gray-400 dark:text-gray-500 text-xs">
-                  {mealPlan.generatedAt ? `· ${format(parseISO(mealPlan.generatedAt), 'MMM d')}` : ''}
-                </span>
-              </button>
-
-              {showMealPlan && (
-                <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4">
-                  {mealSections.map(({ name, options }) =>
-                    options.length > 0 ? (
-                      <div
-                        key={name}
-                        className="flex-shrink-0 w-36 px-3 py-3 bg-white/60 dark:bg-gray-800/60 rounded-2xl border border-white/60 dark:border-gray-700/60"
-                      >
-                        <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
-                          {name}
-                        </p>
-                        <div className="space-y-1.5">
-                          {options.map((opt, i) => {
-                            const isEditing = editingMealOption?.slotName === name && editingMealOption?.optionIdx === i;
-                            return isEditing ? (
-                              <div key={i} className="flex gap-1">
-                                <input
-                                  autoFocus
-                                  value={editingMealText}
-                                  onChange={e => setEditingMealText(e.target.value)}
-                                  onKeyDown={e => {
-                                    if (e.key === 'Enter') saveMealOptionEdit();
-                                    if (e.key === 'Escape') setEditingMealOption(null);
-                                  }}
-                                  className="flex-1 min-w-0 text-xs px-2 py-1 rounded-lg bg-white dark:bg-gray-700 border border-blue-300 text-gray-900 dark:text-gray-100 focus:outline-none"
-                                />
-                                <button onClick={saveMealOptionEdit} className="text-blue-500 text-xs font-bold px-1 flex-shrink-0">✓</button>
-                              </div>
-                            ) : (
-                              <div
-                                key={i}
-                                className="flex items-center gap-1 group text-xs px-2 py-1.5 bg-blue-50/80 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg"
-                              >
-                                <span className="flex-1 leading-tight">{opt}</span>
-                                <button
-                                  onClick={() => { setEditingMealOption({ slotName: name, optionIdx: i }); setEditingMealText(opt); }}
-                                  className="opacity-0 group-hover:opacity-100 text-blue-400 hover:text-blue-600 transition-opacity flex-shrink-0"
-                                >
-                                  <Edit className="w-2.5 h-2.5" />
-                                </button>
-                                <button
-                                  onClick={() => removeMealOption(name, i)}
-                                  className="opacity-0 group-hover:opacity-100 text-blue-400 hover:text-red-400 transition-opacity flex-shrink-0"
-                                >
-                                  <X className="w-2.5 h-2.5" />
-                                </button>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ) : null
-                  )}
-                </div>
+            <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4">
+              {mealSections.map(({ name, options }) =>
+                options.length > 0 ? (
+                  <div
+                    key={name}
+                    className="flex-shrink-0 w-48 px-3 py-3 bg-white/60 dark:bg-gray-800/60 rounded-2xl border border-white/60 dark:border-gray-700/60"
+                  >
+                    <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
+                      {name}
+                    </p>
+                    <div className="space-y-1.5">
+                      {options.map((opt, i) => {
+                        const isEditing = editingMealOption?.slotName === name && editingMealOption?.optionIdx === i;
+                        return isEditing ? (
+                          <div key={i} className="flex gap-1">
+                            <input
+                              autoFocus
+                              value={editingMealText}
+                              onChange={e => setEditingMealText(e.target.value)}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') saveMealOptionEdit();
+                                if (e.key === 'Escape') setEditingMealOption(null);
+                              }}
+                              className="flex-1 min-w-0 text-xs px-2 py-1 rounded-lg bg-white dark:bg-gray-700 border border-blue-300 text-gray-900 dark:text-gray-100 focus:outline-none"
+                            />
+                            <button onClick={saveMealOptionEdit} className="text-blue-500 text-xs font-bold px-1 flex-shrink-0">✓</button>
+                          </div>
+                        ) : (
+                          <div
+                            key={i}
+                            className="flex items-center gap-1 text-xs px-2 py-1.5 bg-blue-50/80 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg"
+                          >
+                            <span className="flex-1 leading-tight">{opt}</span>
+                            <button
+                              onClick={() => { setEditingMealOption({ slotName: name, optionIdx: i }); setEditingMealText(opt); }}
+                              className="text-gray-400 hover:text-gray-600 flex-shrink-0 p-1"
+                            >
+                              <Edit className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => setDeleteMealConfirm({ slotName: name, optionIdx: i })}
+                              className="text-gray-400 hover:text-red-400 flex-shrink-0 p-1"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null
               )}
-            </>
+            </div>
           )}
+
+          {/* Weekly note */}
+          <div className="mt-5">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Weekly note</p>
+              <button
+                onClick={() => { setNoteInput(mealNote); setShowNoteModal(true); }}
+                className="text-xs font-medium text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 flex items-center gap-1"
+              >
+                <Edit className="w-3.5 h-3.5" />
+                Edit
+              </button>
+            </div>
+            {mealNote ? (
+              <p className="text-sm italic text-blue-500 dark:text-blue-400 leading-relaxed text-center">
+                {mealNote}
+              </p>
+            ) : (
+              <p className="text-sm italic text-gray-300 dark:text-gray-600 text-center">No note for this week.</p>
+            )}
+          </div>
         </div>
 
         {/* ── Shopping List ── */}
@@ -699,19 +748,24 @@ Dinner: option1 / option2 / option3`;
 
               {availableLabels.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 mb-3">
-                  {availableLabels.map(label => (
-                    <button
-                      key={label}
-                      onClick={() => toggleQuickAddLabel(label)}
-                      className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
-                        quickAddLabels.includes(label)
-                          ? 'bg-blue-500 text-white'
-                          : 'bg-white/60 dark:bg-gray-800/60 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700'
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
+                  {availableLabels.map(label => {
+                    const selected = quickAddLabels.includes(label.name);
+                    return (
+                      <button
+                        key={label.name}
+                        onClick={() => toggleQuickAddLabel(label.name)}
+                        className="px-2.5 py-1 rounded-full text-xs font-medium transition-all text-white"
+                        style={{
+                          backgroundColor: label.color,
+                          opacity: selected ? 1 : 0.45,
+                          outline: selected ? `2px solid ${label.color}` : 'none',
+                          outlineOffset: '2px',
+                        }}
+                      >
+                        {label.name}
+                      </button>
+                    );
+                  })}
                 </div>
               )}
 
@@ -730,6 +784,7 @@ Dinner: option1 / option2 / option3`;
                           onToggle={handleTogglePurchased}
                           onEdit={openEditItem}
                           onDelete={handleDeleteShoppingItem}
+                          labelColorMap={labelColorMap}
                         />
                       ))}
                     </div>
@@ -905,51 +960,112 @@ Dinner: option1 / option2 / option3`;
                   <label className="label">Labels (up to 2)</label>
                   {availableLabels.length > 0 && (
                     <div className="flex flex-wrap gap-2 mb-2">
-                      {availableLabels.map(label => (
-                        <button
-                          key={label}
-                          type="button"
-                          onClick={() => handleToggleLabel(label)}
-                          className={`px-3 py-1 rounded-full text-xs font-medium transition-colors flex items-center gap-1 ${
-                            selectedLabels.includes(label)
-                              ? 'bg-blue-500 text-white'
-                              : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
-                          }`}
-                        >
-                          {label}
-                          {selectedLabels.includes(label) && (
-                            <span className="text-white/70">✓</span>
-                          )}
-                        </button>
-                      ))}
+                      {availableLabels.map(label => {
+                        const selected = selectedLabels.includes(label.name);
+                        const isEditing = editingLabel?.originalName === label.name;
+                        return isEditing ? (
+                          <div key={label.name} className="w-full space-y-1.5 p-2 rounded-xl bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600">
+                            <div className="flex gap-1.5">
+                              {LABEL_COLORS.map(c => (
+                                <button
+                                  key={c}
+                                  type="button"
+                                  onClick={() => setEditingLabel(prev => ({ ...prev, color: c }))}
+                                  className="w-5 h-5 rounded-full flex-shrink-0 transition-transform"
+                                  style={{
+                                    backgroundColor: c,
+                                    outline: editingLabel.color === c ? `2px solid ${c}` : 'none',
+                                    outlineOffset: '2px',
+                                    transform: editingLabel.color === c ? 'scale(1.2)' : 'scale(1)',
+                                  }}
+                                />
+                              ))}
+                            </div>
+                            <div className="flex gap-1.5">
+                              <input
+                                type="text"
+                                value={editingLabel.name}
+                                onChange={e => setEditingLabel(prev => ({ ...prev, name: e.target.value }))}
+                                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleSaveLabelEdit(); } if (e.key === 'Escape') setEditingLabel(null); }}
+                                className="flex-1 px-2 py-1 rounded-lg bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-300"
+                                autoFocus
+                              />
+                              <button type="button" onClick={handleSaveLabelEdit} className="px-2 py-1 rounded-lg text-xs font-bold text-white" style={{ backgroundColor: editingLabel.color }}>✓</button>
+                              <button type="button" onClick={() => setEditingLabel(null)} className="px-2 py-1 rounded-lg text-xs text-gray-400 hover:text-gray-600">✕</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div key={label.name} className="flex items-center gap-0.5">
+                            <button
+                              type="button"
+                              onClick={() => handleToggleLabel(label.name)}
+                              className="px-3 py-1 rounded-full text-xs font-medium transition-all text-white flex items-center gap-1"
+                              style={{
+                                backgroundColor: label.color,
+                                opacity: selected ? 1 : 0.45,
+                                outline: selected ? `2px solid ${label.color}` : 'none',
+                                outlineOffset: '2px',
+                              }}
+                            >
+                              {label.name}
+                              {selected && <span>✓</span>}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditingLabel({ originalName: label.name, name: label.name, color: label.color })}
+                              className="text-gray-300 hover:text-gray-500 p-0.5"
+                            >
+                              <Edit className="w-3 h-3" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteLabel(label.name)}
+                              className="text-gray-300 hover:text-red-400 p-0.5"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                   {/* Inline add label */}
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={newLabelInput}
-                      onChange={e => setNewLabelInput(e.target.value)}
-                      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddLabel(); } }}
-                      placeholder="New label..."
-                      className="flex-1 px-3 py-1.5 rounded-lg bg-white/70 dark:bg-gray-700/70 border border-gray-200 dark:border-gray-600 text-xs text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-300"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleAddLabel}
-                      disabled={!newLabelInput.trim()}
-                      className="px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-xs font-medium disabled:opacity-40"
-                    >
-                      Add
-                    </button>
-                    {availableLabels.map(label => (
-                      <button
-                        key={`del-${label}`}
-                        type="button"
-                        onClick={() => handleDeleteLabel(label)}
-                        className="hidden"
+                  <div className="space-y-2">
+                    <div className="flex gap-1.5">
+                      {LABEL_COLORS.map(c => (
+                        <button
+                          key={c}
+                          type="button"
+                          onClick={() => setNewLabelColor(c)}
+                          className="w-5 h-5 rounded-full flex-shrink-0 transition-transform"
+                          style={{
+                            backgroundColor: c,
+                            outline: newLabelColor === c ? `2px solid ${c}` : 'none',
+                            outlineOffset: '2px',
+                            transform: newLabelColor === c ? 'scale(1.2)' : 'scale(1)',
+                          }}
+                        />
+                      ))}
+                    </div>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={newLabelInput}
+                        onChange={e => setNewLabelInput(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddLabel(); } }}
+                        placeholder="New label..."
+                        className="flex-1 px-3 py-1.5 rounded-lg bg-white/70 dark:bg-gray-700/70 border border-gray-200 dark:border-gray-600 text-xs text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-300"
                       />
-                    ))}
+                      <button
+                        type="button"
+                        onClick={handleAddLabel}
+                        disabled={!newLabelInput.trim()}
+                        className="px-3 py-1.5 rounded-lg text-xs font-medium text-white disabled:opacity-40"
+                        style={{ backgroundColor: newLabelColor }}
+                      >
+                        Add
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -971,6 +1087,73 @@ Dinner: option1 / option2 / option3`;
           </div>
         </div>
       )}
+
+      {/* Note modal */}
+      {showNoteModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-md p-6 border border-transparent dark:border-gray-700">
+            <div className="flex justify-between items-start mb-4">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">Weekly note</h3>
+              <button onClick={() => setShowNoteModal(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <textarea
+              value={noteInput}
+              onChange={e => setNoteInput(e.target.value)}
+              placeholder="What to eat, avoid, or try this week..."
+              rows={4}
+              className="w-full px-4 py-3 rounded-xl bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100 placeholder-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none mb-4"
+              autoFocus
+            />
+            <button
+              onClick={() => { setMealNote(noteInput); saveMealNote(noteInput); setShowNoteModal(false); }}
+              className="w-full btn-primary"
+            >
+              Save
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* AI modal */}
+      {showAiModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-md p-6 border border-transparent dark:border-gray-700">
+            <div className="flex justify-between items-start mb-4">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">AI Meal Plan</h3>
+              <button onClick={() => setShowAiModal(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <textarea
+              value={mealPrompt}
+              onChange={e => setMealPrompt(e.target.value)}
+              placeholder="Ingredients, goals, restrictions... e.g. chicken, rice, eggs · lose weight · no gluten"
+              rows={4}
+              className="w-full px-4 py-3 rounded-xl bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100 placeholder-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none mb-4"
+              autoFocus
+            />
+            <button
+              onClick={handleGenerateMeal}
+              disabled={!mealPrompt.trim()}
+              className="w-full flex items-center justify-center gap-2 btn-primary disabled:opacity-60"
+            >
+              <Sparkles className="w-4 h-4" />
+              Generate plan
+            </button>
+          </div>
+        </div>
+      )}
+
+      <ConfirmModal
+        isOpen={!!deleteMealConfirm}
+        onClose={() => setDeleteMealConfirm(null)}
+        onConfirm={() => removeMealOption(deleteMealConfirm.slotName, deleteMealConfirm.optionIdx)}
+        title="Remove option"
+        message="Are you sure you want to remove this meal option?"
+        confirmText="Remove"
+      />
     </>
   );
 };

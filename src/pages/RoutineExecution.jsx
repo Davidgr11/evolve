@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { db } from '../utils/firebase';
 import { doc, getDoc, setDoc, updateDoc, increment } from 'firebase/firestore';
 import { useForm } from 'react-hook-form';
-import toast from 'react-hot-toast';
+import toast from '../utils/toast';
 import { Play, Pause, X, Check, ChevronRight } from 'lucide-react';
 import ConfirmModal from '../components/ConfirmModal';
 

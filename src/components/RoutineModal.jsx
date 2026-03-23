@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { storage } from '../utils/firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import imageCompression from 'browser-image-compression';
-import toast from 'react-hot-toast';
+import toast from '../utils/toast';
 import { X, Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
 import ImageUpload from './ImageUpload';
 

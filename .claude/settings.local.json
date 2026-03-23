@@ -18,7 +18,8 @@
       "Bash(cd \"C:\\\\Users\\\\david\\\\Documents\\\\Coding Projects\\\\evolve\" && npm run build 2>&1 | tail -3)",
       "Bash(cd \"C:\\\\Users\\\\david\\\\Documents\\\\Coding Projects\\\\evolve\" && npm run build 2>&1 | grep -E \"\\(error|warning|built|✓\\)\" | head -20)",
       "Bash(cd \"C:\\\\Users\\\\david\\\\Documents\\\\Coding Projects\\\\evolve\" && npm run build 2>&1 | grep -E \"\\(error|✓ built\\)\")",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(cd:*)"
     ]
   }
 }

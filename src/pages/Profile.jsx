@@ -7,7 +7,7 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import imageCompression from 'browser-image-compression';
 import { useForm } from 'react-hook-form';
-import toast from 'react-hot-toast';
+import toast from '../utils/toast';
 import { LogOut, User as UserIcon, Mail, Edit, Moon, Sun, X, Sparkles } from 'lucide-react';
 import ImageUpload from '../components/ImageUpload';
 import ConfirmModal from '../components/ConfirmModal';

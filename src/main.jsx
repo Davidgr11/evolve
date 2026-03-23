@@ -11,7 +11,10 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <AuthProvider>
       <ThemeProvider>
         <App />
-        <Toaster position="top-center" />
+        <Toaster
+          position="top-right"
+          containerStyle={{ top: 'calc(env(safe-area-inset-top, 0px) + 60px)', right: '16px' }}
+        />
       </ThemeProvider>
     </AuthProvider>
   </React.StrictMode>,

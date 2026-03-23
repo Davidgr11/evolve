@@ -6,7 +6,7 @@ import {
   collection, addDoc, getDocs, updateDoc, deleteDoc, doc
 } from 'firebase/firestore';
 import { ref, deleteObject } from 'firebase/storage';
-import toast from 'react-hot-toast';
+import toast from '../utils/toast';
 import {
   Plus, Play, Edit, Trash2, Activity, Flame, Route,
   Dumbbell, Sparkles, Trophy, Zap, Wind, PersonStanding, Swords
@@ -238,7 +238,7 @@ Reply in plain text only — no markdown, no asterisks, no headers. Be concise: 
               <div className="w-24 h-24 rounded-full flex flex-col items-center justify-center gap-0.5 bg-white/70 dark:bg-gray-800/70 border border-blue-100 dark:border-blue-800 shadow-sm">
                 <Icon className={`w-5 h-5 ${iconColor}`} />
                 <p className="text-lg font-bold text-gray-900 dark:text-gray-100 leading-none mt-1">{value}</p>
-                <p className="text-[10px] text-gray-500 dark:text-gray-400 font-medium leading-none mt-0.5">{unit}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 font-medium leading-none mt-0.5">{unit}</p>
               </div>
             </div>
           ))}

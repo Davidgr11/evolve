@@ -5,6 +5,11 @@ import { useAuth } from './AuthContext';
 
 const ThemeContext = createContext();
 
+const APP_BG_COLORS = {
+  light: { blue: '#c2dce8', purple: '#dcd4f0', green: '#c2e8d0' },
+  dark:  { blue: '#111827', purple: '#1a1127',  green: '#0f2117'  },
+};
+
 export const useTheme = () => {
   const context = useContext(ThemeContext);
   if (!context) {
@@ -28,11 +33,15 @@ export const ThemeProvider = ({ children }) => {
     localStorage.setItem('theme', theme);
   }, [theme]);
 
-  // Apply color theme attribute
+  // Apply color theme attribute + status bar meta tag
   useEffect(() => {
     document.documentElement.setAttribute('data-color-theme', colorTheme);
     localStorage.setItem('colorTheme', colorTheme);
-  }, [colorTheme]);
+    const mode = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+    const color = APP_BG_COLORS[mode]?.[colorTheme] ?? '#c2dce8';
+    let meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', color);
+  }, [colorTheme, theme]);
 
   // Load preferences from Firestore when user logs in
   useEffect(() => {

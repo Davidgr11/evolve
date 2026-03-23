@@ -5,7 +5,7 @@ import {
   collection, getDocs, addDoc, updateDoc, deleteDoc,
   doc, setDoc, getDoc
 } from 'firebase/firestore';
-import toast from 'react-hot-toast';
+import toast from '../utils/toast';
 import {
   Plus, X, BookOpen, Search, Sparkles, Star,
   Loader2, RefreshCw, Trash2, Edit
@@ -13,19 +13,39 @@ import {
 import ConfirmModal from '../components/ConfirmModal';
 
 // ─── Google Books API ─────────────────────────────────────────────────────────
-const searchGoogleBooks = async (query) => {
+const gbCache = {};
+
+const searchGoogleBooks = async (query, retries = 3) => {
   if (!query.trim()) return [];
-  const url = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=6&fields=items(id,volumeInfo(title,authors,categories,imageLinks))`;
-  const res = await fetch(url);
-  if (!res.ok) return [];
-  const data = await res.json();
-  return (data.items || []).map(item => ({
-    googleId: item.id,
-    title: item.volumeInfo?.title || '',
-    author: item.volumeInfo?.authors?.[0] || '',
-    category: item.volumeInfo?.categories?.[0] || '',
-    coverUrl: item.volumeInfo?.imageLinks?.thumbnail?.replace('http://', 'https://') || '',
-  }));
+  const key = query.trim().toLowerCase();
+  if (gbCache[key]) return gbCache[key];
+
+  const apiKey = import.meta.env.VITE_GOOGLE_BOOKS_API_KEY;
+  const keyParam = apiKey ? `&key=${apiKey}` : '';
+  const url = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=6&fields=items(id,volumeInfo(title,authors,categories,imageLinks))${keyParam}`;
+
+  for (let attempt = 0; attempt < retries; attempt++) {
+    const res = await fetch(url);
+    if (res.status === 429) {
+      if (attempt < retries - 1) {
+        await new Promise(r => setTimeout(r, 1000 * 2 ** attempt));
+        continue;
+      }
+      return [];
+    }
+    if (!res.ok) return [];
+    const data = await res.json();
+    const results = (data.items || []).map(item => ({
+      googleId: item.id,
+      title: item.volumeInfo?.title || '',
+      author: item.volumeInfo?.authors?.[0] || '',
+      category: item.volumeInfo?.categories?.[0] || '',
+      coverUrl: item.volumeInfo?.imageLinks?.thumbnail?.replace('http://', 'https://') || '',
+    }));
+    gbCache[key] = results;
+    return results;
+  }
+  return [];
 };
 
 const fetchCoverForBook = async (book) => {
@@ -101,7 +121,7 @@ const BookCard = ({ book, onEdit, onDelete, onSummary }) => (
     </div>
     <div className="p-2 flex flex-col gap-0.5">
       <p className="text-xs font-semibold text-gray-900 dark:text-gray-100 leading-tight line-clamp-2">{book.title}</p>
-      {book.author && <p className="text-[10px] text-gray-400 dark:text-gray-500 truncate">{book.author}</p>}
+      {book.author && <p className="text-xs text-gray-400 dark:text-gray-500 truncate">{book.author}</p>}
       {book.rating && (
         <div className="flex gap-0.5 mt-0.5">
           {[1,2,3,4,5].map(s => (
@@ -181,7 +201,7 @@ const Books = () => {
       await updateDoc(doc(db, `users/${user.uid}/books`, book.id), coverUrl ? { coverUrl, coverFetched: true } : { coverFetched: true });
       done++;
       setMigrateProgress(done);
-      await new Promise(r => setTimeout(r, 350));
+      await new Promise(r => setTimeout(r, 1200));
     }
     setMigrating(false);
     toast.success('Library updated!');
@@ -416,25 +436,25 @@ const Books = () => {
             <div className="flex gap-3">
               <div className="flex-1 text-center">
                 <p className="text-3xl font-bold text-gray-900 dark:text-gray-100 leading-none">{booksThisYear}</p>
-                <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1 uppercase tracking-wide">This year</p>
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1 uppercase tracking-wide">This year</p>
               </div>
               <div className="w-px bg-gray-100 dark:bg-gray-700" />
               <div className="flex-1 text-center">
                 <p className="text-3xl font-bold text-gray-900 dark:text-gray-100 leading-none">{readBooks.length}</p>
-                <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1 uppercase tracking-wide">Total read</p>
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1 uppercase tracking-wide">Total read</p>
               </div>
             </div>
             {topGenre && (
               <div className="text-center pt-2 border-t border-gray-100 dark:border-gray-700/50">
                 <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">{topGenre}</p>
-                <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5 uppercase tracking-wide">Top genre · {genreCounts[topGenre]} books</p>
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5 uppercase tracking-wide">Top genre · {genreCounts[topGenre]} books</p>
               </div>
             )}
           </div>
 
           {/* Reading level path */}
           <div className="pt-3 border-t border-gray-100 dark:border-gray-700/50">
-            <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-3">Reading level</p>
+            <p className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-3">Reading level</p>
             <div className="flex flex-wrap gap-2">
               {LEVELS.map((l, i) => {
                 const idx = levelData.levelIndex - 1; // 0-based current index
@@ -454,7 +474,7 @@ const Books = () => {
                   >
                     <span className={isFuture ? 'grayscale opacity-40' : ''}>{l.icon}</span>
                     <span>{l.name}</span>
-                    {isPast && <span className="text-green-500 font-bold text-[10px]">✓</span>}
+                    {isPast && <span className="text-green-500 font-bold text-xs">✓</span>}
                   </div>
                 );
               })}
@@ -491,7 +511,7 @@ const Books = () => {
                   }`}
                 >
                   {s.charAt(0).toUpperCase() + s.slice(1)}
-                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${filterStatus === s ? 'bg-white/20 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-400'}`}>{count}</span>
+                  <span className={`px-1.5 py-0.5 rounded-full text-xs font-bold ${filterStatus === s ? 'bg-white/20 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-400'}`}>{count}</span>
                 </button>
               );
             })}
@@ -570,7 +590,7 @@ const Books = () => {
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{r.title}</p>
                           <p className="text-xs text-gray-400 truncate">{r.author}</p>
-                          {r.category && <p className="text-[10px] text-gray-300 dark:text-gray-600 truncate">{r.category}</p>}
+                          {r.category && <p className="text-xs text-gray-300 dark:text-gray-600 truncate">{r.category}</p>}
                         </div>
                       </button>
                     ))}

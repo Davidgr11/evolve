@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { useAuth } from '../contexts/AuthContext';
-import toast from 'react-hot-toast';
+import toast from '../utils/toast';
 
 const YEAR = new Date().getFullYear();
 

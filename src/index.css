@@ -7,6 +7,21 @@
     @apply text-gray-900 dark:text-gray-100 transition-colors;
     padding-top: env(safe-area-inset-top);
   }
+
+  /* Prevent iOS auto-zoom on input focus (triggered when font-size < 16px).
+     !important is required because Tailwind utility classes (text-sm etc.)
+     have higher layer priority than @layer base and would otherwise override. */
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+
+  /* Prevent date inputs from overflowing their container on iOS.
+     The native date input has an intrinsic width; forcing box-sizing + width
+     keeps it within its flex/grid parent. */
+  input[type="date"] {
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
 }
 
 .app-bg {

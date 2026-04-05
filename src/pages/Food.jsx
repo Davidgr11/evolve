@@ -6,7 +6,7 @@ import toast from '../utils/toast';
 import ConfirmModal from '../components/ConfirmModal';
 import {
   Plus, X, Scale, Trash2, Edit, Sparkles, GripVertical,
-  ChevronDown, ChevronUp, RotateCcw
+  ChevronDown, ChevronUp, RotateCcw, Pill, Check
 } from 'lucide-react';
 import {
   DndContext, closestCenter, KeyboardSensor, PointerSensor,
@@ -46,6 +46,18 @@ const getWeekDays = (weekStart) => {
     days.push(toLocalDateStr(d));
   }
   return days;
+};
+
+const addDaysToDateStr = (dateStr, n) => {
+  const d = new Date(dateStr + 'T12:00:00');
+  d.setDate(d.getDate() + n);
+  return toLocalDateStr(d);
+};
+
+const daysBetween = (from, to) => {
+  const a = new Date(from + 'T12:00:00');
+  const b = new Date(to + 'T12:00:00');
+  return Math.round((b - a) / (1000 * 60 * 60 * 24));
 };
 
 const DAY_LABELS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
@@ -142,9 +154,6 @@ const Food = () => {
   const [editingMealText, setEditingMealText] = useState('');
   const [deleteMealConfirm, setDeleteMealConfirm] = useState(null); // { slotName, optionIdx }
   const [showAiModal, setShowAiModal] = useState(false);
-  const [mealNote, setMealNote] = useState('');
-  const [showNoteModal, setShowNoteModal] = useState(false);
-  const [noteInput, setNoteInput] = useState('');
 
   // ── Shopping
   const [shoppingList, setShoppingList] = useState([]);
@@ -162,6 +171,14 @@ const Food = () => {
   // ── Weight
   const [weightHistory, setWeightHistory] = useState([]);
   const [showWeightModal, setShowWeightModal] = useState(false);
+
+  // ── Medicines
+  const [medicines, setMedicines] = useState([]);
+  const [showMedicines, setShowMedicines] = useState(true);
+  const [showMedicineModal, setShowMedicineModal] = useState(false);
+  const [medicineForm, setMedicineForm] = useState({ name: '', dose: '', frequencyHours: '24', durationDays: '7', startDate: '' });
+  const [editingMedicine, setEditingMedicine] = useState(null);
+  const [deleteMedicineConfirm, setDeleteMedicineConfirm] = useState(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -195,11 +212,11 @@ const Food = () => {
 
         setShoppingList(data.shoppingList || []);
         setWeightHistory(data.weightHistory || []);
+        setMedicines(data.medicines || []);
         const rawLabels = data.availableLabels || [];
         setAvailableLabels(rawLabels.map(l =>
           typeof l === 'string' ? { name: l, color: '#64748b' } : l
         ));
-        setMealNote(data.mealNote || '');
         // Support both old (suggestions string) and new (slots array) format
         const mp = data.mealPlan || null;
         if (mp) {
@@ -383,9 +400,6 @@ Dinner: option1 / option2 / option3`;
     await save({ mealPlan: updated });
   };
 
-  const saveMealNote = async (note) => {
-    await save({ mealNote: note });
-  };
 
   const removeMealOption = async (slotName, optionIdx) => {
     const updated = {
@@ -461,6 +475,67 @@ Dinner: option1 / option2 / option3`;
     const updated = shoppingList.filter(i => i.id !== id);
     setShoppingList(updated);
     await save({ shoppingList: updated });
+  };
+
+  // ── Medicine actions
+  const openAddMedicine = () => {
+    setEditingMedicine(null);
+    setMedicineForm({ name: '', dose: '', frequencyHours: '24', durationDays: '7', startDate: toLocalDateStr(new Date()) });
+    setShowMedicineModal(true);
+  };
+
+  const openEditMedicine = (med) => {
+    setEditingMedicine(med);
+    setMedicineForm({
+      name: med.name,
+      dose: med.dose,
+      frequencyHours: String(med.frequencyHours),
+      durationDays: String(med.durationDays),
+      startDate: med.startDate,
+    });
+    setShowMedicineModal(true);
+  };
+
+  const handleSaveMedicine = async () => {
+    if (!medicineForm.name.trim() || !medicineForm.dose.trim()) return;
+    const med = {
+      id: editingMedicine?.id || Date.now().toString(),
+      name: medicineForm.name.trim(),
+      dose: medicineForm.dose.trim(),
+      frequencyHours: Number(medicineForm.frequencyHours) || 24,
+      durationDays: Number(medicineForm.durationDays) || 1,
+      startDate: medicineForm.startDate || toLocalDateStr(new Date()),
+      log: editingMedicine?.log || {},
+    };
+    const updated = editingMedicine
+      ? medicines.map(m => m.id === editingMedicine.id ? med : m)
+      : [...medicines, med];
+    setMedicines(updated);
+    await save({ medicines: updated });
+    setShowMedicineModal(false);
+    setEditingMedicine(null);
+    toast.success(editingMedicine ? 'Actualizado' : 'Medicamento agregado');
+  };
+
+  const handleToggleMedicineTaken = async (medId) => {
+    const todayStr = toLocalDateStr(new Date());
+    const updated = medicines.map(m => {
+      if (m.id !== medId) return m;
+      const dosesPerDay = Math.max(1, Math.round(24 / m.frequencyHours));
+      const rawLog = m.log?.[todayStr];
+      const current = typeof rawLog === 'boolean' ? (rawLog ? dosesPerDay : 0) : (rawLog || 0);
+      const next = current >= dosesPerDay ? 0 : current + 1;
+      return { ...m, log: { ...m.log, [todayStr]: next } };
+    });
+    setMedicines(updated);
+    await save({ medicines: updated });
+  };
+
+  const handleDeleteMedicine = async (medId) => {
+    const updated = medicines.filter(m => m.id !== medId);
+    setMedicines(updated);
+    await save({ medicines: updated });
+    setDeleteMedicineConfirm(null);
   };
 
   const handleDragEnd = async ({ active, over }) => {
@@ -675,26 +750,6 @@ Dinner: option1 / option2 / option3`;
             </div>
           )}
 
-          {/* Weekly note */}
-          <div className="mt-5">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Weekly note</p>
-              <button
-                onClick={() => { setNoteInput(mealNote); setShowNoteModal(true); }}
-                className="text-xs font-medium text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 flex items-center gap-1"
-              >
-                <Edit className="w-3.5 h-3.5" />
-                Edit
-              </button>
-            </div>
-            {mealNote ? (
-              <p className="text-sm italic text-blue-500 dark:text-blue-400 leading-relaxed text-center">
-                {mealNote}
-              </p>
-            ) : (
-              <p className="text-sm italic text-gray-300 dark:text-gray-600 text-center">No note for this week.</p>
-            )}
-          </div>
         </div>
 
         {/* ── Shopping List ── */}
@@ -792,6 +847,125 @@ Dinner: option1 / option2 / option3`;
                 </DndContext>
               )}
             </>
+          )}
+        </div>
+
+        {/* ── Medicines ── */}
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <button
+              onClick={() => setShowMedicines(v => !v)}
+              className="flex items-center gap-2 text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider"
+            >
+              {showMedicines ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              Medicamentos
+              {medicines.length > 0 && (
+                <span className="text-xs font-medium text-gray-400 dark:text-gray-500 normal-case tracking-normal">
+                  {medicines.filter(m => toLocalDateStr(new Date()) < addDaysToDateStr(m.startDate, m.durationDays)).length} activos
+                </span>
+              )}
+            </button>
+            {showMedicines && (
+              <button
+                onClick={openAddMedicine}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/70 dark:bg-gray-800/70 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-white dark:hover:bg-gray-800 text-xs font-medium transition-colors shadow-sm"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Agregar
+              </button>
+            )}
+          </div>
+
+          {showMedicines && (
+            <div className="space-y-3">
+              {medicines.length === 0 ? (
+                <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-6">
+                  Sin medicamentos activos.
+                </p>
+              ) : (
+                medicines.map(med => {
+                  const todayStr = toLocalDateStr(new Date());
+                  const endDate = addDaysToDateStr(med.startDate, med.durationDays);
+                  const notStarted = todayStr < med.startDate;
+                  const isActive = !notStarted && todayStr < endDate;
+                  const isCompleted = todayStr >= endDate;
+                  const dayNumber = isActive ? daysBetween(med.startDate, todayStr) + 1 : 0;
+                  const dosesPerDay = Math.max(1, Math.round(24 / med.frequencyHours));
+                  const rawLog = med.log?.[todayStr];
+                  const takenCount = typeof rawLog === 'boolean' ? (rawLog ? dosesPerDay : 0) : (rawLog || 0);
+                  const fullTaken = takenCount >= dosesPerDay;
+                  const freqLabel = med.frequencyHours === 24
+                    ? '1 vez al día'
+                    : med.frequencyHours > 24
+                    ? `cada ${med.frequencyHours}h`
+                    : `${dosesPerDay} veces al día (c/${med.frequencyHours}h)`;
+
+                  return (
+                    <div
+                      key={med.id}
+                      className={`p-4 rounded-xl border transition-colors ${
+                        isActive
+                          ? 'bg-white/70 dark:bg-gray-800/70 border-white/60 dark:border-gray-700/60'
+                          : 'bg-white/30 dark:bg-gray-800/30 border-white/40 dark:border-gray-700/40 opacity-60'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                          isActive ? 'bg-blue-100 dark:bg-blue-900/30' : 'bg-gray-100 dark:bg-gray-700'
+                        }`}>
+                          <Pill className={`w-4 h-4 ${isActive ? 'text-blue-500' : 'text-gray-400'}`} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-sm text-gray-900 dark:text-gray-100 truncate">{med.name}</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{med.dose} · {freqLabel}</p>
+                          {isActive && (
+                            <p className="text-xs text-blue-500 dark:text-blue-400 mt-0.5">
+                              Día {dayNumber} de {med.durationDays}
+                            </p>
+                          )}
+                          {isCompleted && (
+                            <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Completado</p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          {isActive && (
+                            <button
+                              onClick={() => handleToggleMedicineTaken(med.id)}
+                              className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors text-xs font-bold ${
+                                fullTaken
+                                  ? 'bg-green-500 text-white'
+                                  : takenCount > 0
+                                  ? 'bg-amber-400 text-white'
+                                  : 'bg-gray-100 dark:bg-gray-700 text-gray-400'
+                              }`}
+                              title={`${takenCount}/${dosesPerDay} dosis`}
+                            >
+                              {fullTaken || dosesPerDay === 1 ? (
+                                <Check className="w-4 h-4" />
+                              ) : (
+                                takenCount > 0 ? `${takenCount}/${dosesPerDay}` : <Check className="w-4 h-4" />
+                              )}
+                            </button>
+                          )}
+                          <button
+                            onClick={() => openEditMedicine(med)}
+                            className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                          >
+                            <Edit className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => setDeleteMedicineConfirm(med.id)}
+                            className="p-1.5 text-gray-400 hover:text-red-500"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
           )}
         </div>
 
@@ -1088,34 +1262,6 @@ Dinner: option1 / option2 / option3`;
         </div>
       )}
 
-      {/* Note modal */}
-      {showNoteModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-md p-6 border border-transparent dark:border-gray-700">
-            <div className="flex justify-between items-start mb-4">
-              <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">Weekly note</h3>
-              <button onClick={() => setShowNoteModal(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <textarea
-              value={noteInput}
-              onChange={e => setNoteInput(e.target.value)}
-              placeholder="What to eat, avoid, or try this week..."
-              rows={4}
-              className="w-full px-4 py-3 rounded-xl bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100 placeholder-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none mb-4"
-              autoFocus
-            />
-            <button
-              onClick={() => { setMealNote(noteInput); saveMealNote(noteInput); setShowNoteModal(false); }}
-              className="w-full btn-primary"
-            >
-              Save
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* AI modal */}
       {showAiModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -1153,6 +1299,109 @@ Dinner: option1 / option2 / option3`;
         title="Remove option"
         message="Are you sure you want to remove this meal option?"
         confirmText="Remove"
+      />
+
+      {/* ── Medicine Modal ── */}
+      {showMedicineModal && (
+        <div
+          className="fixed z-50 liquid-glass-overlay"
+          style={{ top: 0, left: 0, right: 0, bottom: 0, margin: 0 }}
+          onClick={() => setShowMedicineModal(false)}
+        >
+          <div className="flex items-center justify-center h-full pb-20 px-4">
+            <div
+              className="liquid-glass-panel rounded-2xl w-full max-w-md flex flex-col"
+              style={{ maxHeight: 'calc(90vh - 80px)' }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex justify-between items-center px-5 pt-5 pb-4 flex-shrink-0 border-b border-white/30 dark:border-white/10">
+                <h3 className="font-bold text-lg text-gray-900 dark:text-gray-100">
+                  {editingMedicine ? 'Editar medicamento' : 'Nuevo medicamento'}
+                </h3>
+                <button onClick={() => setShowMedicineModal(false)}>
+                  <X className="w-5 h-5 text-gray-400" />
+                </button>
+              </div>
+              <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4">
+                <div>
+                  <label className="label">Nombre *</label>
+                  <input
+                    className="input-field"
+                    placeholder="ej. Ibuprofeno"
+                    value={medicineForm.name}
+                    onChange={e => setMedicineForm(f => ({ ...f, name: e.target.value }))}
+                    autoFocus
+                  />
+                </div>
+                <div>
+                  <label className="label">Dosis *</label>
+                  <input
+                    className="input-field"
+                    placeholder="ej. 1 pastilla, 5ml"
+                    value={medicineForm.dose}
+                    onChange={e => setMedicineForm(f => ({ ...f, dose: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="label">Cada cuántas horas</label>
+                  <input
+                    type="number"
+                    className="input-field"
+                    placeholder="ej. 8 → 3 veces/día · 24 → 1 vez/día"
+                    value={medicineForm.frequencyHours}
+                    onChange={e => setMedicineForm(f => ({ ...f, frequencyHours: e.target.value }))}
+                    min="1"
+                  />
+                  {medicineForm.frequencyHours && Number(medicineForm.frequencyHours) > 0 && (
+                    <p className="text-xs text-gray-400 mt-1">
+                      {Number(medicineForm.frequencyHours) === 24
+                        ? '1 vez al día'
+                        : Number(medicineForm.frequencyHours) > 24
+                        ? `cada ${medicineForm.frequencyHours}h`
+                        : `${Math.round(24 / Number(medicineForm.frequencyHours))} veces al día`}
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <label className="label">Duración (días)</label>
+                  <input
+                    type="number"
+                    className="input-field"
+                    placeholder="ej. 7"
+                    value={medicineForm.durationDays}
+                    onChange={e => setMedicineForm(f => ({ ...f, durationDays: e.target.value }))}
+                    min="1"
+                  />
+                </div>
+                <div>
+                  <label className="label">Fecha de inicio</label>
+                  <input
+                    type="date"
+                    className="input-field"
+                    value={medicineForm.startDate}
+                    onChange={e => setMedicineForm(f => ({ ...f, startDate: e.target.value }))}
+                  />
+                </div>
+                <button
+                  onClick={handleSaveMedicine}
+                  disabled={!medicineForm.name.trim() || !medicineForm.dose.trim()}
+                  className="btn-primary w-full"
+                >
+                  {editingMedicine ? 'Guardar cambios' : 'Agregar medicamento'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <ConfirmModal
+        isOpen={!!deleteMedicineConfirm}
+        onClose={() => setDeleteMedicineConfirm(null)}
+        onConfirm={() => handleDeleteMedicine(deleteMedicineConfirm)}
+        title="Eliminar medicamento"
+        message="¿Seguro que quieres eliminar este medicamento?"
+        confirmText="Eliminar"
       />
     </>
   );

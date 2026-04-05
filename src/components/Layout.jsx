@@ -1,5 +1,5 @@
 import { Outlet, NavLink } from 'react-router-dom';
-import { Target, Zap, Salad, BookOpen } from 'lucide-react';
+import { Target, Zap, Salad, BookOpen, Heart } from 'lucide-react';
 
 const Layout = () => {
   const navItems = [
@@ -7,6 +7,7 @@ const Layout = () => {
     { path: '/move', icon: Zap, label: 'Exercise' },
     { path: '/food', icon: Salad, label: 'Nutrition' },
     { path: '/books', icon: BookOpen, label: 'Books' },
+    { path: '/together', icon: Heart, label: 'Together' },
   ];
 
   return (

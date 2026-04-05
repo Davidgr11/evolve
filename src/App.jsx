@@ -7,6 +7,7 @@ import Goals from './pages/Goals';
 import Move from './pages/Move';
 import Food from './pages/Food';
 import Books from './pages/Books';
+import Together from './pages/Together';
 import Profile from './pages/Profile';
 import RoutineExecution from './pages/RoutineExecution';
 
@@ -29,6 +30,7 @@ function App() {
               <Route path="/move" element={<Move />} />
               <Route path="/food" element={<Food />} />
               <Route path="/books" element={<Books />} />
+              <Route path="/together" element={<Together />} />
               <Route path="/profile" element={<Profile />} />
             </Route>
             <Route path="/routine/:routineId" element={<RoutineExecution />} />

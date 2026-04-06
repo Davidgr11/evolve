@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { db, storage } from '../utils/firebase';
 import {
   doc, getDoc, setDoc, updateDoc, deleteDoc,
-  collection, addDoc, onSnapshot,
+  collection, addDoc, onSnapshot, arrayUnion,
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import imageCompression from 'browser-image-compression';
@@ -220,19 +220,11 @@ const SetupScreen = ({ onCreated, onJoined }) => {
       }
 
       const { coupleId } = inviteSnap.data();
-      const coupleSnap = await getDoc(doc(db, 'couples', coupleId));
-      if (!coupleSnap.exists()) {
-        toast.error('El espacio ya no existe');
-        return;
-      }
 
-      const coupleData = coupleSnap.data();
-
-      if (!coupleData.members.includes(user.uid)) {
-        await updateDoc(doc(db, 'couples', coupleId), {
-          members: [...coupleData.members, user.uid],
-        });
-      }
+      // Non-members can update via arrayUnion (rule allows joining a 1-member couple)
+      await updateDoc(doc(db, 'couples', coupleId), {
+        members: arrayUnion(user.uid),
+      });
 
       await setDoc(doc(db, `users/${user.uid}/settings/together`), { coupleId });
 

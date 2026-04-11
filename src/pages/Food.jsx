@@ -60,6 +60,30 @@ const daysBetween = (from, to) => {
   return Math.round((b - a) / (1000 * 60 * 60 * 24));
 };
 
+const generateDefaultTimes = (frequencyHours) => {
+  const n = Math.max(1, Math.round(24 / Number(frequencyHours)));
+  return Array.from({ length: n }, (_, i) => {
+    const h = Math.floor((8 + i * Number(frequencyHours)) % 24);
+    return `${String(h).padStart(2, '0')}:00`;
+  });
+};
+
+// Sort priority: active-pending by next dose minutes, all-done-today → 2000, inactive/expired → 3000
+const getMedicineSortPriority = (med, todayStr) => {
+  const endDate = addDaysToDateStr(med.startDate, med.durationDays);
+  const notStarted = todayStr < med.startDate;
+  const isCompleted = todayStr >= endDate;
+  if (isCompleted || notStarted) return 3000;
+  const dosesPerDay = Math.max(1, Math.round(24 / med.frequencyHours));
+  const rawLog = med.log?.[todayStr];
+  const takenCount = typeof rawLog === 'boolean' ? (rawLog ? dosesPerDay : 0) : (rawLog || 0);
+  if (takenCount >= dosesPerDay) return 2000;
+  const times = med.doseTimes || [];
+  const next = times[takenCount] || '23:59';
+  const [h, m] = next.split(':').map(Number);
+  return h * 60 + (m || 0);
+};
+
 const DAY_LABELS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 const RATING_EMOJI = ['😵', '😞', '😐', '🙂', '🥗'];
 const RATING_COLOR = (r) =>
@@ -176,7 +200,7 @@ const Food = () => {
   const [medicines, setMedicines] = useState([]);
   const [showMedicines, setShowMedicines] = useState(true);
   const [showMedicineModal, setShowMedicineModal] = useState(false);
-  const [medicineForm, setMedicineForm] = useState({ name: '', dose: '', frequencyHours: '24', durationDays: '7', startDate: '' });
+  const [medicineForm, setMedicineForm] = useState({ name: '', dose: '', frequencyHours: '24', durationDays: '7', startDate: '', doseTimes: ['08:00'], note: '' });
   const [editingMedicine, setEditingMedicine] = useState(null);
   const [deleteMedicineConfirm, setDeleteMedicineConfirm] = useState(null);
 
@@ -480,7 +504,7 @@ Dinner: option1 / option2 / option3`;
   // ── Medicine actions
   const openAddMedicine = () => {
     setEditingMedicine(null);
-    setMedicineForm({ name: '', dose: '', frequencyHours: '24', durationDays: '7', startDate: toLocalDateStr(new Date()) });
+    setMedicineForm({ name: '', dose: '', frequencyHours: '24', durationDays: '7', startDate: toLocalDateStr(new Date()), doseTimes: ['08:00'], note: '' });
     setShowMedicineModal(true);
   };
 
@@ -492,6 +516,8 @@ Dinner: option1 / option2 / option3`;
       frequencyHours: String(med.frequencyHours),
       durationDays: String(med.durationDays),
       startDate: med.startDate,
+      doseTimes: med.doseTimes || generateDefaultTimes(med.frequencyHours),
+      note: med.note || '',
     });
     setShowMedicineModal(true);
   };
@@ -505,6 +531,8 @@ Dinner: option1 / option2 / option3`;
       frequencyHours: Number(medicineForm.frequencyHours) || 24,
       durationDays: Number(medicineForm.durationDays) || 1,
       startDate: medicineForm.startDate || toLocalDateStr(new Date()),
+      doseTimes: medicineForm.doseTimes,
+      note: medicineForm.note.trim(),
       log: editingMedicine?.log || {},
     };
     const updated = editingMedicine
@@ -883,87 +911,123 @@ Dinner: option1 / option2 / option3`;
                   Sin medicamentos activos.
                 </p>
               ) : (
-                medicines.map(med => {
-                  const todayStr = toLocalDateStr(new Date());
-                  const endDate = addDaysToDateStr(med.startDate, med.durationDays);
-                  const notStarted = todayStr < med.startDate;
-                  const isActive = !notStarted && todayStr < endDate;
-                  const isCompleted = todayStr >= endDate;
-                  const dayNumber = isActive ? daysBetween(med.startDate, todayStr) + 1 : 0;
-                  const dosesPerDay = Math.max(1, Math.round(24 / med.frequencyHours));
-                  const rawLog = med.log?.[todayStr];
-                  const takenCount = typeof rawLog === 'boolean' ? (rawLog ? dosesPerDay : 0) : (rawLog || 0);
-                  const fullTaken = takenCount >= dosesPerDay;
-                  const freqLabel = med.frequencyHours === 24
-                    ? '1 vez al día'
-                    : med.frequencyHours > 24
-                    ? `cada ${med.frequencyHours}h`
-                    : `${dosesPerDay} veces al día (c/${med.frequencyHours}h)`;
+                [...medicines]
+                  .sort((a, b) => {
+                    const t = toLocalDateStr(new Date());
+                    return getMedicineSortPriority(a, t) - getMedicineSortPriority(b, t);
+                  })
+                  .map(med => {
+                    const todayStr = toLocalDateStr(new Date());
+                    const endDate = addDaysToDateStr(med.startDate, med.durationDays);
+                    const notStarted = todayStr < med.startDate;
+                    const isActive = !notStarted && todayStr < endDate;
+                    const isCompleted = todayStr >= endDate;
+                    const dayNumber = isActive ? daysBetween(med.startDate, todayStr) + 1 : 0;
+                    const dosesPerDay = Math.max(1, Math.round(24 / med.frequencyHours));
+                    const rawLog = med.log?.[todayStr];
+                    const takenCount = typeof rawLog === 'boolean' ? (rawLog ? dosesPerDay : 0) : (rawLog || 0);
+                    const fullTaken = takenCount >= dosesPerDay;
+                    const freqLabel = med.frequencyHours === 24
+                      ? '1 vez al día'
+                      : med.frequencyHours > 24
+                      ? `cada ${med.frequencyHours}h`
+                      : `${dosesPerDay} veces al día`;
+                    const times = med.doseTimes || generateDefaultTimes(med.frequencyHours);
 
-                  return (
-                    <div
-                      key={med.id}
-                      className={`p-4 rounded-xl border transition-colors ${
-                        isActive
-                          ? 'bg-white/70 dark:bg-gray-800/70 border-white/60 dark:border-gray-700/60'
-                          : 'bg-white/30 dark:bg-gray-800/30 border-white/40 dark:border-gray-700/40 opacity-60'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                          isActive ? 'bg-blue-100 dark:bg-blue-900/30' : 'bg-gray-100 dark:bg-gray-700'
-                        }`}>
-                          <Pill className={`w-4 h-4 ${isActive ? 'text-blue-500' : 'text-gray-400'}`} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-sm text-gray-900 dark:text-gray-100 truncate">{med.name}</p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{med.dose} · {freqLabel}</p>
-                          {isActive && (
-                            <p className="text-xs text-blue-500 dark:text-blue-400 mt-0.5">
-                              Día {dayNumber} de {med.durationDays}
-                            </p>
-                          )}
-                          {isCompleted && (
-                            <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Completado</p>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-1.5 flex-shrink-0">
-                          {isActive && (
+                    return (
+                      <div
+                        key={med.id}
+                        className={`p-4 rounded-xl border transition-colors ${
+                          isActive && fullTaken
+                            ? 'bg-green-50/70 dark:bg-green-900/10 border-green-200/60 dark:border-green-700/40'
+                            : isActive
+                            ? 'bg-white/70 dark:bg-gray-800/70 border-white/60 dark:border-gray-700/60'
+                            : 'bg-white/30 dark:bg-gray-800/30 border-white/40 dark:border-gray-700/40 opacity-60'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                            isActive && fullTaken ? 'bg-green-100 dark:bg-green-900/30'
+                            : isActive ? 'bg-blue-100 dark:bg-blue-900/30'
+                            : 'bg-gray-100 dark:bg-gray-700'
+                          }`}>
+                            <Pill className={`w-4 h-4 ${
+                              isActive && fullTaken ? 'text-green-500'
+                              : isActive ? 'text-blue-500'
+                              : 'text-gray-400'
+                            }`} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-sm text-gray-900 dark:text-gray-100 truncate">{med.name}</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{med.dose} · {freqLabel}</p>
+                            {isActive && (
+                              <p className="text-xs text-blue-500 dark:text-blue-400 mt-0.5">
+                                Día {dayNumber} de {med.durationDays}
+                              </p>
+                            )}
+                            {isCompleted && (
+                              <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Tratamiento completado</p>
+                            )}
+                            {isActive && (
+                              <div className="flex gap-1 mt-1.5 flex-wrap">
+                                {times.map((t, i) => (
+                                  <span
+                                    key={i}
+                                    className={`text-xs px-1.5 py-0.5 rounded font-mono ${
+                                      i < takenCount
+                                        ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400 line-through opacity-60'
+                                        : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'
+                                    }`}
+                                  >
+                                    {t}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                            {isActive && fullTaken && (
+                              <p className="text-xs text-green-600 dark:text-green-400 mt-1 font-medium">✓ Completado por hoy</p>
+                            )}
+                            {med.note ? (
+                              <p className="text-xs text-gray-400 dark:text-gray-500 mt-1 italic">{med.note}</p>
+                            ) : null}
+                          </div>
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            {isActive && (
+                              <button
+                                onClick={() => handleToggleMedicineTaken(med.id)}
+                                className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors text-xs font-bold ${
+                                  fullTaken
+                                    ? 'bg-green-500 text-white'
+                                    : takenCount > 0
+                                    ? 'bg-amber-400 text-white'
+                                    : 'bg-gray-100 dark:bg-gray-700 text-gray-400'
+                                }`}
+                                title={`${takenCount}/${dosesPerDay} dosis`}
+                              >
+                                {fullTaken || dosesPerDay === 1 ? (
+                                  <Check className="w-4 h-4" />
+                                ) : (
+                                  takenCount > 0 ? `${takenCount}/${dosesPerDay}` : <Check className="w-4 h-4" />
+                                )}
+                              </button>
+                            )}
                             <button
-                              onClick={() => handleToggleMedicineTaken(med.id)}
-                              className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors text-xs font-bold ${
-                                fullTaken
-                                  ? 'bg-green-500 text-white'
-                                  : takenCount > 0
-                                  ? 'bg-amber-400 text-white'
-                                  : 'bg-gray-100 dark:bg-gray-700 text-gray-400'
-                              }`}
-                              title={`${takenCount}/${dosesPerDay} dosis`}
+                              onClick={() => openEditMedicine(med)}
+                              className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
                             >
-                              {fullTaken || dosesPerDay === 1 ? (
-                                <Check className="w-4 h-4" />
-                              ) : (
-                                takenCount > 0 ? `${takenCount}/${dosesPerDay}` : <Check className="w-4 h-4" />
-                              )}
+                              <Edit className="w-3.5 h-3.5" />
                             </button>
-                          )}
-                          <button
-                            onClick={() => openEditMedicine(med)}
-                            className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
-                          >
-                            <Edit className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => setDeleteMedicineConfirm(med.id)}
-                            className="p-1.5 text-gray-400 hover:text-red-500"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                            <button
+                              onClick={() => setDeleteMedicineConfirm(med.id)}
+                              className="p-1.5 text-gray-400 hover:text-red-500"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })
+                    );
+                  })
               )}
             </div>
           )}
@@ -1349,7 +1413,14 @@ Dinner: option1 / option2 / option3`;
                     className="input-field"
                     placeholder="ej. 8 → 3 veces/día · 24 → 1 vez/día"
                     value={medicineForm.frequencyHours}
-                    onChange={e => setMedicineForm(f => ({ ...f, frequencyHours: e.target.value }))}
+                    onChange={e => {
+                      const fh = e.target.value;
+                      setMedicineForm(f => ({
+                        ...f,
+                        frequencyHours: fh,
+                        doseTimes: fh && Number(fh) > 0 ? generateDefaultTimes(fh) : f.doseTimes,
+                      }));
+                    }}
                     min="1"
                   />
                   {medicineForm.frequencyHours && Number(medicineForm.frequencyHours) > 0 && (
@@ -1362,6 +1433,28 @@ Dinner: option1 / option2 / option3`;
                     </p>
                   )}
                 </div>
+                {medicineForm.doseTimes.length > 0 && (
+                  <div>
+                    <label className="label">Horarios de dosis</label>
+                    <div className="space-y-2">
+                      {medicineForm.doseTimes.map((t, i) => (
+                        <div key={i} className="flex items-center gap-2">
+                          <span className="text-xs text-gray-400 w-16 flex-shrink-0">Dosis {i + 1}</span>
+                          <input
+                            type="time"
+                            className="input-field flex-1"
+                            value={t}
+                            onChange={e => {
+                              const newTimes = [...medicineForm.doseTimes];
+                              newTimes[i] = e.target.value;
+                              setMedicineForm(f => ({ ...f, doseTimes: newTimes }));
+                            }}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div>
                   <label className="label">Duración (días)</label>
                   <input
@@ -1380,6 +1473,15 @@ Dinner: option1 / option2 / option3`;
                     className="input-field"
                     value={medicineForm.startDate}
                     onChange={e => setMedicineForm(f => ({ ...f, startDate: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="label">Nota</label>
+                  <input
+                    className="input-field"
+                    placeholder="ej. Tomar con comida"
+                    value={medicineForm.note}
+                    onChange={e => setMedicineForm(f => ({ ...f, note: e.target.value }))}
                   />
                 </div>
                 <button

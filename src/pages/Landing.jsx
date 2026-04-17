@@ -56,7 +56,7 @@ const Landing = () => {
               <div className="relative z-10">
                 <span className="text-2xl mb-2 block">{icon}</span>
                 <p className="font-semibold text-gray-900 dark:text-gray-100 text-sm mb-1">{title}</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">{description}</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">{description}</p>
               </div>
             </div>
           ))}

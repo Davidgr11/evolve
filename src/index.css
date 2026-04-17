@@ -50,23 +50,41 @@ html.dark[data-color-theme="purple"] .app-bg                     { background: #
 [data-color-theme="purple"] .focus\:ring-blue-300:focus          { --tw-ring-color: #c4b5fd !important; }
 [data-color-theme="purple"] .liquid-glass-panel                  { box-shadow: inset 0 1.5px 0 rgba(255,255,255,0.95), inset 0 -1px 0 rgba(255,255,255,0.25), 0 24px 60px rgba(120,80,220,0.14), 0 4px 16px rgba(0,0,0,0.08); }
 
-/* Green */
-[data-color-theme="green"] .app-bg                               { background: #c2e8d0; }
-html.dark[data-color-theme="green"] .app-bg                      { background: #0f2117; }
-[data-color-theme="green"] .btn-primary                          { background-color: #22c55e !important; }
-[data-color-theme="green"] .btn-primary:hover:not(:disabled)     { background-color: #16a34a !important; }
-[data-color-theme="green"] .text-primary-500                     { color: #22c55e !important; }
-[data-color-theme="green"] .text-primary-600                     { color: #16a34a !important; }
-[data-color-theme="green"] .bg-primary-500                       { background-color: #22c55e !important; }
-[data-color-theme="green"] .bg-primary-600                       { background-color: #16a34a !important; }
-[data-color-theme="green"] .bg-blue-500                          { background-color: #22c55e !important; }
-[data-color-theme="green"] .text-blue-500                        { color: #22c55e !important; }
-[data-color-theme="green"] .text-blue-600                        { color: #16a34a !important; }
-[data-color-theme="green"] .text-blue-400                        { color: #4ade80 !important; }
-[data-color-theme="green"] .border-blue-100                      { border-color: #dcfce7 !important; }
-[data-color-theme="green"] .border-blue-800                      { border-color: #166534 !important; }
-[data-color-theme="green"] .focus\:ring-blue-300:focus           { --tw-ring-color: #86efac !important; }
-[data-color-theme="green"] .liquid-glass-panel                   { box-shadow: inset 0 1.5px 0 rgba(255,255,255,0.95), inset 0 -1px 0 rgba(255,255,255,0.25), 0 24px 60px rgba(34,197,94,0.10), 0 4px 16px rgba(0,0,0,0.08); }
+/* Arena */
+[data-color-theme="arena"] .app-bg                               { background: #ede5d8; }
+html.dark[data-color-theme="arena"] .app-bg                      { background: #1c1812; }
+[data-color-theme="arena"] .btn-primary                          { background-color: #9e7b5a !important; }
+[data-color-theme="arena"] .btn-primary:hover:not(:disabled)     { background-color: #865f42 !important; }
+[data-color-theme="arena"] .text-primary-500                     { color: #9e7b5a !important; }
+[data-color-theme="arena"] .text-primary-600                     { color: #865f42 !important; }
+[data-color-theme="arena"] .bg-primary-500                       { background-color: #9e7b5a !important; }
+[data-color-theme="arena"] .bg-primary-600                       { background-color: #865f42 !important; }
+[data-color-theme="arena"] .bg-blue-500                          { background-color: #9e7b5a !important; }
+[data-color-theme="arena"] .text-blue-500                        { color: #9e7b5a !important; }
+[data-color-theme="arena"] .text-blue-600                        { color: #865f42 !important; }
+[data-color-theme="arena"] .text-blue-400                        { color: #c4a47a !important; }
+[data-color-theme="arena"] .border-blue-100                      { border-color: #f5ece0 !important; }
+[data-color-theme="arena"] .border-blue-800                      { border-color: #6b4c30 !important; }
+[data-color-theme="arena"] .focus\:ring-blue-300:focus           { --tw-ring-color: #d4b896 !important; }
+[data-color-theme="arena"] .liquid-glass-panel                   { box-shadow: inset 0 1.5px 0 rgba(255,255,255,0.95), inset 0 -1px 0 rgba(255,255,255,0.25), 0 24px 60px rgba(158,123,90,0.14), 0 4px 16px rgba(0,0,0,0.08); }
+
+/* Pizarra */
+[data-color-theme="slate"] .app-bg                               { background: #dce0e8; }
+html.dark[data-color-theme="slate"] .app-bg                      { background: #12141a; }
+[data-color-theme="slate"] .btn-primary                          { background-color: #64748b !important; }
+[data-color-theme="slate"] .btn-primary:hover:not(:disabled)     { background-color: #475569 !important; }
+[data-color-theme="slate"] .text-primary-500                     { color: #64748b !important; }
+[data-color-theme="slate"] .text-primary-600                     { color: #475569 !important; }
+[data-color-theme="slate"] .bg-primary-500                       { background-color: #64748b !important; }
+[data-color-theme="slate"] .bg-primary-600                       { background-color: #475569 !important; }
+[data-color-theme="slate"] .bg-blue-500                          { background-color: #64748b !important; }
+[data-color-theme="slate"] .text-blue-500                        { color: #64748b !important; }
+[data-color-theme="slate"] .text-blue-600                        { color: #475569 !important; }
+[data-color-theme="slate"] .text-blue-400                        { color: #94a3b8 !important; }
+[data-color-theme="slate"] .border-blue-100                      { border-color: #e2e8f0 !important; }
+[data-color-theme="slate"] .border-blue-800                      { border-color: #334155 !important; }
+[data-color-theme="slate"] .focus\:ring-blue-300:focus           { --tw-ring-color: #cbd5e1 !important; }
+[data-color-theme="slate"] .liquid-glass-panel                   { box-shadow: inset 0 1.5px 0 rgba(255,255,255,0.95), inset 0 -1px 0 rgba(255,255,255,0.25), 0 24px 60px rgba(100,116,139,0.12), 0 4px 16px rgba(0,0,0,0.08); }
 
 /* ─── Liquid Glass ─────────────────────────────────────────────── */
 

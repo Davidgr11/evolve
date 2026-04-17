@@ -141,7 +141,7 @@ const Auth = () => {
                   })}
                 />
                 {errors.email && (
-                  <p className="text-red-500 text-xs mt-1">{errors.email.message}</p>
+                  <p className="text-red-500 text-sm mt-1">{errors.email.message}</p>
                 )}
               </div>
 
@@ -156,7 +156,7 @@ const Auth = () => {
                   })}
                 />
                 {errors.password && (
-                  <p className="text-red-500 text-xs mt-1">{errors.password.message}</p>
+                  <p className="text-red-500 text-sm mt-1">{errors.password.message}</p>
                 )}
               </div>
 
@@ -170,7 +170,7 @@ const Auth = () => {
             </form>
 
             {/* Toggle */}
-            <p className="text-center text-xs text-gray-500 dark:text-gray-400">
+            <p className="text-center text-sm text-gray-500 dark:text-gray-400">
               {isSignUp ? 'Already have an account? ' : "Don't have an account? "}
               <button
                 onClick={() => {

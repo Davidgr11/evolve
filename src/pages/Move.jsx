@@ -8,7 +8,7 @@ import {
 import { ref, deleteObject } from 'firebase/storage';
 import toast from '../utils/toast';
 import {
-  Plus, Play, Edit, Trash2, Activity, Flame, Route,
+  Plus, Play, Edit, Trash2, Flame, Route,
   Dumbbell, Sparkles, Trophy, Zap, Wind, PersonStanding, Swords
 } from 'lucide-react';
 import RoutineModal from '../components/RoutineModal';
@@ -50,6 +50,17 @@ const TYPE_CONFIG = {
   },
 };
 
+const getWeeklyDone = (routine) => {
+  if (!routine.runDates?.length) return 0;
+  const now = new Date();
+  const day = now.getDay();
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - (day === 0 ? 6 : day - 1));
+  monday.setHours(0, 0, 0, 0);
+  const mondayStr = monday.toISOString().split('T')[0];
+  return routine.runDates.filter(d => d >= mondayStr).length;
+};
+
 const getStatusBorder = (routine) => {
   if (!routine.lastRun) return 'border-l-gray-200 dark:border-l-gray-700';
   const days = Math.floor((Date.now() - new Date(routine.lastRun)) / 86400000);
@@ -59,11 +70,11 @@ const getStatusBorder = (routine) => {
 };
 
 const formatLastRun = (routine) => {
-  if (!routine.lastRun) return null; // no data yet — don't show
+  if (!routine.lastRun) return null;
   const days = Math.floor((Date.now() - new Date(routine.lastRun)) / 86400000);
-  if (days === 0) return 'Today';
-  if (days === 1) return 'Yesterday';
-  return `${days}d ago`;
+  if (days === 0) return 'Hoy';
+  if (days === 1) return 'Ayer';
+  return `hace ${days}d`;
 };
 
 const Move = () => {
@@ -75,14 +86,14 @@ const Move = () => {
   const [editingRoutine, setEditingRoutine] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState({ isOpen: false, routine: null });
   const [stats, setStats] = useState({
-    month: { stretch: 0, workout: 0, running: 0, sports: 0, effort: [], calories: 0, km: 0 },
-    year:  { stretch: 0, workout: 0, running: 0, sports: 0, effort: [], calories: 0, km: 0 }
+    month: { stretch: 0, workout: 0, running: 0, sports: 0, calories: 0, km: 0 },
+    year:  { stretch: 0, workout: 0, running: 0, sports: 0, calories: 0, km: 0 }
   });
   const [claudeLoading, setClaudeLoading] = useState(false);
   const [claudeAnalysis, setClaudeAnalysis] = useState('');
 
   const now = new Date();
-  const currentMonthName = now.toLocaleString('en-US', { month: 'long' });
+  const currentMonthName = now.toLocaleString('es-MX', { month: 'long' }).replace(/^\w/, c => c.toUpperCase());
   const currentYear = now.getFullYear();
   const monthsElapsed = now.getMonth() + 1;
 
@@ -95,7 +106,7 @@ const Move = () => {
     try {
       const snapshot = await getDocs(collection(db, `users/${user.uid}/routines`));
       setRoutines(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
-    } catch { toast.error('Failed to load routines'); }
+    } catch { toast.error('Error al cargar las rutinas'); }
     finally { setLoading(false); }
   };
 
@@ -103,8 +114,8 @@ const Move = () => {
     try {
       const curMonth = now.getMonth() + 1;
       const snapshot = await getDocs(collection(db, `users/${user.uid}/statistics/move/${currentYear}`));
-      let m = { stretch: 0, workout: 0, running: 0, sports: 0, effort: [], calories: 0, km: 0 };
-      let y = { stretch: 0, workout: 0, running: 0, sports: 0, effort: [], calories: 0, km: 0 };
+      let m = { stretch: 0, workout: 0, running: 0, sports: 0, calories: 0, km: 0 };
+      let y = { stretch: 0, workout: 0, running: 0, sports: 0, calories: 0, km: 0 };
       snapshot.forEach((d) => {
         const data = d.data();
         const month = parseInt(d.id);
@@ -113,17 +124,11 @@ const Move = () => {
         y.workout  += data.workout  || 0;
         y.running  += data.running  || 0;
         y.sports   += data.sports   || 0;
-        y.effort    = [...y.effort, ...(data.effort || [])];
         y.calories += data.calories || 0;
         y.km       += data.km       || 0;
       });
       setStats({ month: m, year: y });
     } catch (err) { console.error(err); }
-  };
-
-  const avgEffort = (arr) => {
-    if (!arr?.length) return '—';
-    return (arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(1);
   };
 
   const totalMonth = (stats.month.stretch || 0) + (stats.month.workout || 0) +
@@ -139,12 +144,12 @@ const Move = () => {
     setClaudeAnalysis('');
     try {
       const totalYear = stats.year.stretch + stats.year.workout + stats.year.running + stats.year.sports;
-      const prompt = `Exercise data for ${currentMonthName} ${currentYear}:
-- Sessions: ${totalMonth} (stretch ${stats.month.stretch}, workout ${stats.month.workout}, running ${stats.month.running}, sports ${stats.month.sports})
-- Calories: ${stats.month.calories} kcal, Distance: ${(stats.month.km || 0).toFixed(1)} km, Avg effort: ${avgEffort(stats.month.effort)}/5
-Year to date (${monthsElapsed}/12 months): ${totalYear} sessions, ${stats.year.calories} kcal, ${(stats.year.km || 0).toFixed(1)} km
+      const prompt = `Datos de ejercicio de ${currentMonthName} ${currentYear}:
+- Sesiones: ${totalMonth} (estiramiento ${stats.month.stretch}, entrenamiento ${stats.month.workout}, correr ${stats.month.running}, deportes ${stats.month.sports})
+- Calorías: ${stats.month.calories} kcal, Distancia: ${(stats.month.km || 0).toFixed(1)} km
+Acumulado del año (${monthsElapsed}/12 meses): ${totalYear} sesiones, ${stats.year.calories} kcal, ${(stats.year.km || 0).toFixed(1)} km
 
-Reply in plain text only — no markdown, no asterisks, no headers. Be concise: 1 sentence on what stands out, 1 sentence with the single most useful action to take right now.`;
+Responde solo en texto plano — sin markdown, sin asteriscos, sin encabezados. Sé conciso: 1 oración sobre lo que más destaca, 1 oración con la acción más útil que puedo tomar ahora mismo. Responde en español.`;
 
       const res = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
@@ -173,16 +178,16 @@ Reply in plain text only — no markdown, no asterisks, no headers. Be concise: 
     try {
       if (editingRoutine) {
         await updateDoc(doc(db, `users/${user.uid}/routines`, editingRoutine.id), routineData);
-        toast.success('Routine updated');
+        toast.success('Rutina actualizada');
       } else {
         await addDoc(collection(db, `users/${user.uid}/routines`), {
           ...routineData, createdAt: new Date().toISOString()
         });
-        toast.success('Routine created');
+        toast.success('Rutina creada');
       }
       setShowModal(false);
       loadRoutines();
-    } catch { toast.error('Failed to save routine'); }
+    } catch { toast.error('Error al guardar la rutina'); }
   };
 
   const handleDeleteRoutine = async (routine) => {
@@ -191,61 +196,62 @@ Reply in plain text only — no markdown, no asterisks, no headers. Be concise: 
         if (ex.imagePath) { try { await deleteObject(ref(storage, ex.imagePath)); } catch {} }
       }
       await deleteDoc(doc(db, `users/${user.uid}/routines`, routine.id));
-      toast.success('Routine deleted');
+      toast.success('Rutina eliminada');
       loadRoutines();
-    } catch { toast.error('Failed to delete routine'); }
+    } catch { toast.error('Error al eliminar la rutina'); }
   };
 
   if (loading) return (
     <div className="flex items-center justify-center h-64">
-      <div className="text-gray-500">Loading...</div>
+      <div className="text-gray-500">Cargando...</div>
     </div>
   );
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
 
       {/* Header */}
       <div className="flex justify-between items-end">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-widest text-blue-500 dark:text-blue-400 mb-1">
-            {currentYear}
-          </p>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 leading-tight">
-            Exercise
+            Actividad
           </h1>
         </div>
         <button
           onClick={() => { setEditingRoutine(null); setShowModal(true); }}
           className="btn-primary flex items-center gap-1.5 text-sm"
         >
-          <Plus className="w-4 h-4" /> New Routine
+          <Plus className="w-4 h-4" /> Nueva Rutina
         </button>
       </div>
 
-      {/* Year stats — liquid glass circles */}
+      {/* Annual stats */}
       <div>
-        <p className="text-xs font-bold text-gray-600 dark:text-gray-400 uppercase tracking-widest mb-4 text-center">
-          {currentYear} Annual
+        <p className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-3">
+          {currentYear}
         </p>
-        <div className="flex justify-around">
-          {[
-            { icon: Flame,    iconColor: 'text-orange-400', value: stats.year.calories.toLocaleString(), unit: 'kcal' },
-            { icon: Route,    iconColor: 'text-blue-400',   value: (stats.year.km || 0).toFixed(1),      unit: 'km'   },
-            { icon: Activity, iconColor: 'text-purple-400', value: avgEffort(stats.year.effort),         unit: 'effort avg' },
-          ].map(({ icon: Icon, iconColor, value, unit }) => (
-            <div key={unit} className="flex flex-col items-center">
-              <div className="w-24 h-24 rounded-full flex flex-col items-center justify-center gap-0.5 bg-white/70 dark:bg-gray-800/70 border border-blue-100 dark:border-blue-800 shadow-sm">
-                <Icon className={`w-5 h-5 ${iconColor}`} />
-                <p className="text-lg font-bold text-gray-900 dark:text-gray-100 leading-none mt-1">{value}</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 font-medium leading-none mt-0.5">{unit}</p>
-              </div>
+        <div className="liquid-glass-panel rounded-2xl p-5">
+          <div className="flex items-stretch">
+            <div className="flex-1 flex flex-col items-center gap-1">
+              <Flame className="w-5 h-5 text-orange-400 mb-0.5" />
+              <p className="text-3xl font-bold text-gray-900 dark:text-gray-100 leading-none">
+                {stats.year.calories.toLocaleString()}
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide font-medium">kcal</p>
             </div>
-          ))}
+            <div className="w-px bg-gray-100 dark:bg-gray-700 mx-4" />
+            <div className="flex-1 flex flex-col items-center gap-1">
+              <Route className="w-5 h-5 text-blue-400 mb-0.5" />
+              <p className="text-3xl font-bold text-gray-900 dark:text-gray-100 leading-none">
+                {(stats.year.km || 0).toFixed(1)}
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide font-medium">km</p>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Month — AI analyze only */}
+      {/* Month — AI analyze */}
       <div>
         <div className="flex items-center justify-between mb-3">
           <p className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
@@ -257,13 +263,13 @@ Reply in plain text only — no markdown, no asterisks, no headers. Be concise: 
             className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white/70 dark:bg-gray-800/70 border border-blue-100 dark:border-blue-800 text-blue-600 dark:text-blue-400 hover:bg-white dark:hover:bg-gray-800 transition-colors text-sm font-medium disabled:opacity-60 shadow-sm"
           >
             <Sparkles className="w-3.5 h-3.5" />
-            {claudeLoading ? 'Analyzing...' : 'Analyze current month'}
+            {claudeLoading ? 'Analizando...' : 'Analizar mes'}
           </button>
         </div>
 
         {claudeAnalysis && (
-          <div className="px-4 py-3 bg-white/60 dark:bg-gray-800/60 rounded-2xl border border-blue-100 dark:border-blue-900 shadow-sm">
-            <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{claudeAnalysis}</p>
+          <div className="px-4 py-3 liquid-glass-panel rounded-2xl">
+            <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed text-justify">{claudeAnalysis}</p>
           </div>
         )}
       </div>
@@ -271,15 +277,15 @@ Reply in plain text only — no markdown, no asterisks, no headers. Be concise: 
       {/* Routines */}
       <div>
         <p className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-4">
-          My Routines
+          Mis Rutinas
         </p>
 
         {routines.length === 0 ? (
           <div className="text-center py-16">
             <Dumbbell className="w-14 h-14 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-            <p className="text-gray-500 dark:text-gray-400 mb-4">No routines yet</p>
+            <p className="text-gray-500 dark:text-gray-400 mb-4">Sin rutinas aún</p>
             <button onClick={() => { setEditingRoutine(null); setShowModal(true); }} className="btn-primary">
-              Create Routine
+              Crear rutina
             </button>
           </div>
         ) : (
@@ -290,16 +296,15 @@ Reply in plain text only — no markdown, no asterisks, no headers. Be concise: 
               const lastRun = formatLastRun(routine);
               const statusBorder = getStatusBorder(routine);
 
+              const weeklyDone = getWeeklyDone(routine);
+              const weeklyGoal = routine.weeklyGoal || 0;
+              const onTrack = weeklyGoal > 0 && weeklyDone >= weeklyGoal;
+
               return (
                 <div
                   key={routine.id}
-                  className={`relative overflow-hidden rounded-2xl border-l-4 ${statusBorder} bg-gradient-to-br ${cfg.gradient} backdrop-blur-sm border border-r border-t border-b ${cfg.border} shadow-sm hover:shadow-md transition-shadow`}
+                  className={`relative overflow-hidden rounded-2xl border-l-4 ${statusBorder} liquid-glass-panel shadow-sm hover:shadow-md transition-shadow`}
                 >
-                  {/* Faint type icon watermark */}
-                  <TypeIcon
-                    className="absolute top-3 right-3 opacity-10 dark:opacity-[0.07]"
-                    style={{ width: 56, height: 56 }}
-                  />
 
                   <div className="relative p-4">
                     {/* Type badge */}
@@ -313,12 +318,34 @@ Reply in plain text only — no markdown, no asterisks, no headers. Be concise: 
                     </h3>
 
                     {/* Meta */}
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
-                      {routine.exercises?.length || 0} exercises · {routine.series} series
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">
+                      {routine.exercises?.length || 0} ejercicios · {routine.series} ronda{routine.series !== 1 ? 's' : ''}
                     </p>
 
+                    {/* Weekly goal progress */}
+                    {weeklyGoal > 0 && (
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className="flex gap-1">
+                          {Array.from({ length: weeklyGoal }, (_, i) => (
+                            <div
+                              key={i}
+                              className={`w-2.5 h-2.5 rounded-full transition-colors ${
+                                i < weeklyDone
+                                  ? onTrack ? 'bg-green-400' : 'bg-amber-400'
+                                  : 'bg-gray-200 dark:bg-gray-600'
+                              }`}
+                            />
+                          ))}
+                        </div>
+                        <span className="text-xs text-gray-400 dark:text-gray-500">
+                          {weeklyDone}/{weeklyGoal} esta semana
+                          {onTrack && <span className="text-green-500 ml-1">✓</span>}
+                        </span>
+                      </div>
+                    )}
+
                     {/* Last run + sessions */}
-                    <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400 mb-4">
+                    <div className="flex items-center gap-3 text-sm text-gray-500 dark:text-gray-400 mb-4">
                       {lastRun && (
                         <span className="flex items-center gap-1">
                           <span
@@ -331,7 +358,7 @@ Reply in plain text only — no markdown, no asterisks, no headers. Be concise: 
                       {(routine.totalRuns || 0) > 0 && (
                         <span className="flex items-center gap-1">
                           <Trophy className="w-3 h-3" />
-                          {routine.totalRuns} session{routine.totalRuns !== 1 ? 's' : ''}
+                          {routine.totalRuns} sesión{routine.totalRuns !== 1 ? 'es' : ''}
                         </span>
                       )}
                     </div>
@@ -342,17 +369,17 @@ Reply in plain text only — no markdown, no asterisks, no headers. Be concise: 
                         onClick={() => navigate(`/routine/${routine.id}`)}
                         className="flex-1 bg-gray-900 dark:bg-gray-100 hover:bg-gray-800 dark:hover:bg-white text-white dark:text-gray-900 py-2 px-3 rounded-xl flex items-center justify-center gap-1.5 text-sm font-semibold transition-colors"
                       >
-                        <Play className="w-4 h-4" /> Start
+                        <Play className="w-4 h-4" /> Iniciar
                       </button>
                       <button
                         onClick={() => { setEditingRoutine(routine); setShowModal(true); }}
-                        className="bg-white/50 dark:bg-gray-700/50 hover:bg-white/80 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 py-2 px-3 rounded-xl transition-colors"
+                        className="bg-white/70 dark:bg-gray-700/70 hover:bg-white dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 py-2 px-3 rounded-xl border border-white/60 dark:border-gray-600/60 transition-colors"
                       >
                         <Edit className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => setDeleteConfirm({ isOpen: true, routine })}
-                        className="bg-white/50 dark:bg-gray-700/50 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-400 py-2 px-3 rounded-xl transition-colors"
+                        className="bg-white/70 dark:bg-gray-700/70 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-400 py-2 px-3 rounded-xl border border-white/60 dark:border-gray-600/60 transition-colors"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -377,10 +404,10 @@ Reply in plain text only — no markdown, no asterisks, no headers. Be concise: 
         isOpen={deleteConfirm.isOpen}
         onClose={() => setDeleteConfirm({ isOpen: false, routine: null })}
         onConfirm={() => handleDeleteRoutine(deleteConfirm.routine)}
-        title="Delete Routine"
-        message="Are you sure you want to delete this routine? All exercise images will also be deleted."
-        confirmText="Delete"
-        cancelText="Cancel"
+        title="Eliminar rutina"
+        message="¿Seguro que quieres eliminar esta rutina? Las imágenes de los ejercicios también se eliminarán."
+        confirmText="Eliminar"
+        cancelText="Cancelar"
         confirmColor="red"
       />
     </div>

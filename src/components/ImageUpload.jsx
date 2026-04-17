@@ -57,8 +57,8 @@ const ImageUpload = ({ id, onChange, disabled, accept = "image/*", label = "Sele
             <>
               <Upload className="w-8 h-8 text-gray-400 dark:text-gray-500 mx-auto mb-2" />
               <p className="text-sm text-gray-600 dark:text-gray-300 mb-1">{label}</p>
-              {fileName && <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{fileName}</p>}
-              {!fileName && <p className="text-xs text-gray-400 dark:text-gray-500">Click to browse or drag and drop</p>}
+              {fileName && <p className="text-sm text-gray-500 dark:text-gray-400 truncate">{fileName}</p>}
+              {!fileName && <p className="text-sm text-gray-400 dark:text-gray-500">Click to browse or drag and drop</p>}
             </>
           )}
         </div>

@@ -6,15 +6,15 @@ import toast from '../utils/toast';
 import ConfirmModal from '../components/ConfirmModal';
 import {
   Plus, X, Scale, Trash2, Edit, Sparkles, GripVertical,
-  ChevronDown, ChevronUp, RotateCcw, Pill, Check
+  ChevronDown, ChevronUp, RotateCcw, Pill, Check,
+  ShoppingCart, Loader2, ChevronRight, Tag,
 } from 'lucide-react';
 import {
-  DndContext, closestCenter, KeyboardSensor, PointerSensor,
+  DndContext, closestCenter, PointerSensor,
   useSensor, useSensors, TouchSensor
 } from '@dnd-kit/core';
 import {
-  arrayMove, SortableContext, sortableKeyboardCoordinates,
-  useSortable, verticalListSortingStrategy
+  arrayMove, SortableContext, useSortable, verticalListSortingStrategy
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
@@ -28,24 +28,6 @@ const toLocalDateStr = (d) => {
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
-};
-
-const getWeekStart = (date = new Date()) => {
-  const d = new Date(date);
-  const day = d.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  d.setDate(d.getDate() + diff);
-  return toLocalDateStr(d);
-};
-
-const getWeekDays = (weekStart) => {
-  const days = [];
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(weekStart + 'T12:00:00');
-    d.setDate(d.getDate() + i);
-    days.push(toLocalDateStr(d));
-  }
-  return days;
 };
 
 const addDaysToDateStr = (dateStr, n) => {
@@ -68,7 +50,6 @@ const generateDefaultTimes = (frequencyHours) => {
   });
 };
 
-// Sort priority: active-pending by next dose minutes, all-done-today → 2000, inactive/expired → 3000
 const getMedicineSortPriority = (med, todayStr) => {
   const endDate = addDaysToDateStr(med.startDate, med.durationDays);
   const notStarted = todayStr < med.startDate;
@@ -80,33 +61,52 @@ const getMedicineSortPriority = (med, todayStr) => {
   if (takenCount >= dosesPerDay) return 2000;
   const times = med.doseTimes || [];
   const next = times[takenCount] || '23:59';
-  const [h, m] = next.split(':').map(Number);
-  return h * 60 + (m || 0);
+  const [h, mins] = next.split(':').map(Number);
+  return h * 60 + (mins || 0);
 };
 
-const DAY_LABELS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-const RATING_EMOJI = ['😵', '😞', '😐', '🙂', '🥗'];
-const RATING_COLOR = (r) =>
-  ['bg-red-400', 'bg-orange-400', 'bg-yellow-400', 'bg-lime-400', 'bg-green-400'][r - 1] || 'bg-gray-200';
+const LABEL_GRAY = '#6b7280';
 
-const LABEL_COLORS = [
-  '#ef4444', '#f97316', '#eab308', '#22c55e',
-  '#3b82f6', '#8b5cf6', '#ec4899', '#64748b',
+const MEAL_EMOJIS = ['🥙', '🥗', '🍳', '🥑', '🐟', '🍚', '🥦', '🫙', '🥕', '🍜'];
+
+// ─── Plan setup options ────────────────────────────────────────────────────
+const GOAL_OPTIONS = [
+  { value: 'fat_loss',  emoji: '🔥', label: 'Bajar grasa / peso',            desc: 'Déficit calórico, alta proteína, menos carbohidratos refinados' },
+  { value: 'muscle',    emoji: '💪', label: 'Ganar músculo y masa',           desc: 'Superávit moderado, alta proteína, carbohidratos de calidad' },
+  { value: 'longevity', emoji: '🥗', label: 'Dieta equilibrada y longevidad', desc: 'Estilo mediterráneo, antiinflamatorio, variado y sostenible' },
 ];
 
-const MEAL_SLOTS = ['Breakfast', 'Snack AM', 'Lunch', 'Snack PM', 'Dinner'];
+const LIFESTYLE_OPTIONS = [
+  { value: 'home',  emoji: '🏠', label: 'Cocino en casa casi todos los días' },
+  { value: 'busy',  emoji: '💼', label: 'Tengo tiempo limitado para cocinar' },
+  { value: 'mixed', emoji: '⚡', label: 'Una mezcla de ambos' },
+];
 
-const parseTextToSlots = (text) => {
-  if (!text) return [];
-  return MEAL_SLOTS.map(slot => {
-    const regex = new RegExp(`${slot}:\\s*(.+?)(?=\\n|$)`, 'i');
-    const match = text.match(regex);
-    return { name: slot, options: match ? match[1].split('/').map(s => s.trim()).filter(Boolean) : [] };
+// ─── Claude helper ────────────────────────────────────────────────────────
+const callClaude = async (prompt, maxTokens = 600) => {
+  const apiKey = import.meta.env.VITE_CLAUDE_API_KEY;
+  if (!apiKey || apiKey === 'your_claude_api_key_here') throw new Error('no key');
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: maxTokens,
+      messages: [{ role: 'user', content: prompt }],
+    }),
   });
+  if (!res.ok) throw new Error(`API ${res.status}`);
+  return (await res.json()).content[0].text.trim()
+    .replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim();
 };
 
-// ─── SortableShoppingItem ────────────────────────────────────────────────────
-const SortableShoppingItem = ({ item, onToggle, onEdit, onDelete, labelColorMap = {} }) => {
+// ─── SortableShoppingItem ─────────────────────────────────────────────────
+const SortableShoppingItem = ({ item, onToggle, onEdit, onDelete }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id });
   return (
     <div
@@ -136,7 +136,7 @@ const SortableShoppingItem = ({ item, onToggle, onEdit, onDelete, labelColorMap 
               <span
                 key={l}
                 className="text-xs font-medium px-2 py-0.5 rounded-full text-white"
-                style={{ backgroundColor: labelColorMap[l] || '#64748b' }}
+                style={{ backgroundColor: LABEL_GRAY }}
               >
                 {l}
               </span>
@@ -154,49 +154,47 @@ const SortableShoppingItem = ({ item, onToggle, onEdit, onDelete, labelColorMap 
   );
 };
 
-// ─── Food page ───────────────────────────────────────────────────────────────
+// ─── Food ─────────────────────────────────────────────────────────────────
 const Food = () => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
 
-  const thisWeekStart = getWeekStart();
-
-  // ── Check-in
-  const [currentWeek, setCurrentWeek] = useState({ weekStart: thisWeekStart, days: {} });
-  const [previousWeek, setPreviousWeek] = useState(null);
-  const [checkinModal, setCheckinModal] = useState(null); // date string
-  const [checkinForm, setCheckinForm] = useState({ rating: 3, note: '', weight: '' });
-  const [claudeLoading, setClaudeLoading] = useState(false);
-  const [claudeInsight, setClaudeInsight] = useState('');
-
-  // ── Meal plan
-  const [mealPrompt, setMealPrompt] = useState('');
-  const [mealPlan, setMealPlan] = useState(null); // { slots:[{name,options[]}], mealPrompt, generatedAt }
-  const [showMealPlan, setShowMealPlan] = useState(true);
-  const [mealLoading, setMealLoading] = useState(false);
-  const [editingMealOption, setEditingMealOption] = useState(null); // { slotName, optionIdx }
-  const [editingMealText, setEditingMealText] = useState('');
-  const [deleteMealConfirm, setDeleteMealConfirm] = useState(null); // { slotName, optionIdx }
-  const [showAiModal, setShowAiModal] = useState(false);
-
-  // ── Shopping
-  const [shoppingList, setShoppingList] = useState([]);
-  const [availableLabels, setAvailableLabels] = useState([]);
-  const [showShoppingList, setShowShoppingList] = useState(false);
-  const [quickAddText, setQuickAddText] = useState('');
-  const [quickAddLabels, setQuickAddLabels] = useState([]);
-  const [shoppingModal, setShoppingModal] = useState(null); // null | 'add' | item object
-  const [shoppingForm, setShoppingForm] = useState({ title: '' });
-  const [selectedLabels, setSelectedLabels] = useState([]);
-  const [newLabelInput, setNewLabelInput] = useState('');
-  const [newLabelColor, setNewLabelColor] = useState(LABEL_COLORS[4]);
-  const [editingLabel, setEditingLabel] = useState(null); // { originalName, name, color }
-
-  // ── Weight
+  // Weight
   const [weightHistory, setWeightHistory] = useState([]);
   const [showWeightModal, setShowWeightModal] = useState(false);
+  const [newWeightInput, setNewWeightInput] = useState('');
+  const [newWeightDate, setNewWeightDate] = useState(toLocalDateStr(new Date()));
+  const [savingWeight, setSavingWeight] = useState(false);
 
-  // ── Medicines
+  // Shopping
+  const [shoppingList, setShoppingList] = useState([]);
+  const [availableLabels, setAvailableLabels] = useState([]);
+  const [showShoppingModal, setShowShoppingModal] = useState(false);
+  const [shoppingItemModal, setShoppingItemModal] = useState(null); // null | 'add' | item
+  const [shoppingForm, setShoppingForm] = useState({ title: '' });
+  const [selectedLabels, setSelectedLabels] = useState([]);
+  // Labels modal
+  const [showLabelsModal, setShowLabelsModal] = useState(false);
+  const [labelEditingName, setLabelEditingName] = useState(null);
+  const [labelEditInput, setLabelEditInput] = useState('');
+  const [newLabelModalInput, setNewLabelModalInput] = useState('');
+
+  // Meal Plan
+  const [mealPlan, setMealPlan] = useState(null);
+  const [showPlanSetupModal, setShowPlanSetupModal] = useState(false);
+  const [planSetupForm, setPlanSetupForm] = useState({ goal: '', lifestyle: '', restrictions: '' });
+  const [mealLoading, setMealLoading] = useState(false);
+  const [showEvalModal, setShowEvalModal] = useState(false);
+  const [evalResult, setEvalResult] = useState('');
+  const [evalLoading, setEvalLoading] = useState(false);
+  const [selectedMealOption, setSelectedMealOption] = useState(null); // { slotName, option, idx }
+  const [mealOptionForm, setMealOptionForm] = useState({ name: '', description: '' });
+  const [addingMealToSlot, setAddingMealToSlot] = useState(null);
+  const [addMealForm, setAddMealForm] = useState({ name: '', description: '' });
+  const [expandedMealOption, setExpandedMealOption] = useState(null); // `${slotName}-${idx}`
+  const [addedSuggestions, setAddedSuggestions] = useState(new Set());
+
+  // Medicines
   const [medicines, setMedicines] = useState([]);
   const [showMedicines, setShowMedicines] = useState(true);
   const [showMedicineModal, setShowMedicineModal] = useState(false);
@@ -207,7 +205,6 @@ const Food = () => {
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
   useEffect(() => { loadData(); }, [user]);
@@ -217,39 +214,14 @@ const Food = () => {
       const snap = await getDoc(doc(db, `users/${user.uid}/food`, 'data'));
       if (snap.exists()) {
         const data = snap.data();
-
-        // Week rotation: if saved week ≠ current week, move it to previousWeek
-        const savedWeek = data.currentWeek;
-        if (savedWeek && savedWeek.weekStart !== thisWeekStart) {
-          const fresh = { weekStart: thisWeekStart, days: {} };
-          setPreviousWeek(savedWeek);
-          setCurrentWeek(fresh);
-          await setDoc(
-            doc(db, `users/${user.uid}/food`, 'data'),
-            { ...data, currentWeek: fresh, previousWeek: savedWeek },
-            { merge: true }
-          );
-        } else {
-          setCurrentWeek(savedWeek || { weekStart: thisWeekStart, days: {} });
-          setPreviousWeek(data.previousWeek || null);
-        }
-
         setShoppingList(data.shoppingList || []);
         setWeightHistory(data.weightHistory || []);
         setMedicines(data.medicines || []);
         const rawLabels = data.availableLabels || [];
         setAvailableLabels(rawLabels.map(l =>
-          typeof l === 'string' ? { name: l, color: '#64748b' } : l
+          typeof l === 'string' ? { name: l } : { name: l.name }
         ));
-        // Support both old (suggestions string) and new (slots array) format
-        const mp = data.mealPlan || null;
-        if (mp) {
-          if (mp.suggestions && !mp.slots) {
-            setMealPlan({ ...mp, slots: parseTextToSlots(mp.suggestions) });
-          } else {
-            setMealPlan(mp);
-          }
-          }
+        if (data.mealPlanV2) setMealPlan(data.mealPlanV2);
       }
     } catch (err) {
       console.error(err);
@@ -262,207 +234,36 @@ const Food = () => {
     try {
       await setDoc(doc(db, `users/${user.uid}/food`, 'data'), updates, { merge: true });
     } catch (err) {
-      toast.error('Failed to save');
+      toast.error('Error al guardar');
       console.error(err);
     }
   };
 
-  // ── Check-in actions
-  const openCheckin = (date) => {
-    const existing = currentWeek.days[date];
-    setCheckinForm({ rating: existing?.rating ?? 3, note: existing?.note ?? '', weight: existing?.weight ?? '' });
-    setCheckinModal(date);
-  };
-
-  const saveCheckin = async () => {
-    const entry = {
-      rating: checkinForm.rating,
-      note: checkinForm.note,
-      ...(checkinForm.weight ? { weight: parseFloat(checkinForm.weight) } : {}),
-    };
-    const updated = { ...currentWeek, days: { ...currentWeek.days, [checkinModal]: entry } };
-    setCurrentWeek(updated);
-
-    let newWeightHistory = weightHistory;
-    if (checkinForm.weight) {
-      const we = { date: checkinModal, weight: parseFloat(checkinForm.weight), id: Date.now().toString() };
-      newWeightHistory = [...weightHistory.filter(w => w.date !== checkinModal), we]
+  // ── Weight ──────────────────────────────────────────────────────────────
+  const handleAddWeight = async () => {
+    if (!newWeightInput) return;
+    setSavingWeight(true);
+    try {
+      const entry = { date: newWeightDate, weight: parseFloat(newWeightInput), id: Date.now().toString() };
+      const updated = [...weightHistory.filter(w => w.date !== newWeightDate), entry]
         .sort((a, b) => new Date(b.date) - new Date(a.date));
-      setWeightHistory(newWeightHistory);
-    }
-
-    await save({ currentWeek: updated, weightHistory: newWeightHistory });
-    setCheckinModal(null);
-    toast.success('Saved');
-  };
-
-  const handleInsight = async () => {
-    const apiKey = import.meta.env.VITE_CLAUDE_API_KEY;
-    if (!apiKey || apiKey === 'your_claude_api_key_here') { toast.error('Add your Claude API key'); return; }
-
-    const days = getWeekDays(currentWeek.weekStart);
-    const cur = days.map((d, i) => {
-      const e = currentWeek.days[d];
-      return e ? `${DAY_LABELS[i]}:${e.rating}/5${e.note ? `(${e.note})` : ''}` : null;
-    }).filter(Boolean);
-
-    if (!cur.length) { toast.error('No check-ins this week yet'); return; }
-
-    const prev = previousWeek
-      ? getWeekDays(previousWeek.weekStart).map((d, i) => {
-          const e = previousWeek.days[d];
-          return e ? `${DAY_LABELS[i]}:${e.rating}/5` : null;
-        }).filter(Boolean)
-      : [];
-
-    setClaudeLoading(true);
-    setClaudeInsight('');
-    try {
-      const prompt = `Nutrition check-ins this week: ${cur.join(', ')}${prev.length ? `. Last week: ${prev.join(', ')}` : ''}. Scale 1-5.
-Reply in plain text only, no markdown, no asterisks. 1 sentence on what the pattern shows, 1 concrete suggestion.`;
-
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true',
-        },
-        body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: 120,
-          messages: [{ role: 'user', content: prompt }],
-        }),
-      });
-      if (!res.ok) throw new Error(`API ${res.status}`);
-      const data = await res.json();
-      setClaudeInsight(data.content[0].text);
-    } catch (err) {
-      toast.error('Failed to get insight');
-      console.error(err);
+      setWeightHistory(updated);
+      await save({ weightHistory: updated });
+      setNewWeightInput('');
+      setNewWeightDate(toLocalDateStr(new Date()));
+      toast.success('Registro guardado');
     } finally {
-      setClaudeLoading(false); }
-  };
-
-  // ── Meal plan actions
-  const handleGenerateMeal = async () => {
-    const apiKey = import.meta.env.VITE_CLAUDE_API_KEY;
-    if (!apiKey || apiKey === 'your_claude_api_key_here') { toast.error('Add your Claude API key'); return; }
-    if (!mealPrompt.trim()) { toast.error('Enter ingredients or instructions first'); return; }
-
-    setShowAiModal(false);
-    setMealLoading(true);
-    try {
-      const prompt = `You are a nutrition assistant creating a weekly meal rotation.
-Instructions/context: ${mealPrompt.trim()}
-
-IMPORTANT: Detect the language of the instructions/context above and reply in that same language.
-
-Rules:
-- Breakfast, Lunch, and Dinner MUST be completely different meals — no shared proteins or base ingredients between them.
-- Snack AM and Snack PM should be light, quick options.
-- Vary cooking methods (grilled, boiled, raw, etc.) across the day.
-- Keep options short (3-5 words max each).
-- Give 2-3 options per slot separated by " / ".
-
-Reply ONLY in this exact format with no extra text:
-Breakfast: option1 / option2 / option3
-Snack AM: option1 / option2
-Lunch: option1 / option2 / option3
-Snack PM: option1 / option2
-Dinner: option1 / option2 / option3`;
-
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true',
-        },
-        body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: 350,
-          messages: [{ role: 'user', content: prompt }],
-        }),
-      });
-      if (!res.ok) throw new Error(`API ${res.status}`);
-      const data = await res.json();
-      const slots = parseTextToSlots(data.content[0].text);
-      const plan = {
-        slots,
-        mealPrompt: mealPrompt.trim(),
-        generatedAt: new Date().toISOString(),
-      };
-      setMealPlan(plan);
-      setShowMealPlan(true);
-      setMealPrompt('');
-      await save({ mealPlan: plan });
-      toast.success('Meal plan generated!');
-    } catch (err) {
-      toast.error('Failed to generate');
-      console.error(err);
-    } finally {
-      setMealLoading(false);
+      setSavingWeight(false);
     }
   };
 
-  const saveMealOptionEdit = async () => {
-    if (!editingMealOption || !editingMealText.trim()) { setEditingMealOption(null); return; }
-    const { slotName, optionIdx } = editingMealOption;
-    const updated = {
-      ...mealPlan,
-      slots: mealPlan.slots.map(s =>
-        s.name === slotName
-          ? { ...s, options: s.options.map((o, i) => i === optionIdx ? editingMealText.trim() : o) }
-          : s
-      ),
-    };
-    setMealPlan(updated);
-    setEditingMealOption(null);
-    await save({ mealPlan: updated });
+  const handleDeleteWeight = async (id) => {
+    const updated = weightHistory.filter(w => w.id !== id);
+    setWeightHistory(updated);
+    await save({ weightHistory: updated });
   };
 
-
-  const removeMealOption = async (slotName, optionIdx) => {
-    const updated = {
-      ...mealPlan,
-      slots: mealPlan.slots.map(s =>
-        s.name === slotName
-          ? { ...s, options: s.options.filter((_, i) => i !== optionIdx) }
-          : s
-      ),
-    };
-    setMealPlan(updated);
-    await save({ mealPlan: updated });
-  };
-
-  // ── Shopping actions
-  const handleQuickAdd = async (e) => {
-    if (e.key !== 'Enter' || !quickAddText.trim()) return;
-    const item = {
-      id: Date.now().toString(),
-      title: quickAddText.trim(),
-      purchased: false,
-      label1: quickAddLabels[0] || '',
-      label2: quickAddLabels[1] || '',
-    };
-    const updated = [...shoppingList, item];
-    setShoppingList(updated);
-    await save({ shoppingList: updated });
-    setQuickAddText('');
-    setQuickAddLabels([]);
-  };
-
-  const toggleQuickAddLabel = (label) => {
-    if (quickAddLabels.includes(label)) {
-      setQuickAddLabels(quickAddLabels.filter(l => l !== label));
-    } else if (quickAddLabels.length < 2) {
-      setQuickAddLabels([...quickAddLabels, label]);
-    }
-  };
-
+  // ── Shopping ─────────────────────────────────────────────────────────────
   const handleTogglePurchased = async (id) => {
     const updated = shoppingList.map(i => i.id === id ? { ...i, purchased: !i.purchased } : i);
     setShoppingList(updated);
@@ -470,15 +271,15 @@ Dinner: option1 / option2 / option3`;
   };
 
   const handleClearPurchased = async () => {
-    const updated = shoppingList.filter(i => !i.purchased);
+    const updated = shoppingList.map(i => ({ ...i, purchased: false }));
     setShoppingList(updated);
     await save({ shoppingList: updated });
-    toast.success('Cleared');
+    toast.success('Lista reiniciada');
   };
 
   const handleSaveShoppingItem = async () => {
     if (!shoppingForm.title.trim()) return;
-    const editing = typeof shoppingModal === 'object' ? shoppingModal : null;
+    const editing = typeof shoppingItemModal === 'object' ? shoppingItemModal : null;
     const item = {
       id: editing?.id || Date.now().toString(),
       title: shoppingForm.title.trim(),
@@ -491,8 +292,8 @@ Dinner: option1 / option2 / option3`;
       : [...shoppingList, item];
     setShoppingList(updated);
     await save({ shoppingList: updated });
-    setShoppingModal(null);
-    toast.success(editing ? 'Updated' : 'Added');
+    setShoppingItemModal(null);
+    toast.success(editing ? 'Actualizado' : 'Agregado');
   };
 
   const handleDeleteShoppingItem = async (id) => {
@@ -501,7 +302,248 @@ Dinner: option1 / option2 / option3`;
     await save({ shoppingList: updated });
   };
 
-  // ── Medicine actions
+  const handleDragEnd = async ({ active, over }) => {
+    if (!over || active.id === over.id) return;
+    const updated = arrayMove(
+      shoppingList,
+      shoppingList.findIndex(i => i.id === active.id),
+      shoppingList.findIndex(i => i.id === over.id)
+    );
+    setShoppingList(updated);
+    await save({ shoppingList: updated });
+  };
+
+  const openEditItem = (item) => {
+    setShoppingForm({ title: item.title });
+    setSelectedLabels([item.label1, item.label2].filter(Boolean));
+    setShoppingItemModal(item);
+  };
+
+  const handleToggleLabel = (label) => {
+    if (selectedLabels.includes(label)) {
+      setSelectedLabels(selectedLabels.filter(l => l !== label));
+    } else if (selectedLabels.length < 2) {
+      setSelectedLabels([...selectedLabels, label]);
+    } else {
+      toast.error('Máximo 2 etiquetas');
+    }
+  };
+
+
+  const handleDeleteLabel = async (labelName) => {
+    const updated = availableLabels.filter(l => l.name !== labelName);
+    setAvailableLabels(updated);
+    await save({ availableLabels: updated });
+  };
+
+  const handleStartEditLabel = (name) => { setLabelEditingName(name); setLabelEditInput(name); };
+
+  const handleSaveEditLabel = async () => {
+    const newName = labelEditInput.trim();
+    if (!newName || newName === labelEditingName) { setLabelEditingName(null); return; }
+    if (availableLabels.some(l => l.name === newName)) { toast.error('Ya existe esa etiqueta'); return; }
+    const updatedLabels = availableLabels.map(l => l.name === labelEditingName ? { name: newName } : l);
+    const updatedList = shoppingList.map(i => ({
+      ...i,
+      label1: i.label1 === labelEditingName ? newName : i.label1,
+      label2: i.label2 === labelEditingName ? newName : i.label2,
+    }));
+    setAvailableLabels(updatedLabels);
+    setShoppingList(updatedList);
+    await save({ availableLabels: updatedLabels, shoppingList: updatedList });
+    setLabelEditingName(null);
+    toast.success('Etiqueta actualizada');
+  };
+
+  const handleAddLabelInModal = async () => {
+    const t = newLabelModalInput.trim();
+    if (!t || availableLabels.some(l => l.name === t)) return;
+    const updated = [...availableLabels, { name: t }];
+    setAvailableLabels(updated);
+    await save({ availableLabels: updated });
+    setNewLabelModalInput('');
+  };
+
+  // ── Meal Plan ──────────────────────────────────────────────────────────────
+  const handleGeneratePlan = async () => {
+    if (!planSetupForm.goal || !planSetupForm.lifestyle) {
+      toast.error('Selecciona tu objetivo y estilo de vida');
+      return;
+    }
+    const goalLabel = GOAL_OPTIONS.find(g => g.value === planSetupForm.goal)?.label || '';
+    const lifestyleLabel = LIFESTYLE_OPTIONS.find(l => l.value === planSetupForm.lifestyle)?.label || '';
+
+    setMealLoading(true);
+    try {
+      const prompt = `Eres un nutricionista experto en longevidad y alimentación saludable para personas mexicanas. Genera un plan de alimentación semanal personalizado.
+
+Perfil:
+- Objetivo: ${goalLabel}
+- Estilo de vida: ${lifestyleLabel}
+${planSetupForm.restrictions ? `- Restricciones: ${planSetupForm.restrictions}` : ''}
+
+Reglas:
+- Aplica principios de longevidad (mediterráneo, antiinflamatorio, alta fibra, proteína de calidad)
+- Usa ingredientes accesibles en México; menciona marcas mexicanas si es útil (Lala, Alpura, Costco, etc.)
+- Cada opción: nombre corto (3-7 palabras) + descripción práctica con cantidades y contexto (máx 25 palabras)
+- Desayuno y Comida: 3 opciones. Snack AM, Snack PM, Cena: 2 opciones.
+
+Responde SOLO con este JSON:
+{
+  "slots": [
+    {"name": "Desayuno", "options": [{"name": "...", "description": "..."}, ...]},
+    {"name": "Snack AM", "options": [{"name": "...", "description": "..."}, ...]},
+    {"name": "Comida", "options": [{"name": "...", "description": "..."}, ...]},
+    {"name": "Snack PM", "options": [{"name": "...", "description": "..."}, ...]},
+    {"name": "Cena", "options": [{"name": "...", "description": "..."}, ...]}
+  ]
+}`;
+
+      const text = await callClaude(prompt, 1400);
+      const parsed = JSON.parse(text);
+      const plan = {
+        slots: parsed.slots,
+        setup: planSetupForm,
+        generatedAt: new Date().toISOString(),
+      };
+      setMealPlan(plan);
+      await save({ mealPlanV2: plan });
+      setShowPlanSetupModal(false);
+      toast.success('¡Plan generado!');
+    } catch (err) {
+      toast.error('Error al generar el plan');
+      console.error(err);
+    } finally {
+      setMealLoading(false);
+    }
+  };
+
+  const handleEvalPlan = async () => {
+    if (!mealPlan?.slots?.length) return;
+    setEvalLoading(true);
+    setEvalResult('');
+    setSuggestionSlotPicker(null);
+    try {
+      const planText = mealPlan.slots.map(s =>
+        `${s.name}:\n${s.options.map(o => `  - ${o.name}`).join('\n')}`
+      ).join('\n\n');
+      const allFoodNames = mealPlan.slots.flatMap(s => s.options.map(o => o.name));
+      const setup = mealPlan.setup || {};
+      const goalLabel = GOAL_OPTIONS.find(g => g.value === setup.goal)?.label || '';
+      const lifestyleLabel = LIFESTYLE_OPTIONS.find(l => l.value === setup.lifestyle)?.label || '';
+      const setupContext = goalLabel
+        ? `Perfil del usuario: objetivo = ${goalLabel}${lifestyleLabel ? `, estilo de vida = ${lifestyleLabel}` : ''}${setup.restrictions ? `, restricciones = ${setup.restrictions}` : ''}`
+        : '';
+      const text = await callClaude(
+        `Evalúa este plan de alimentación desde la perspectiva de la longevidad y salud. Sé directo y útil. Responde en español, plain text, sin markdown.
+${setupContext ? `\n${setupContext}\n` : ''}
+PLAN:
+${planText}
+
+Estructura tu respuesta así:
+1. Un punto fuerte del plan
+2. Un área de mejora
+3. Si hay algo importante que falta, sugiere 1 o 2 opciones específicas adaptadas al perfil del usuario. NO repitas ningún alimento que ya está en el plan. Usa el formato exacto:
+SUGERENCIA: [nombre corto]: [descripción breve de ingredientes, máx 20 palabras]`,
+        500
+      );
+      setEvalResult(text);
+    } catch {
+      toast.error('Error al evaluar');
+    } finally {
+      setEvalLoading(false);
+    }
+  };
+
+  const parseSuggestions = (text) => {
+    const lines = text.split('\n');
+    const suggestions = [];
+    for (const line of lines) {
+      const match = line.match(/SUGERENCIA:\s*([^:]+):\s*(.+)/);
+      if (match) suggestions.push({ name: match[1].trim(), description: match[2].trim() });
+    }
+    return suggestions;
+  };
+
+  const evalMainText = evalResult
+    ? evalResult.split('\n').filter(l => !l.startsWith('SUGERENCIA:')).join('\n').trim()
+    : '';
+
+  const openMealOptionModal = (slotName, option, idx) => {
+    setSelectedMealOption({ slotName, option, idx });
+    setMealOptionForm({ name: option.name, description: option.description || '' });
+  };
+
+  const handleSaveMealOption = async () => {
+    if (!mealOptionForm.name.trim()) return;
+    const updated = {
+      ...mealPlan,
+      slots: mealPlan.slots.map(s =>
+        s.name === selectedMealOption.slotName
+          ? { ...s, options: s.options.map((o, i) => i === selectedMealOption.idx ? { ...o, name: mealOptionForm.name.trim(), description: mealOptionForm.description.trim() } : o) }
+          : s
+      ),
+    };
+    setMealPlan(updated);
+    await save({ mealPlanV2: updated });
+    setSelectedMealOption(null);
+    setExpandedMealOption(null);
+    toast.success('Opción actualizada');
+  };
+
+  const handleDeleteMealOption = async () => {
+    const updated = {
+      ...mealPlan,
+      slots: mealPlan.slots.map(s =>
+        s.name === selectedMealOption.slotName
+          ? { ...s, options: s.options.filter((_, i) => i !== selectedMealOption.idx) }
+          : s
+      ),
+    };
+    setMealPlan(updated);
+    await save({ mealPlanV2: updated });
+    setSelectedMealOption(null);
+    setExpandedMealOption(null);
+    toast.success('Opción eliminada');
+  };
+
+  const handleAddMealOption = async () => {
+    if (!addMealForm.name.trim()) return;
+    const updated = {
+      ...mealPlan,
+      slots: mealPlan.slots.map(s =>
+        s.name === addingMealToSlot
+          ? { ...s, options: [...s.options, { name: addMealForm.name.trim(), description: addMealForm.description.trim() }] }
+          : s
+      ),
+    };
+    setMealPlan(updated);
+    await save({ mealPlanV2: updated });
+    setAddingMealToSlot(null);
+    setAddMealForm({ name: '', description: '' });
+    toast.success(`Opción agregada a ${addingMealToSlot}`);
+  };
+
+  const [suggestionSlotPicker, setSuggestionSlotPicker] = useState(null); // suggestion index | null
+
+  const handleAddSuggestionToSlot = async (suggestion, slotName) => {
+    if (!mealPlan?.slots) return;
+    const updated = {
+      ...mealPlan,
+      slots: mealPlan.slots.map(s =>
+        s.name === slotName
+          ? { ...s, options: [...s.options, { name: suggestion.name, description: suggestion.description }] }
+          : s
+      ),
+    };
+    setMealPlan(updated);
+    await save({ mealPlanV2: updated });
+    setAddedSuggestions(prev => new Set([...prev, suggestion.name]));
+    setSuggestionSlotPicker(null);
+    toast.success(`Agregado a ${slotName}`);
+  };
+
+  // ── Medicines ──────────────────────────────────────────────────────────────
   const openAddMedicine = () => {
     setEditingMedicine(null);
     setMedicineForm({ name: '', dose: '', frequencyHours: '24', durationDays: '7', startDate: toLocalDateStr(new Date()), doseTimes: ['08:00'], note: '' });
@@ -566,320 +608,43 @@ Dinner: option1 / option2 / option3`;
     setDeleteMedicineConfirm(null);
   };
 
-  const handleDragEnd = async ({ active, over }) => {
-    if (!over || active.id === over.id) return;
-    const updated = arrayMove(
-      shoppingList,
-      shoppingList.findIndex(i => i.id === active.id),
-      shoppingList.findIndex(i => i.id === over.id)
-    );
-    setShoppingList(updated);
-    await save({ shoppingList: updated });
-  };
-
-  const openEditItem = (item) => {
-    setShoppingForm({ title: item.title });
-    setSelectedLabels([item.label1, item.label2].filter(Boolean));
-    setShoppingModal(item);
-  };
-
-  const handleToggleLabel = (label) => {
-    if (selectedLabels.includes(label)) {
-      setSelectedLabels(selectedLabels.filter(l => l !== label));
-    } else if (selectedLabels.length < 2) {
-      setSelectedLabels([...selectedLabels, label]);
-    } else {
-      toast.error('Max 2 labels');
-    }
-  };
-
-  const handleAddLabel = async () => {
-    const t = newLabelInput.trim();
-    if (!t || availableLabels.some(l => l.name === t)) return;
-    const updated = [...availableLabels, { name: t, color: newLabelColor }];
-    setAvailableLabels(updated);
-    await save({ availableLabels: updated });
-    setNewLabelInput('');
-    setNewLabelColor(LABEL_COLORS[4]);
-  };
-
-  const handleSaveLabelEdit = async () => {
-    if (!editingLabel || !editingLabel.name.trim()) return;
-    const updated = availableLabels.map(l =>
-      l.name === editingLabel.originalName
-        ? { name: editingLabel.name.trim(), color: editingLabel.color }
-        : l
-    );
-    setAvailableLabels(updated);
-    await save({ availableLabels: updated });
-    setEditingLabel(null);
-  };
-
-  const handleDeleteLabel = async (labelName) => {
-    const updated = availableLabels.filter(l => l.name !== labelName);
-    setAvailableLabels(updated);
-    await save({ availableLabels: updated });
-  };
-
-  // ── derived
-  const labelColorMap = Object.fromEntries(availableLabels.map(l => [l.name, l.color]));
-  const weekDays = getWeekDays(currentWeek.weekStart);
-  const today = new Date().toISOString().split('T')[0];
-  const purchasedCount = shoppingList.filter(i => i.purchased).length;
-  const mealSections = mealPlan?.slots || [];
+  // Derived
   const chartData = [...weightHistory]
     .filter(e => e.date)
     .reverse()
-    .map(e => ({
-      date: format(parseISO(e.date), 'MMM d'),
-      weight: e.weight,
-    }));
+    .map(e => ({ date: format(parseISO(e.date), 'dd MMM'), weight: e.weight }));
 
-  if (loading) return <div className="flex items-center justify-center h-64 text-gray-500">Loading...</div>;
+  const purchasedCount = shoppingList.filter(i => i.purchased).length;
+
+  if (loading) return <div className="flex items-center justify-center h-64 text-gray-500">Cargando...</div>;
 
   return (
     <>
       <div className="space-y-8">
 
-        {/* Header */}
-        <div className="flex justify-between items-end">
-          <div>
-            <p className="text-xs font-bold text-blue-500 dark:text-blue-400 uppercase tracking-widest mb-1">
-              {new Date().getFullYear()}
-            </p>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 leading-tight">Nutrition</h1>
-          </div>
-          <button
-            onClick={() => setShowWeightModal(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/70 dark:bg-gray-800/70 border border-blue-100 dark:border-blue-800 text-gray-600 dark:text-gray-400 hover:bg-white dark:hover:bg-gray-800 transition-colors text-sm shadow-sm"
-          >
-            <Scale className="w-4 h-4" />
-            Weight
-          </button>
-        </div>
-
-        {/* ── Weekly Check-in ── */}
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <p className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">This Week</p>
+        {/* ── Header ── */}
+        <div className="flex justify-between items-center">
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 leading-tight">Nutrición</h1>
+          <div className="flex items-center gap-2">
             <button
-              onClick={handleInsight}
-              disabled={claudeLoading}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white/70 dark:bg-gray-800/70 border border-blue-100 dark:border-blue-800 text-blue-600 dark:text-blue-400 hover:bg-white dark:hover:bg-gray-800 transition-colors text-sm font-medium disabled:opacity-60 shadow-sm"
+              onClick={() => setShowWeightModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/70 dark:bg-gray-800/70 border border-blue-100 dark:border-blue-800 text-gray-600 dark:text-gray-400 hover:bg-white dark:hover:bg-gray-800 transition-colors text-sm shadow-sm"
             >
-              <Sparkles className="w-3.5 h-3.5" />
-              {claudeLoading ? 'Analyzing...' : 'Analyze week'}
+              <Scale className="w-4 h-4" />
+              Control de peso
+            </button>
+            <button
+              onClick={() => setShowShoppingModal(true)}
+              className="p-2 rounded-xl bg-white/70 dark:bg-gray-800/70 border border-blue-100 dark:border-blue-800 text-gray-600 dark:text-gray-400 hover:bg-white dark:hover:bg-gray-800 transition-colors shadow-sm"
+              title="Lista del super"
+            >
+              <ShoppingCart className="w-4 h-4" />
             </button>
           </div>
-
-          <div className="flex gap-2 justify-between">
-            {weekDays.map((date, i) => {
-              const entry = currentWeek.days[date];
-              const isToday = date === today;
-              const isPast = date <= today;
-              return (
-                <div key={date} className="flex flex-col items-center gap-1.5 flex-1">
-                  <button
-                    onClick={() => isPast && openCheckin(date)}
-                    disabled={!isPast}
-                    className={`w-full aspect-square rounded-xl flex items-center justify-center text-lg transition-all
-                      ${entry
-                        ? RATING_COLOR(entry.rating)
-                        : isToday
-                          ? 'bg-white/70 dark:bg-gray-700/70 border-2 border-dashed border-blue-400'
-                          : 'bg-white/40 dark:bg-gray-800/40'}
-                      ${isPast ? 'cursor-pointer hover:scale-105 active:scale-95' : 'opacity-25 cursor-default'}
-                    `}
-                  >
-                    {entry ? RATING_EMOJI[entry.rating - 1] : isToday ? '＋' : ''}
-                  </button>
-                  <span className={`text-xs font-bold uppercase ${isToday ? 'text-blue-500' : 'text-gray-400 dark:text-gray-500'}`}>
-                    {DAY_LABELS[i]}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-
-          {claudeInsight && (
-            <div className="mt-4 px-4 py-3 bg-white/60 dark:bg-gray-800/60 rounded-2xl border border-blue-100 dark:border-blue-900 shadow-sm">
-              <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{claudeInsight}</p>
-            </div>
-          )}
         </div>
 
-        {/* ── Meal Plan ── */}
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <p className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Meal Plan</p>
-            <button
-              onClick={() => setShowAiModal(true)}
-              disabled={mealLoading}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/70 dark:bg-gray-800/70 border border-blue-100 dark:border-blue-800 text-blue-600 dark:text-blue-400 hover:bg-white dark:hover:bg-gray-800 transition-colors text-sm font-medium disabled:opacity-60 shadow-sm"
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              {mealLoading ? 'Generating...' : 'Get AI help'}
-            </button>
-          </div>
-
-          {mealPlan && (
-            <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4">
-              {mealSections.map(({ name, options }) =>
-                options.length > 0 ? (
-                  <div
-                    key={name}
-                    className="flex-shrink-0 w-48 px-3 py-3 bg-white/60 dark:bg-gray-800/60 rounded-2xl border border-white/60 dark:border-gray-700/60"
-                  >
-                    <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
-                      {name}
-                    </p>
-                    <div className="space-y-1.5">
-                      {options.map((opt, i) => {
-                        const isEditing = editingMealOption?.slotName === name && editingMealOption?.optionIdx === i;
-                        return isEditing ? (
-                          <div key={i} className="flex gap-1">
-                            <input
-                              autoFocus
-                              value={editingMealText}
-                              onChange={e => setEditingMealText(e.target.value)}
-                              onKeyDown={e => {
-                                if (e.key === 'Enter') saveMealOptionEdit();
-                                if (e.key === 'Escape') setEditingMealOption(null);
-                              }}
-                              className="flex-1 min-w-0 text-xs px-2 py-1 rounded-lg bg-white dark:bg-gray-700 border border-blue-300 text-gray-900 dark:text-gray-100 focus:outline-none"
-                            />
-                            <button onClick={saveMealOptionEdit} className="text-blue-500 text-xs font-bold px-1 flex-shrink-0">✓</button>
-                          </div>
-                        ) : (
-                          <div
-                            key={i}
-                            className="flex items-center gap-1 text-xs px-2 py-1.5 bg-blue-50/80 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg"
-                          >
-                            <span className="flex-1 leading-tight">{opt}</span>
-                            <button
-                              onClick={() => { setEditingMealOption({ slotName: name, optionIdx: i }); setEditingMealText(opt); }}
-                              className="text-gray-400 hover:text-gray-600 flex-shrink-0 p-1"
-                            >
-                              <Edit className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => setDeleteMealConfirm({ slotName: name, optionIdx: i })}
-                              className="text-gray-400 hover:text-red-400 flex-shrink-0 p-1"
-                            >
-                              <X className="w-4 h-4" />
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ) : null
-              )}
-            </div>
-          )}
-
-        </div>
-
-        {/* ── Shopping List ── */}
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <button
-              onClick={() => setShowShoppingList(v => !v)}
-              className="flex items-center gap-2 text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider"
-            >
-              {showShoppingList ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-              Shopping List
-              {shoppingList.length > 0 && (
-                <span className="text-xs font-medium text-gray-400 dark:text-gray-500 normal-case tracking-normal">
-                  {shoppingList.length} items
-                </span>
-              )}
-            </button>
-            {showShoppingList && purchasedCount > 0 && (
-              <button
-                onClick={handleClearPurchased}
-                className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white/70 dark:bg-gray-800/70 border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:bg-white dark:hover:bg-gray-800 text-xs font-medium transition-colors"
-              >
-                <RotateCcw className="w-3 h-3" />
-                Clear {purchasedCount}
-              </button>
-            )}
-          </div>
-
-          {showShoppingList && (
-            <>
-              <div className="flex gap-2 mb-2">
-                <input
-                  type="text"
-                  value={quickAddText}
-                  onChange={e => setQuickAddText(e.target.value)}
-                  onKeyDown={handleQuickAdd}
-                  placeholder="Quick add — press Enter"
-                  className="flex-1 px-4 py-2.5 rounded-xl bg-white/70 dark:bg-gray-800/70 border border-white/60 dark:border-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
-                />
-                <button
-                  onClick={() => {
-                    setShoppingForm({ title: '' });
-                    setSelectedLabels([]);
-                    setShoppingModal('add');
-                  }}
-                  className="p-2.5 rounded-xl bg-white/70 dark:bg-gray-800/70 border border-white/60 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-white dark:hover:bg-gray-800 transition-colors"
-                >
-                  <Plus className="w-4 h-4" />
-                </button>
-              </div>
-
-              {availableLabels.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 mb-3">
-                  {availableLabels.map(label => {
-                    const selected = quickAddLabels.includes(label.name);
-                    return (
-                      <button
-                        key={label.name}
-                        onClick={() => toggleQuickAddLabel(label.name)}
-                        className="px-2.5 py-1 rounded-full text-xs font-medium transition-all text-white"
-                        style={{
-                          backgroundColor: label.color,
-                          opacity: selected ? 1 : 0.45,
-                          outline: selected ? `2px solid ${label.color}` : 'none',
-                          outlineOffset: '2px',
-                        }}
-                      >
-                        {label.name}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-
-              {shoppingList.length === 0 ? (
-                <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-6">
-                  Empty list. Quick add above or tap +
-                </p>
-              ) : (
-                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                  <SortableContext items={shoppingList.map(i => i.id)} strategy={verticalListSortingStrategy}>
-                    <div className="space-y-2">
-                      {shoppingList.map(item => (
-                        <SortableShoppingItem
-                          key={item.id}
-                          item={item}
-                          onToggle={handleTogglePurchased}
-                          onEdit={openEditItem}
-                          onDelete={handleDeleteShoppingItem}
-                          labelColorMap={labelColorMap}
-                        />
-                      ))}
-                    </div>
-                  </SortableContext>
-                </DndContext>
-              )}
-            </>
-          )}
-        </div>
-
-        {/* ── Medicines ── */}
-        <div>
+        {/* ── Medicines (temporarily hidden) ── */}
+        {false && <div>
           <div className="flex items-center justify-between mb-4">
             <button
               onClick={() => setShowMedicines(v => !v)}
@@ -888,7 +653,7 @@ Dinner: option1 / option2 / option3`;
               {showMedicines ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
               Medicamentos
               {medicines.length > 0 && (
-                <span className="text-xs font-medium text-gray-400 dark:text-gray-500 normal-case tracking-normal">
+                <span className="text-sm font-medium text-gray-400 dark:text-gray-500 normal-case tracking-normal">
                   {medicines.filter(m => toLocalDateStr(new Date()) < addDaysToDateStr(m.startDate, m.durationDays)).length} activos
                 </span>
               )}
@@ -896,7 +661,7 @@ Dinner: option1 / option2 / option3`;
             {showMedicines && (
               <button
                 onClick={openAddMedicine}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/70 dark:bg-gray-800/70 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-white dark:hover:bg-gray-800 text-xs font-medium transition-colors shadow-sm"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/70 dark:bg-gray-800/70 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-white dark:hover:bg-gray-800 text-sm font-medium transition-colors shadow-sm"
               >
                 <Plus className="w-3.5 h-3.5" />
                 Agregar
@@ -907,9 +672,7 @@ Dinner: option1 / option2 / option3`;
           {showMedicines && (
             <div className="space-y-3">
               {medicines.length === 0 ? (
-                <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-6">
-                  Sin medicamentos activos.
-                </p>
+                <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-6">Sin medicamentos activos.</p>
               ) : (
                 [...medicines]
                   .sort((a, b) => {
@@ -959,68 +722,42 @@ Dinner: option1 / option2 / option3`;
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="font-medium text-sm text-gray-900 dark:text-gray-100 truncate">{med.name}</p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{med.dose} · {freqLabel}</p>
-                            {isActive && (
-                              <p className="text-xs text-blue-500 dark:text-blue-400 mt-0.5">
-                                Día {dayNumber} de {med.durationDays}
-                              </p>
-                            )}
-                            {isCompleted && (
-                              <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">Tratamiento completado</p>
-                            )}
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{med.dose} · {freqLabel}</p>
+                            {isActive && <p className="text-sm text-blue-500 dark:text-blue-400 mt-0.5">Día {dayNumber} de {med.durationDays}</p>}
+                            {isCompleted && <p className="text-sm text-gray-400 dark:text-gray-500 mt-0.5">Tratamiento completado</p>}
                             {isActive && (
                               <div className="flex gap-1 mt-1.5 flex-wrap">
                                 {times.map((t, i) => (
-                                  <span
-                                    key={i}
-                                    className={`text-xs px-1.5 py-0.5 rounded font-mono ${
-                                      i < takenCount
-                                        ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400 line-through opacity-60'
-                                        : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'
-                                    }`}
-                                  >
-                                    {t}
-                                  </span>
+                                  <span key={i} className={`text-xs px-1.5 py-0.5 rounded font-mono ${
+                                    i < takenCount
+                                      ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400 line-through opacity-60'
+                                      : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'
+                                  }`}>{t}</span>
                                 ))}
                               </div>
                             )}
-                            {isActive && fullTaken && (
-                              <p className="text-xs text-green-600 dark:text-green-400 mt-1 font-medium">✓ Completado por hoy</p>
-                            )}
-                            {med.note ? (
-                              <p className="text-xs text-gray-400 dark:text-gray-500 mt-1 italic">{med.note}</p>
-                            ) : null}
+                            {isActive && fullTaken && <p className="text-sm text-green-600 dark:text-green-400 mt-1 font-medium">✓ Completado por hoy</p>}
+                            {med.note ? <p className="text-sm text-gray-400 dark:text-gray-500 mt-1 italic">{med.note}</p> : null}
                           </div>
                           <div className="flex items-center gap-1.5 flex-shrink-0">
                             {isActive && (
                               <button
                                 onClick={() => handleToggleMedicineTaken(med.id)}
                                 className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors text-xs font-bold ${
-                                  fullTaken
-                                    ? 'bg-green-500 text-white'
-                                    : takenCount > 0
-                                    ? 'bg-amber-400 text-white'
-                                    : 'bg-gray-100 dark:bg-gray-700 text-gray-400'
+                                  fullTaken ? 'bg-green-500 text-white'
+                                  : takenCount > 0 ? 'bg-amber-400 text-white'
+                                  : 'bg-gray-100 dark:bg-gray-700 text-gray-400'
                                 }`}
                                 title={`${takenCount}/${dosesPerDay} dosis`}
                               >
-                                {fullTaken || dosesPerDay === 1 ? (
-                                  <Check className="w-4 h-4" />
-                                ) : (
-                                  takenCount > 0 ? `${takenCount}/${dosesPerDay}` : <Check className="w-4 h-4" />
-                                )}
+                                {fullTaken || dosesPerDay === 1 ? <Check className="w-4 h-4" />
+                                  : takenCount > 0 ? `${takenCount}/${dosesPerDay}` : <Check className="w-4 h-4" />}
                               </button>
                             )}
-                            <button
-                              onClick={() => openEditMedicine(med)}
-                              className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
-                            >
+                            <button onClick={() => openEditMedicine(med)} className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
                               <Edit className="w-3.5 h-3.5" />
                             </button>
-                            <button
-                              onClick={() => setDeleteMedicineConfirm(med.id)}
-                              className="p-1.5 text-gray-400 hover:text-red-500"
-                            >
+                            <button onClick={() => setDeleteMedicineConfirm(med.id)} className="p-1.5 text-gray-400 hover:text-red-500">
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           </div>
@@ -1031,79 +768,102 @@ Dinner: option1 / option2 / option3`;
               )}
             </div>
           )}
+        </div>}
+
+        {/* ── Meal Plan ── */}
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Plan de Alimentación</p>
+            {mealPlan && (
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { setEvalResult(''); setSuggestionSlotPicker(null); setAddedSuggestions(new Set()); setShowEvalModal(true); handleEvalPlan(); }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/70 dark:bg-gray-800/70 border border-green-200 dark:border-green-800 text-green-600 dark:text-green-400 hover:bg-white dark:hover:bg-gray-800 transition-colors text-sm font-medium shadow-sm"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  Evaluar plan
+                </button>
+                <button
+                  onClick={() => { setPlanSetupForm({ goal: '', lifestyle: '', restrictions: '' }); setShowPlanSetupModal(true); }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/70 dark:bg-gray-800/70 border border-blue-100 dark:border-blue-800 text-blue-600 dark:text-blue-400 hover:bg-white dark:hover:bg-gray-800 transition-colors text-sm font-medium shadow-sm"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Nuevo plan
+                </button>
+              </div>
+            )}
+          </div>
+
+          {!mealPlan ? (
+            <div className="liquid-glass-panel rounded-2xl p-8 text-center">
+              <div className="w-16 h-16 rounded-full bg-green-50 dark:bg-green-900/20 flex items-center justify-center mx-auto mb-3">
+                <span className="text-3xl">🥗</span>
+              </div>
+              <p className="font-semibold text-gray-700 dark:text-gray-300 mb-1">Sin plan de alimentación</p>
+              <p className="text-sm text-gray-400 mb-5">Genera un plan personalizado con IA basado en tus objetivos y estilo de vida</p>
+              <button onClick={() => setShowPlanSetupModal(true)} className="btn-primary px-8">
+                Iniciar con mi plan
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {mealPlan.slots.map((slot) => (
+                <div key={slot.name} className="liquid-glass-panel rounded-2xl overflow-hidden">
+                  <div className="px-4 pt-4 pb-2">
+                    <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{slot.name}</p>
+                  </div>
+                  <div className="px-2 pb-1">
+                    {slot.options.map((option, idx) => {
+                      const optKey = `${slot.name}-${idx}`;
+                      const isOpen = expandedMealOption === optKey;
+                      return (
+                        <div key={idx} className="rounded-xl overflow-hidden mb-0.5">
+                          <button
+                            onClick={() => setExpandedMealOption(isOpen ? null : optKey)}
+                            className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/50 dark:hover:bg-gray-700/50 transition-colors text-left"
+                          >
+                            <div className="w-9 h-9 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center flex-shrink-0 overflow-hidden border border-gray-200/60 dark:border-gray-600/60">
+                              {option.imageUrl ? (
+                                <img src={option.imageUrl} alt={option.name} className="w-full h-full object-cover" />
+                              ) : (
+                                <span className="text-base">{MEAL_EMOJIS[idx % MEAL_EMOJIS.length]}</span>
+                              )}
+                            </div>
+                            <p className="flex-1 text-sm font-medium text-gray-800 dark:text-gray-200 leading-snug">{option.name}</p>
+                            <button
+                              onClick={e => { e.stopPropagation(); openMealOptionModal(slot.name, option, idx); }}
+                              className="p-1.5 text-gray-300 hover:text-gray-500 dark:hover:text-gray-300 rounded-lg transition-colors flex-shrink-0"
+                            >
+                              <Edit className="w-3.5 h-3.5" />
+                            </button>
+                          </button>
+                          {isOpen && (
+                            <div className="px-4 pb-3 pt-0.5">
+                              <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
+                                {option.description || <span className="italic">Sin descripción</span>}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                    <button
+                      onClick={() => { setAddingMealToSlot(slot.name); setAddMealForm({ name: '', description: '' }); }}
+                      className="w-full flex items-center justify-center gap-1.5 py-2 text-sm text-gray-400 hover:text-primary-500 transition-colors border-t border-white/30 dark:border-gray-700/30 mt-1"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      Agregar opción
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
       </div>
 
-      {/* ── Check-in Modal ── */}
-      {checkinModal && (
-        <div
-          className="fixed z-50 liquid-glass-overlay"
-          style={{ top: 0, left: 0, right: 0, bottom: 0, margin: 0 }}
-          onClick={() => setCheckinModal(null)}
-        >
-          <div className="flex items-center justify-center h-full pb-20 px-4">
-            <div className="liquid-glass-panel rounded-2xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
-              <div className="flex justify-between items-center mb-5">
-                <h3 className="font-bold text-lg text-gray-900 dark:text-gray-100">
-                  {format(parseISO(checkinModal), 'EEEE, MMM d')}
-                </h3>
-                <button onClick={() => setCheckinModal(null)}>
-                  <X className="w-5 h-5 text-gray-400" />
-                </button>
-              </div>
-
-              <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3">How did you eat today?</p>
-              <div className="flex gap-2 justify-between mb-5">
-                {[1, 2, 3, 4, 5].map(r => (
-                  <button
-                    key={r}
-                    onClick={() => setCheckinForm(f => ({ ...f, rating: r }))}
-                    className={`flex-1 py-3 rounded-xl text-xl transition-all ${
-                      checkinForm.rating === r
-                        ? RATING_COLOR(r) + ' scale-105 shadow-md'
-                        : 'bg-gray-100 dark:bg-gray-700'
-                    }`}
-                  >
-                    {RATING_EMOJI[r - 1]}
-                  </button>
-                ))}
-              </div>
-
-              <div className="mb-4">
-                <label className="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-1.5">
-                  Note (optional)
-                </label>
-                <input
-                  type="text"
-                  value={checkinForm.note}
-                  onChange={e => setCheckinForm(f => ({ ...f, note: e.target.value }))}
-                  placeholder="What did you eat? Any notes..."
-                  className="w-full px-3 py-2 rounded-xl bg-white/70 dark:bg-gray-700/70 border border-gray-200 dark:border-gray-600 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-300"
-                />
-              </div>
-
-              <div className="mb-6">
-                <label className="text-xs font-bold text-gray-500 uppercase tracking-wide block mb-1.5">
-                  Weight kg (optional)
-                </label>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={checkinForm.weight}
-                  onChange={e => setCheckinForm(f => ({ ...f, weight: e.target.value }))}
-                  placeholder="e.g. 75.5"
-                  className="w-full px-3 py-2 rounded-xl bg-white/70 dark:bg-gray-700/70 border border-gray-200 dark:border-gray-600 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-300"
-                />
-              </div>
-
-              <button onClick={saveCheckin} className="btn-primary w-full">Save</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Weight History Modal ── */}
+      {/* ── Weight Modal ── */}
       {showWeightModal && (
         <div
           className="fixed z-50 liquid-glass-overlay"
@@ -1111,205 +871,635 @@ Dinner: option1 / option2 / option3`;
           onClick={() => setShowWeightModal(false)}
         >
           <div className="flex items-center justify-center h-full pb-20 px-4">
-            <div className="liquid-glass-panel rounded-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
-              <div className="flex justify-between items-center mb-5">
-                <h3 className="font-bold text-lg text-gray-900 dark:text-gray-100">Weight History</h3>
+            <div
+              className="liquid-glass-panel rounded-2xl w-full max-w-md flex flex-col overflow-hidden"
+              style={{ maxHeight: 'calc(90vh - 80px)' }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex justify-between items-center px-5 pt-5 pb-4 flex-shrink-0 border-b border-white/30 dark:border-white/10">
+                <h3 className="font-bold text-lg text-gray-900 dark:text-gray-100">Control de peso</h3>
                 <button onClick={() => setShowWeightModal(false)}>
                   <X className="w-5 h-5 text-gray-400" />
                 </button>
               </div>
 
-              {weightHistory.length > 0 ? (
-                <>
-                  <div className="text-center mb-5">
-                    <p className="text-4xl font-bold text-blue-500">{weightHistory[0].weight} kg</p>
-                    <p className="text-xs text-gray-400 mt-1">
-                      Last recorded · {format(parseISO(weightHistory[0].date), 'MMM d, yyyy')}
-                    </p>
+              <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-5">
+                {/* Add new record */}
+                <div>
+                  <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Registrar peso</p>
+                  <div className="flex gap-2 flex-wrap">
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={newWeightInput}
+                      onChange={e => setNewWeightInput(e.target.value)}
+                      placeholder="ej. 75.5 kg"
+                      className="flex-1 min-w-0 px-3 py-2 rounded-xl bg-white/70 dark:bg-gray-700/70 border border-gray-200 dark:border-gray-600 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                    />
+                    <input
+                      type="date"
+                      value={newWeightDate}
+                      onChange={e => setNewWeightDate(e.target.value)}
+                      className="px-3 py-2 rounded-xl bg-white/70 dark:bg-gray-700/70 border border-gray-200 dark:border-gray-600 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                    />
+                    <button
+                      onClick={handleAddWeight}
+                      disabled={savingWeight || !newWeightInput}
+                      className="btn-primary px-4 py-2 text-sm disabled:opacity-60"
+                    >
+                      {savingWeight ? '...' : 'Guardar'}
+                    </button>
                   </div>
-                  {chartData.length > 1 && (
-                    <ResponsiveContainer width="100%" height={150}>
-                      <LineChart data={chartData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.08)" />
-                        <XAxis dataKey="date" tick={{ fontSize: 10 }} />
-                        <YAxis domain={['dataMin - 1', 'dataMax + 1']} tick={{ fontSize: 10 }} />
-                        <Tooltip />
-                        <Line type="monotone" dataKey="weight" stroke="#3b82f6" strokeWidth={2} dot={false} />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  )}
-                  <div className="mt-4 max-h-40 overflow-y-auto space-y-1">
-                    {weightHistory.slice(0, 15).map(e => (
-                      <div
-                        key={e.id}
-                        className="flex justify-between text-sm py-1.5 border-b border-gray-100 dark:border-gray-700/50 last:border-0"
-                      >
-                        <span className="text-gray-500">{format(parseISO(e.date), 'MMM d, yyyy')}</span>
-                        <span className="font-semibold text-gray-900 dark:text-gray-100">{e.weight} kg</span>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              ) : (
-                <p className="text-sm text-gray-400 text-center py-8">
-                  No weight data yet. Log it optionally during your daily check-in.
-                </p>
-              )}
+                </div>
 
-              <button onClick={() => setShowWeightModal(false)} className="btn-secondary w-full mt-5">Close</button>
+                {weightHistory.length > 0 ? (
+                  <>
+                    <div className="text-center">
+                      <p className="text-4xl font-bold text-blue-500">{weightHistory[0].weight} kg</p>
+                      <p className="text-sm text-gray-400 mt-1">
+                        Último registro · {format(parseISO(weightHistory[0].date), 'dd MMM yyyy')}
+                      </p>
+                    </div>
+                    {chartData.length > 1 && (
+                      <ResponsiveContainer width="100%" height={150}>
+                        <LineChart data={chartData}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.08)" />
+                          <XAxis dataKey="date" tick={{ fontSize: 10 }} />
+                          <YAxis domain={['dataMin - 1', 'dataMax + 1']} tick={{ fontSize: 10 }} />
+                          <Tooltip />
+                          <Line type="monotone" dataKey="weight" stroke="#3b82f6" strokeWidth={2} dot={false} />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    )}
+                    <div>
+                      <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">Historial</p>
+                      <div className="max-h-44 overflow-y-auto space-y-1">
+                        {weightHistory.slice(0, 20).map(e => (
+                          <div key={e.id} className="flex justify-between items-center text-sm py-1.5 border-b border-gray-100 dark:border-gray-700/50 last:border-0">
+                            <span className="text-gray-500">{format(parseISO(e.date), 'dd MMM yyyy')}</span>
+                            <div className="flex items-center gap-3">
+                              <span className="font-semibold text-gray-900 dark:text-gray-100">{e.weight} kg</span>
+                              <button onClick={() => handleDeleteWeight(e.id)} className="text-gray-300 hover:text-red-400 transition-colors">
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-sm text-gray-400 text-center py-4">Sin registros aún.</p>
+                )}
+              </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* ── Shopping Item Modal ── */}
-      {shoppingModal && (
+      {/* ── Shopping Modal ── */}
+      {showShoppingModal && (
         <div
           className="fixed z-50 liquid-glass-overlay"
           style={{ top: 0, left: 0, right: 0, bottom: 0, margin: 0 }}
-          onClick={() => setShoppingModal(null)}
+          onClick={() => setShowShoppingModal(false)}
         >
           <div className="flex items-center justify-center h-full pb-20 px-4">
-            <div className="liquid-glass-panel rounded-2xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
-              <div className="flex justify-between items-center mb-5">
-                <h3 className="font-bold text-lg text-gray-900 dark:text-gray-100">
-                  {typeof shoppingModal === 'object' ? 'Edit Item' : 'Add Item'}
-                </h3>
-                <button onClick={() => setShoppingModal(null)}>
+            <div
+              className="liquid-glass-panel rounded-2xl w-full max-w-md flex flex-col overflow-hidden"
+              style={{ maxHeight: 'calc(90vh - 80px)' }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex justify-between items-center px-5 pt-5 pb-4 flex-shrink-0 border-b border-white/30 dark:border-white/10">
+                <div className="flex items-center gap-2">
+                  <h3 className="font-bold text-lg text-gray-900 dark:text-gray-100">Lista del super</h3>
+                  {shoppingList.length > 0 && (
+                    <span className="text-sm text-gray-400">{shoppingList.length} ítems</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  {purchasedCount > 0 && (
+                    <button
+                      onClick={handleClearPurchased}
+                      className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white/70 dark:bg-gray-800/70 border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:bg-white dark:hover:bg-gray-800 text-sm transition-colors"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      Reiniciar lista
+                    </button>
+                  )}
+                  <button onClick={() => setShowShoppingModal(false)}>
+                    <X className="w-5 h-5 text-gray-400" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-3">
+                {/* Action buttons */}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => { setShoppingForm({ title: '' }); setSelectedLabels([]); setShoppingItemModal('add'); }}
+                    className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl btn-primary text-sm font-medium"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Agregar ítem
+                  </button>
+                  <button
+                    onClick={() => setShowLabelsModal(true)}
+                    className="flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-white/70 dark:bg-gray-800/70 border border-white/60 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-white dark:hover:bg-gray-800 transition-colors text-sm"
+                  >
+                    <Tag className="w-4 h-4" />
+                    Etiquetas
+                  </button>
+                </div>
+
+                {/* List */}
+                {shoppingList.length === 0 ? (
+                  <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-6">
+                    Lista vacía. Toca "Agregar ítem" para comenzar.
+                  </p>
+                ) : (
+                  <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                    <SortableContext items={shoppingList.map(i => i.id)} strategy={verticalListSortingStrategy}>
+                      <div className="space-y-2">
+                        {shoppingList.map(item => (
+                          <SortableShoppingItem
+                            key={item.id}
+                            item={item}
+                            onToggle={handleTogglePurchased}
+                            onEdit={openEditItem}
+                            onDelete={handleDeleteShoppingItem}
+                          />
+                        ))}
+                      </div>
+                    </SortableContext>
+                  </DndContext>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Plan Setup Modal ── */}
+      {showPlanSetupModal && (
+        <div
+          className="fixed z-50 liquid-glass-overlay"
+          style={{ top: 0, left: 0, right: 0, bottom: 0, margin: 0 }}
+          onClick={() => !mealLoading && setShowPlanSetupModal(false)}
+        >
+          <div className="flex items-center justify-center h-full pb-20 px-4">
+            <div
+              className="liquid-glass-panel rounded-2xl w-full max-w-md flex flex-col overflow-hidden"
+              style={{ maxHeight: 'calc(90vh - 80px)' }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex justify-between items-center px-5 pt-5 pb-4 flex-shrink-0 border-b border-white/30 dark:border-white/10">
+                <h3 className="font-bold text-lg text-gray-900 dark:text-gray-100">Personaliza tu plan</h3>
+                {!mealLoading && (
+                  <button onClick={() => setShowPlanSetupModal(false)}>
+                    <X className="w-5 h-5 text-gray-400" />
+                  </button>
+                )}
+              </div>
+
+              <div className="flex-1 min-h-0 overflow-y-auto p-5">
+                {mealLoading ? (
+                  <div className="flex flex-col items-center py-16 gap-3">
+                    <Loader2 className="w-8 h-8 text-primary-400 animate-spin" />
+                    <p className="text-sm text-gray-500 dark:text-gray-400 text-center">
+                      Generando tu plan personalizado...
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {/* Goal */}
+                    <div>
+                      <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">¿Cuál es tu objetivo?</p>
+                      <div className="space-y-2">
+                        {GOAL_OPTIONS.map(opt => (
+                          <button
+                            key={opt.value}
+                            onClick={() => setPlanSetupForm(f => ({ ...f, goal: opt.value }))}
+                            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 text-left transition-all ${
+                              planSetupForm.goal === opt.value
+                                ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
+                                : 'border-gray-200 dark:border-gray-600 bg-white/50 dark:bg-gray-800/50 hover:border-gray-300'
+                            }`}
+                          >
+                            <span className="text-xl flex-shrink-0">{opt.emoji}</span>
+                            <div>
+                              <p className="font-medium text-sm text-gray-900 dark:text-gray-100">{opt.label}</p>
+                              <p className="text-sm text-gray-400 leading-tight">{opt.desc}</p>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Lifestyle */}
+                    <div>
+                      <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">¿Cómo es tu día a día?</p>
+                      <div className="space-y-2">
+                        {LIFESTYLE_OPTIONS.map(opt => (
+                          <button
+                            key={opt.value}
+                            onClick={() => setPlanSetupForm(f => ({ ...f, lifestyle: opt.value }))}
+                            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 text-left transition-all ${
+                              planSetupForm.lifestyle === opt.value
+                                ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
+                                : 'border-gray-200 dark:border-gray-600 bg-white/50 dark:bg-gray-800/50 hover:border-gray-300'
+                            }`}
+                          >
+                            <span className="text-xl flex-shrink-0">{opt.emoji}</span>
+                            <p className="font-medium text-sm text-gray-900 dark:text-gray-100">{opt.label}</p>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Restrictions */}
+                    <div>
+                      <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                        Restricciones o preferencias{' '}
+                        <span className="text-gray-400 font-normal">(opcional)</span>
+                      </p>
+                      <textarea
+                        className="input-field resize-none"
+                        rows={3}
+                        placeholder="ej. Soy vegetariano, no me gusta el pescado, sin gluten..."
+                        value={planSetupForm.restrictions}
+                        onChange={e => setPlanSetupForm(f => ({ ...f, restrictions: e.target.value }))}
+                      />
+                    </div>
+
+                    <button
+                      onClick={handleGeneratePlan}
+                      disabled={!planSetupForm.goal || !planSetupForm.lifestyle}
+                      className="w-full btn-primary py-3 flex items-center justify-center gap-2 disabled:opacity-60"
+                    >
+                      <Sparkles className="w-4 h-4" />
+                      Generar mi plan
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Eval Modal ── */}
+      {showEvalModal && (
+        <div
+          className="fixed z-50 liquid-glass-overlay"
+          style={{ top: 0, left: 0, right: 0, bottom: 0, margin: 0 }}
+          onClick={() => { if (!evalLoading) { setShowEvalModal(false); setSuggestionSlotPicker(null); } }}
+        >
+          <div className="flex items-center justify-center h-full pb-20 px-4">
+            <div
+              className="liquid-glass-panel rounded-2xl w-full max-w-md flex flex-col overflow-hidden"
+              style={{ maxHeight: 'calc(90vh - 80px)' }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex justify-between items-center px-5 pt-5 pb-4 flex-shrink-0 border-b border-white/30 dark:border-white/10">
+                <h3 className="font-bold text-lg text-gray-900 dark:text-gray-100">Evaluación del plan</h3>
+                {!evalLoading && (
+                  <button onClick={() => { setShowEvalModal(false); setSuggestionSlotPicker(null); }}>
+                    <X className="w-5 h-5 text-gray-400" />
+                  </button>
+                )}
+              </div>
+
+              <div className="flex-1 min-h-0 overflow-y-auto p-5">
+                {evalLoading ? (
+                  <div className="flex flex-col items-center py-16 gap-3">
+                    <Loader2 className="w-8 h-8 text-green-400 animate-spin" />
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Evaluando tu plan...</p>
+                  </div>
+                ) : evalResult ? (
+                  <div className="space-y-4">
+                    <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-line text-justify">{evalMainText}</p>
+                    {parseSuggestions(evalResult).filter(s => !addedSuggestions.has(s.name)).length > 0 && (
+                      <div className="border-t border-gray-100 dark:border-gray-700 pt-4">
+                        <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Sugerencias para agregar:</p>
+                        <div className="space-y-2">
+                          {parseSuggestions(evalResult).filter(s => !addedSuggestions.has(s.name)).map((s, i) => (
+                            <div key={i} className="p-3 bg-green-50/60 dark:bg-green-900/10 rounded-xl border border-green-100 dark:border-green-800">
+                              <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{s.name}</p>
+                              <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{s.description}</p>
+                              {suggestionSlotPicker === i ? (
+                                <div className="mt-2 space-y-1">
+                                  <p className="text-sm text-gray-500 dark:text-gray-400">¿A qué tiempo de comida?</p>
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {mealPlan?.slots?.map(slot => (
+                                      <button
+                                        key={slot.name}
+                                        onClick={() => handleAddSuggestionToSlot(s, slot.name)}
+                                        className="px-2.5 py-1 rounded-lg text-sm font-medium bg-white/80 dark:bg-gray-700/80 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:border-green-400 hover:text-green-600 dark:hover:text-green-400 transition-colors"
+                                      >
+                                        {slot.name}
+                                      </button>
+                                    ))}
+                                    <button
+                                      onClick={() => setSuggestionSlotPicker(null)}
+                                      className="px-2.5 py-1 rounded-lg text-sm text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
+                                    >
+                                      Cancelar
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => setSuggestionSlotPicker(i)}
+                                  className="mt-2 flex items-center gap-1 text-sm text-green-600 dark:text-green-400 font-medium hover:underline"
+                                >
+                                  <Plus className="w-3.5 h-3.5" />
+                                  Agregar al plan
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center py-10 gap-4">
+                    <span className="text-4xl">🔍</span>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 text-center">
+                      Analiza tu plan para ver sus puntos fuertes y áreas de mejora
+                    </p>
+                    <button
+                      onClick={handleEvalPlan}
+                      className="btn-primary flex items-center gap-2 px-6"
+                    >
+                      <Sparkles className="w-4 h-4" />
+                      Evaluar ahora
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Meal Option Edit Modal ── */}
+      {selectedMealOption && (
+        <div
+          className="fixed z-50 liquid-glass-overlay"
+          style={{ top: 0, left: 0, right: 0, bottom: 0, margin: 0 }}
+          onClick={() => setSelectedMealOption(null)}
+        >
+          <div className="flex items-center justify-center h-full pb-20 px-4">
+            <div
+              className="liquid-glass-panel rounded-2xl w-full max-w-sm flex flex-col overflow-hidden"
+              style={{ maxHeight: 'calc(90vh - 80px)' }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between gap-3 px-5 pt-5 pb-4 flex-shrink-0 border-b border-white/30 dark:border-white/10">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center flex-shrink-0">
+                    <span className="text-xl">{MEAL_EMOJIS[selectedMealOption.idx % MEAL_EMOJIS.length]}</span>
+                  </div>
+                  <p className="text-xs font-bold text-gray-400 uppercase tracking-wide">{selectedMealOption.slotName}</p>
+                </div>
+                <button onClick={() => setSelectedMealOption(null)} className="flex-shrink-0">
                   <X className="w-5 h-5 text-gray-400" />
                 </button>
               </div>
+              <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4">
+                <div>
+                  <label className="label">Nombre</label>
+                  <input
+                    className="input-field"
+                    value={mealOptionForm.name}
+                    onChange={e => setMealOptionForm(f => ({ ...f, name: e.target.value }))}
+                    autoFocus
+                  />
+                </div>
+                <div>
+                  <label className="label">Descripción / ingredientes</label>
+                  <textarea
+                    className="input-field resize-none"
+                    rows={4}
+                    value={mealOptionForm.description}
+                    onChange={e => setMealOptionForm(f => ({ ...f, description: e.target.value }))}
+                    placeholder="Ingredientes, cantidades, contexto..."
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={handleDeleteMealOption} className="p-2.5 rounded-xl bg-white/70 dark:bg-gray-800/70 border border-red-200 dark:border-red-800 text-red-400 hover:text-red-600 transition-colors">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                  <button onClick={() => setSelectedMealOption(null)} className="btn-secondary flex-1">Cancelar</button>
+                  <button onClick={handleSaveMealOption} disabled={!mealOptionForm.name.trim()} className="btn-primary flex-1 disabled:opacity-60">Guardar</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
+      {/* ── Add Meal Option Modal ── */}
+      {addingMealToSlot && (
+        <div
+          className="fixed z-50 liquid-glass-overlay"
+          style={{ top: 0, left: 0, right: 0, bottom: 0, margin: 0 }}
+          onClick={() => setAddingMealToSlot(null)}
+        >
+          <div className="flex items-center justify-center h-full pb-20 px-4">
+            <div
+              className="liquid-glass-panel rounded-2xl w-full max-w-sm p-6"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex justify-between items-start mb-4">
+                <div>
+                  <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-0.5">{addingMealToSlot}</p>
+                  <h3 className="font-bold text-lg text-gray-900 dark:text-gray-100">Agregar opción</h3>
+                </div>
+                <button onClick={() => setAddingMealToSlot(null)}><X className="w-5 h-5 text-gray-400" /></button>
+              </div>
               <div className="space-y-4">
                 <div>
-                  <label className="label">Name *</label>
+                  <label className="label">Nombre *</label>
+                  <input
+                    className="input-field"
+                    value={addMealForm.name}
+                    onChange={e => setAddMealForm(f => ({ ...f, name: e.target.value }))}
+                    placeholder="ej. Avena con plátano"
+                    autoFocus
+                  />
+                </div>
+                <div>
+                  <label className="label">Descripción / ingredientes</label>
+                  <textarea
+                    className="input-field resize-none"
+                    rows={3}
+                    value={addMealForm.description}
+                    onChange={e => setAddMealForm(f => ({ ...f, description: e.target.value }))}
+                    placeholder="Ingredientes, cantidades, contexto..."
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => setAddingMealToSlot(null)} className="btn-secondary flex-1">Cancelar</button>
+                  <button onClick={handleAddMealOption} disabled={!addMealForm.name.trim()} className="btn-primary flex-1 disabled:opacity-60">Agregar</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Labels Modal ── */}
+      {showLabelsModal && (
+        <div
+          className="fixed z-[70] liquid-glass-overlay"
+          style={{ top: 0, left: 0, right: 0, bottom: 0, margin: 0 }}
+          onClick={() => { setShowLabelsModal(false); setLabelEditingName(null); }}
+        >
+          <div className="flex items-center justify-center h-full pb-20 px-4">
+            <div
+              className="liquid-glass-panel rounded-2xl w-full max-w-sm flex flex-col overflow-hidden"
+              style={{ maxHeight: 'calc(90vh - 80px)' }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex justify-between items-center px-5 pt-5 pb-4 flex-shrink-0 border-b border-white/30 dark:border-white/10">
+                <h3 className="font-bold text-lg text-gray-900 dark:text-gray-100">Gestionar etiquetas</h3>
+                <button onClick={() => { setShowLabelsModal(false); setLabelEditingName(null); }}>
+                  <X className="w-5 h-5 text-gray-400" />
+                </button>
+              </div>
+              <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4">
+                {/* Add new */}
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newLabelModalInput}
+                    onChange={e => setNewLabelModalInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddLabelInModal(); } }}
+                    placeholder="Nueva etiqueta..."
+                    className="flex-1 px-3 py-2 rounded-xl bg-white/70 dark:bg-gray-700/70 border border-gray-200 dark:border-gray-600 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                    autoFocus
+                  />
+                  <button
+                    onClick={handleAddLabelInModal}
+                    disabled={!newLabelModalInput.trim()}
+                    className="px-3 py-2 rounded-xl text-sm font-medium text-white disabled:opacity-40"
+                    style={{ backgroundColor: LABEL_GRAY }}
+                  >
+                    Añadir
+                  </button>
+                </div>
+
+                {availableLabels.length === 0 ? (
+                  <p className="text-sm text-gray-400 text-center py-6">Sin etiquetas. Crea una arriba.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {availableLabels.map(label => (
+                      <div key={label.name} className="flex items-center gap-2 p-3 rounded-xl bg-white/50 dark:bg-gray-800/50 border border-white/60 dark:border-gray-700/60">
+                        {labelEditingName === label.name ? (
+                          <>
+                            <input
+                              type="text"
+                              value={labelEditInput}
+                              onChange={e => setLabelEditInput(e.target.value)}
+                              onKeyDown={e => { if (e.key === 'Enter') handleSaveEditLabel(); if (e.key === 'Escape') setLabelEditingName(null); }}
+                              className="flex-1 px-2 py-1.5 rounded-lg bg-white dark:bg-gray-700 border border-blue-300 text-sm text-gray-900 dark:text-gray-100 focus:outline-none"
+                              autoFocus
+                            />
+                            <button onClick={handleSaveEditLabel} className="p-1.5 text-green-500 hover:text-green-600">
+                              <Check className="w-4 h-4" />
+                            </button>
+                            <button onClick={() => setLabelEditingName(null)} className="p-1.5 text-gray-400 hover:text-gray-600">
+                              <X className="w-4 h-4" />
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <span
+                              className="flex-1 text-sm font-medium px-2.5 py-0.5 rounded-full text-white w-fit"
+                              style={{ backgroundColor: LABEL_GRAY }}
+                            >
+                              {label.name}
+                            </span>
+                            <button onClick={() => handleStartEditLabel(label.name)} className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                              <Edit className="w-3.5 h-3.5" />
+                            </button>
+                            <button onClick={() => handleDeleteLabel(label.name)} className="p-1.5 text-gray-400 hover:text-red-500">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Shopping Item Edit Modal ── */}
+      {shoppingItemModal && (
+        <div
+          className="fixed z-[60] liquid-glass-overlay"
+          style={{ top: 0, left: 0, right: 0, bottom: 0, margin: 0 }}
+          onClick={() => setShoppingItemModal(null)}
+        >
+          <div className="flex items-center justify-center h-full pb-20 px-4">
+            <div className="liquid-glass-panel rounded-2xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="font-bold text-lg text-gray-900 dark:text-gray-100">
+                  {typeof shoppingItemModal === 'object' ? 'Editar ítem' : 'Agregar ítem'}
+                </h3>
+                <button onClick={() => setShoppingItemModal(null)}>
+                  <X className="w-5 h-5 text-gray-400" />
+                </button>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="label">Nombre *</label>
                   <input
                     type="text"
                     value={shoppingForm.title}
                     onChange={e => setShoppingForm(f => ({ ...f, title: e.target.value }))}
                     className="input-field"
-                    placeholder="Item name"
+                    placeholder="Nombre del ítem"
                     autoFocus
                   />
                 </div>
-
-                {/* Labels */}
-                <div>
-                  <label className="label">Labels (up to 2)</label>
-                  {availableLabels.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mb-2">
+                {availableLabels.length > 0 && (
+                  <div>
+                    <label className="label">Etiquetas (máx. 2)</label>
+                    <div className="flex flex-wrap gap-2">
                       {availableLabels.map(label => {
                         const selected = selectedLabels.includes(label.name);
-                        const isEditing = editingLabel?.originalName === label.name;
-                        return isEditing ? (
-                          <div key={label.name} className="w-full space-y-1.5 p-2 rounded-xl bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600">
-                            <div className="flex gap-1.5">
-                              {LABEL_COLORS.map(c => (
-                                <button
-                                  key={c}
-                                  type="button"
-                                  onClick={() => setEditingLabel(prev => ({ ...prev, color: c }))}
-                                  className="w-5 h-5 rounded-full flex-shrink-0 transition-transform"
-                                  style={{
-                                    backgroundColor: c,
-                                    outline: editingLabel.color === c ? `2px solid ${c}` : 'none',
-                                    outlineOffset: '2px',
-                                    transform: editingLabel.color === c ? 'scale(1.2)' : 'scale(1)',
-                                  }}
-                                />
-                              ))}
-                            </div>
-                            <div className="flex gap-1.5">
-                              <input
-                                type="text"
-                                value={editingLabel.name}
-                                onChange={e => setEditingLabel(prev => ({ ...prev, name: e.target.value }))}
-                                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleSaveLabelEdit(); } if (e.key === 'Escape') setEditingLabel(null); }}
-                                className="flex-1 px-2 py-1 rounded-lg bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-xs text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-300"
-                                autoFocus
-                              />
-                              <button type="button" onClick={handleSaveLabelEdit} className="px-2 py-1 rounded-lg text-xs font-bold text-white" style={{ backgroundColor: editingLabel.color }}>✓</button>
-                              <button type="button" onClick={() => setEditingLabel(null)} className="px-2 py-1 rounded-lg text-xs text-gray-400 hover:text-gray-600">✕</button>
-                            </div>
-                          </div>
-                        ) : (
-                          <div key={label.name} className="flex items-center gap-0.5">
-                            <button
-                              type="button"
-                              onClick={() => handleToggleLabel(label.name)}
-                              className="px-3 py-1 rounded-full text-xs font-medium transition-all text-white flex items-center gap-1"
-                              style={{
-                                backgroundColor: label.color,
-                                opacity: selected ? 1 : 0.45,
-                                outline: selected ? `2px solid ${label.color}` : 'none',
-                                outlineOffset: '2px',
-                              }}
-                            >
-                              {label.name}
-                              {selected && <span>✓</span>}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setEditingLabel({ originalName: label.name, name: label.name, color: label.color })}
-                              className="text-gray-300 hover:text-gray-500 p-0.5"
-                            >
-                              <Edit className="w-3 h-3" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteLabel(label.name)}
-                              className="text-gray-300 hover:text-red-400 p-0.5"
-                            >
-                              <X className="w-3 h-3" />
-                            </button>
-                          </div>
+                        return (
+                          <button
+                            key={label.name}
+                            type="button"
+                            onClick={() => handleToggleLabel(label.name)}
+                            className="flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium text-white transition-all"
+                            style={{
+                              backgroundColor: LABEL_GRAY,
+                              opacity: selected ? 1 : 0.4,
+                              outline: selected ? `2px solid ${LABEL_GRAY}` : 'none',
+                              outlineOffset: '2px',
+                            }}
+                          >
+                            {label.name}
+                            {selected && <span>✓</span>}
+                          </button>
                         );
                       })}
                     </div>
-                  )}
-                  {/* Inline add label */}
-                  <div className="space-y-2">
-                    <div className="flex gap-1.5">
-                      {LABEL_COLORS.map(c => (
-                        <button
-                          key={c}
-                          type="button"
-                          onClick={() => setNewLabelColor(c)}
-                          className="w-5 h-5 rounded-full flex-shrink-0 transition-transform"
-                          style={{
-                            backgroundColor: c,
-                            outline: newLabelColor === c ? `2px solid ${c}` : 'none',
-                            outlineOffset: '2px',
-                            transform: newLabelColor === c ? 'scale(1.2)' : 'scale(1)',
-                          }}
-                        />
-                      ))}
-                    </div>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={newLabelInput}
-                        onChange={e => setNewLabelInput(e.target.value)}
-                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddLabel(); } }}
-                        placeholder="New label..."
-                        className="flex-1 px-3 py-1.5 rounded-lg bg-white/70 dark:bg-gray-700/70 border border-gray-200 dark:border-gray-600 text-xs text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-1 focus:ring-blue-300"
-                      />
-                      <button
-                        type="button"
-                        onClick={handleAddLabel}
-                        disabled={!newLabelInput.trim()}
-                        className="px-3 py-1.5 rounded-lg text-xs font-medium text-white disabled:opacity-40"
-                        style={{ backgroundColor: newLabelColor }}
-                      >
-                        Add
-                      </button>
-                    </div>
                   </div>
-                </div>
-
+                )}
                 <div className="flex gap-2 pt-1">
-                  <button type="button" onClick={() => setShoppingModal(null)} className="btn-secondary flex-1">
-                    Cancel
+                  <button type="button" onClick={() => setShoppingItemModal(null)} className="btn-secondary flex-1">
+                    Cancelar
                   </button>
                   <button
                     type="button"
@@ -1317,7 +1507,7 @@ Dinner: option1 / option2 / option3`;
                     disabled={!shoppingForm.title.trim()}
                     className="btn-primary flex-1"
                   >
-                    Save
+                    Guardar
                   </button>
                 </div>
               </div>
@@ -1325,45 +1515,6 @@ Dinner: option1 / option2 / option3`;
           </div>
         </div>
       )}
-
-      {/* AI modal */}
-      {showAiModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-md p-6 border border-transparent dark:border-gray-700">
-            <div className="flex justify-between items-start mb-4">
-              <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">AI Meal Plan</h3>
-              <button onClick={() => setShowAiModal(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <textarea
-              value={mealPrompt}
-              onChange={e => setMealPrompt(e.target.value)}
-              placeholder="Ingredients, goals, restrictions... e.g. chicken, rice, eggs · lose weight · no gluten"
-              rows={4}
-              className="w-full px-4 py-3 rounded-xl bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100 placeholder-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none mb-4"
-              autoFocus
-            />
-            <button
-              onClick={handleGenerateMeal}
-              disabled={!mealPrompt.trim()}
-              className="w-full flex items-center justify-center gap-2 btn-primary disabled:opacity-60"
-            >
-              <Sparkles className="w-4 h-4" />
-              Generate plan
-            </button>
-          </div>
-        </div>
-      )}
-
-      <ConfirmModal
-        isOpen={!!deleteMealConfirm}
-        onClose={() => setDeleteMealConfirm(null)}
-        onConfirm={() => removeMealOption(deleteMealConfirm.slotName, deleteMealConfirm.optionIdx)}
-        title="Remove option"
-        message="Are you sure you want to remove this meal option?"
-        confirmText="Remove"
-      />
 
       {/* ── Medicine Modal ── */}
       {showMedicineModal && (
@@ -1389,29 +1540,17 @@ Dinner: option1 / option2 / option3`;
               <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4">
                 <div>
                   <label className="label">Nombre *</label>
-                  <input
-                    className="input-field"
-                    placeholder="ej. Ibuprofeno"
-                    value={medicineForm.name}
-                    onChange={e => setMedicineForm(f => ({ ...f, name: e.target.value }))}
-                    autoFocus
-                  />
+                  <input className="input-field" placeholder="ej. Ibuprofeno" value={medicineForm.name}
+                    onChange={e => setMedicineForm(f => ({ ...f, name: e.target.value }))} autoFocus />
                 </div>
                 <div>
                   <label className="label">Dosis *</label>
-                  <input
-                    className="input-field"
-                    placeholder="ej. 1 pastilla, 5ml"
-                    value={medicineForm.dose}
-                    onChange={e => setMedicineForm(f => ({ ...f, dose: e.target.value }))}
-                  />
+                  <input className="input-field" placeholder="ej. 1 pastilla, 5ml" value={medicineForm.dose}
+                    onChange={e => setMedicineForm(f => ({ ...f, dose: e.target.value }))} />
                 </div>
                 <div>
                   <label className="label">Cada cuántas horas</label>
-                  <input
-                    type="number"
-                    className="input-field"
-                    placeholder="ej. 8 → 3 veces/día · 24 → 1 vez/día"
+                  <input type="number" className="input-field" placeholder="ej. 8 → 3 veces/día · 24 → 1 vez/día"
                     value={medicineForm.frequencyHours}
                     onChange={e => {
                       const fh = e.target.value;
@@ -1424,11 +1563,9 @@ Dinner: option1 / option2 / option3`;
                     min="1"
                   />
                   {medicineForm.frequencyHours && Number(medicineForm.frequencyHours) > 0 && (
-                    <p className="text-xs text-gray-400 mt-1">
-                      {Number(medicineForm.frequencyHours) === 24
-                        ? '1 vez al día'
-                        : Number(medicineForm.frequencyHours) > 24
-                        ? `cada ${medicineForm.frequencyHours}h`
+                    <p className="text-sm text-gray-400 mt-1">
+                      {Number(medicineForm.frequencyHours) === 24 ? '1 vez al día'
+                        : Number(medicineForm.frequencyHours) > 24 ? `cada ${medicineForm.frequencyHours}h`
                         : `${Math.round(24 / Number(medicineForm.frequencyHours))} veces al día`}
                     </p>
                   )}
@@ -1439,11 +1576,8 @@ Dinner: option1 / option2 / option3`;
                     <div className="space-y-2">
                       {medicineForm.doseTimes.map((t, i) => (
                         <div key={i} className="flex items-center gap-2">
-                          <span className="text-xs text-gray-400 w-16 flex-shrink-0">Dosis {i + 1}</span>
-                          <input
-                            type="time"
-                            className="input-field flex-1"
-                            value={t}
+                          <span className="text-sm text-gray-400 w-16 flex-shrink-0">Dosis {i + 1}</span>
+                          <input type="time" className="input-field flex-1" value={t}
                             onChange={e => {
                               const newTimes = [...medicineForm.doseTimes];
                               newTimes[i] = e.target.value;
@@ -1457,32 +1591,18 @@ Dinner: option1 / option2 / option3`;
                 )}
                 <div>
                   <label className="label">Duración (días)</label>
-                  <input
-                    type="number"
-                    className="input-field"
-                    placeholder="ej. 7"
-                    value={medicineForm.durationDays}
-                    onChange={e => setMedicineForm(f => ({ ...f, durationDays: e.target.value }))}
-                    min="1"
-                  />
+                  <input type="number" className="input-field" placeholder="ej. 7" value={medicineForm.durationDays}
+                    onChange={e => setMedicineForm(f => ({ ...f, durationDays: e.target.value }))} min="1" />
                 </div>
                 <div>
                   <label className="label">Fecha de inicio</label>
-                  <input
-                    type="date"
-                    className="input-field"
-                    value={medicineForm.startDate}
-                    onChange={e => setMedicineForm(f => ({ ...f, startDate: e.target.value }))}
-                  />
+                  <input type="date" className="input-field" value={medicineForm.startDate}
+                    onChange={e => setMedicineForm(f => ({ ...f, startDate: e.target.value }))} />
                 </div>
                 <div>
                   <label className="label">Nota</label>
-                  <input
-                    className="input-field"
-                    placeholder="ej. Tomar con comida"
-                    value={medicineForm.note}
-                    onChange={e => setMedicineForm(f => ({ ...f, note: e.target.value }))}
-                  />
+                  <input className="input-field" placeholder="ej. Tomar con comida" value={medicineForm.note}
+                    onChange={e => setMedicineForm(f => ({ ...f, note: e.target.value }))} />
                 </div>
                 <button
                   onClick={handleSaveMedicine}

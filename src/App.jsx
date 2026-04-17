@@ -3,11 +3,12 @@ import { useAuth } from './contexts/AuthContext';
 import Landing from './pages/Landing';
 import Auth from './pages/Auth';
 import Layout from './components/Layout';
-import Goals from './pages/Goals';
+import Home from './pages/Home';
 import Move from './pages/Move';
 import Food from './pages/Food';
 import Books from './pages/Books';
 import Together from './pages/Together';
+import Wellbeing from './pages/Wellbeing';
 import Profile from './pages/Profile';
 import RoutineExecution from './pages/RoutineExecution';
 
@@ -26,15 +27,16 @@ function App() {
         ) : (
           <>
             <Route element={<Layout />}>
-              <Route path="/goals" element={<Goals />} />
+              <Route path="/home" element={<Home />} />
               <Route path="/move" element={<Move />} />
               <Route path="/food" element={<Food />} />
               <Route path="/books" element={<Books />} />
               <Route path="/together" element={<Together />} />
+              <Route path="/wellbeing" element={<Wellbeing />} />
               <Route path="/profile" element={<Profile />} />
             </Route>
             <Route path="/routine/:routineId" element={<RoutineExecution />} />
-            <Route path="*" element={<Navigate to="/goals" />} />
+            <Route path="*" element={<Navigate to="/home" />} />
           </>
         )}
       </Routes>

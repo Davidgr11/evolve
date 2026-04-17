@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../utils/firebase';
-import { doc, getDoc, setDoc, updateDoc, increment } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, increment, arrayUnion } from 'firebase/firestore';
 import { useForm } from 'react-hook-form';
 import toast from '../utils/toast';
 import { Play, Pause, X, Check, ChevronRight } from 'lucide-react';
@@ -22,7 +22,7 @@ const RoutineExecution = () => {
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const timerRef = useRef(null);
 
-  const { register, handleSubmit, formState: { errors } } = useForm();
+  const { register, handleSubmit } = useForm();
 
   useEffect(() => {
     loadRoutine();
@@ -51,11 +51,11 @@ const RoutineExecution = () => {
       if (routineDoc.exists()) {
         setRoutine({ id: routineDoc.id, ...routineDoc.data() });
       } else {
-        toast.error('Routine not found');
+        toast.error('Rutina no encontrada');
         navigate('/move');
       }
     } catch (error) {
-      toast.error('Failed to load routine');
+      toast.error('Error al cargar la rutina');
       console.error(error);
     } finally {
       setLoading(false);
@@ -97,7 +97,6 @@ const RoutineExecution = () => {
   };
 
   const confirmExit = () => {
-    toast.success('Routine exited');
     navigate('/move');
   };
 
@@ -155,15 +154,17 @@ const RoutineExecution = () => {
       }
 
       // Update routine's lastRun and totalRuns
+      const todayStr = new Date().toISOString().split('T')[0];
       await updateDoc(doc(db, `users/${user.uid}/routines`, routineId), {
         lastRun: new Date().toISOString(),
-        totalRuns: increment(1)
+        totalRuns: increment(1),
+        runDates: arrayUnion(todayStr),
       });
 
-      toast.success('Routine completed successfully!');
+      toast.success('¡Rutina completada!');
       navigate('/move');
     } catch (error) {
-      toast.error('Failed to save statistics');
+      toast.error('Error al guardar estadísticas');
       console.error(error);
     }
   };
@@ -175,7 +176,7 @@ const RoutineExecution = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
-        <div className="text-gray-500">Loading routine...</div>
+        <div className="text-gray-500">Cargando rutina...</div>
       </div>
     );
   }
@@ -204,11 +205,11 @@ const RoutineExecution = () => {
           >
             {isPaused ? (
               <>
-                <Play className="w-5 h-5" /> Resume
+                <Play className="w-5 h-5" /> Reanudar
               </>
             ) : (
               <>
-                <Pause className="w-5 h-5" /> Pause
+                <Pause className="w-5 h-5" /> Pausar
               </>
             )}
           </button>
@@ -218,10 +219,10 @@ const RoutineExecution = () => {
         <div className="bg-white dark:bg-gray-800 rounded-lg p-4 mb-6 shadow-sm border border-gray-200 dark:border-gray-700">
           <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400 mb-2">
             <span>
-              Exercise {currentExerciseIndex + 1} of {routine.exercises.length}
+              Ejercicio {currentExerciseIndex + 1} de {routine.exercises.length}
             </span>
             <span>
-              Series {currentSeries} of {routine.series}
+              Ronda {currentSeries} de {routine.series}
             </span>
           </div>
           <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
@@ -252,6 +253,13 @@ const RoutineExecution = () => {
             />
           )}
 
+          {!currentExercise.imageUrl && currentExercise.instructions && (
+            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 mb-4 border border-blue-200 dark:border-blue-700/40">
+              <p className="text-xs font-semibold text-blue-500 dark:text-blue-400 uppercase tracking-wide mb-1">Cómo hacerlo</p>
+              <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{currentExercise.instructions}</p>
+            </div>
+          )}
+
           {currentExercise.repetitions && (
             <div className="bg-gray-100 dark:bg-gray-700 rounded-lg p-4 text-center border border-gray-200 dark:border-gray-600">
               <p className="text-lg font-medium text-gray-900 dark:text-gray-100">{currentExercise.repetitions}</p>
@@ -265,7 +273,7 @@ const RoutineExecution = () => {
           className="w-full bg-primary-500 hover:bg-primary-600 text-white font-bold py-4 px-6 rounded-lg flex items-center justify-center gap-2 transition-colors"
         >
           <Check className="w-6 h-6" />
-          Complete Exercise
+          Completar ejercicio
           <ChevronRight className="w-6 h-6" />
         </button>
       </div>
@@ -278,50 +286,35 @@ const RoutineExecution = () => {
         >
           <div className="flex items-center justify-center h-full pb-20 px-4">
           <div className="liquid-glass-panel rounded-2xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-xl font-bold mb-4 text-gray-900 dark:text-gray-100">Workout Complete!</h2>
+            <h2 className="text-xl font-bold mb-1 text-gray-900 dark:text-gray-100">¡Rutina completada!</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">Registra los datos de tu sesión (opcional)</p>
 
             <form onSubmit={handleSubmit(onSubmitStats)} className="space-y-4">
               <div>
-                <label className="label">Effort (1-5) *</label>
-                <input
-                  type="number"
-                  min="1"
-                  max="5"
-                  className="input-field"
-                  {...register('effort', {
-                    required: 'Effort is required',
-                    min: { value: 1, message: 'Minimum 1' },
-                    max: { value: 5, message: 'Maximum 5' }
-                  })}
-                />
-                {errors.effort && (
-                  <p className="text-red-500 text-sm mt-1">{errors.effort.message}</p>
-                )}
-              </div>
-
-              <div>
-                <label className="label">Calories (optional)</label>
+                <label className="label">Calorías</label>
                 <input
                   type="number"
                   min="0"
                   className="input-field"
+                  placeholder="kcal quemadas"
                   {...register('calories')}
                 />
               </div>
 
               <div>
-                <label className="label">Kilometers (optional)</label>
+                <label className="label">Kilómetros</label>
                 <input
                   type="number"
                   min="0"
                   step="0.1"
                   className="input-field"
+                  placeholder="km recorridos"
                   {...register('km')}
                 />
               </div>
 
               <button type="submit" className="btn-primary w-full">
-                Save & Complete
+                Guardar y completar
               </button>
             </form>
           </div>
@@ -334,10 +327,10 @@ const RoutineExecution = () => {
         isOpen={showExitConfirm}
         onClose={() => setShowExitConfirm(false)}
         onConfirm={confirmExit}
-        title="Exit Routine"
-        message="Are you sure you want to exit without saving your progress?"
-        confirmText="Exit"
-        cancelText="Continue"
+        title="Salir de la rutina"
+        message="¿Seguro que quieres salir sin guardar tu progreso?"
+        confirmText="Salir"
+        cancelText="Continuar"
         confirmColor="red"
       />
     </div>

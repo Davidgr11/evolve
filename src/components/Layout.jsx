@@ -1,13 +1,13 @@
 import { Outlet, NavLink } from 'react-router-dom';
-import { Target, Zap, Salad, BookOpen, Heart } from 'lucide-react';
+import { Home, Zap, Salad, Lightbulb, Heart } from 'lucide-react';
 
 const Layout = () => {
   const navItems = [
-    { path: '/goals', icon: Target, label: 'Goals' },
-    { path: '/move', icon: Zap, label: 'Exercise' },
-    { path: '/food', icon: Salad, label: 'Nutrition' },
-    { path: '/books', icon: BookOpen, label: 'Books' },
-    { path: '/together', icon: Heart, label: 'Together' },
+    { path: '/home', icon: Home, label: 'Inicio' },
+    { path: '/food', icon: Salad, label: 'Nutrición' },
+    { path: '/move', icon: Zap, label: 'Actividad' },
+    { path: '/books', icon: Lightbulb, label: 'Mente' },
+    { path: '/together', icon: Heart, label: 'Amor' },
   ];
 
   return (
@@ -34,7 +34,7 @@ const Layout = () => {
                 }
               >
                 <Icon className="w-6 h-6 mb-1.5" />
-                <span className="text-xs font-medium">{label}</span>
+                <span className="text-sm font-medium">{label}</span>
               </NavLink>
             ))}
           </div>

@@ -6,8 +6,8 @@ import { useAuth } from './AuthContext';
 const ThemeContext = createContext();
 
 const APP_BG_COLORS = {
-  light: { blue: '#c2dce8', purple: '#dcd4f0', green: '#c2e8d0' },
-  dark:  { blue: '#111827', purple: '#1a1127',  green: '#0f2117'  },
+  light: { blue: '#c2dce8', purple: '#dcd4f0', arena: '#ede5d8', slate: '#dce0e8' },
+  dark:  { blue: '#111827', purple: '#1a1127',  arena: '#1c1812', slate: '#12141a' },
 };
 
 export const useTheme = () => {

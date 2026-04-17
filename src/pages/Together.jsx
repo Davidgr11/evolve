@@ -11,7 +11,7 @@ import toast from '../utils/toast';
 import {
   Heart, Plus, ArrowLeft, MapPin, Gift, CheckSquare,
   Settings, Copy, Trash2, Edit, ExternalLink, Calendar,
-  X, Check, Users, StickyNote, GripVertical,
+  X, Check, Users, StickyNote, GripVertical, ChevronDown, ChevronUp,
 } from 'lucide-react';
 import { differenceInYears, differenceInDays, addYears, format } from 'date-fns';
 import ConfirmModal from '../components/ConfirmModal';
@@ -89,7 +89,7 @@ const SortablePlanCard = ({ plan, onEdit, onDelete, showDrag }) => {
               {typeConfig.label}
             </span>
             {plan.date && (
-              <span className="text-xs text-gray-400 dark:text-gray-500 flex items-center gap-1">
+              <span className="text-sm text-gray-400 dark:text-gray-500 flex items-center gap-1">
                 <Calendar className="w-3 h-3" />
                 {format(new Date(plan.date + 'T12:00:00'), 'd MMM yyyy')}
               </span>
@@ -114,7 +114,7 @@ const SortablePlanCard = ({ plan, onEdit, onDelete, showDrag }) => {
             )}
           </div>
           {plan.notes && (
-            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1.5 line-clamp-2">{plan.notes}</p>
+            <p className="text-sm text-gray-400 dark:text-gray-500 mt-1.5 line-clamp-2">{plan.notes}</p>
           )}
         </div>
         <div className="flex gap-1 flex-shrink-0">
@@ -155,7 +155,7 @@ const ItemCard = ({ item, onEdit, onDelete }) => (
           )}
         </div>
         {item.notes && (
-          <p className="text-xs text-gray-400 dark:text-gray-500 mt-1.5 line-clamp-2">{item.notes}</p>
+          <p className="text-sm text-gray-400 dark:text-gray-500 mt-1.5 line-clamp-2">{item.notes}</p>
         )}
       </div>
       <div className="flex gap-1 flex-shrink-0">
@@ -244,7 +244,7 @@ const SetupScreen = ({ onCreated, onJoined }) => {
         <div className="w-20 h-20 rounded-full bg-pink-100 dark:bg-pink-900/30 flex items-center justify-center mx-auto mb-4">
           <Heart className="w-10 h-10 text-pink-500" />
         </div>
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Together</h1>
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Amor</h1>
         <p className="text-gray-500 dark:text-gray-400 mt-2 text-sm">Tu espacio compartido de pareja</p>
       </div>
 
@@ -368,7 +368,7 @@ const SettingsModal = ({ isOpen, onClose, couple, coupleId }) => {
                   {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
                 </button>
               </div>
-              <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+              <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">
                 Comparte este código con tu pareja para que se una
               </p>
             </div>
@@ -690,25 +690,35 @@ const ItemFormModal = ({ isOpen, onClose, onSave, editingItem, type }) => {
 // ─── EventDetailView ──────────────────────────────────────────────────────────
 
 const EventDetailView = ({ event, coupleId, onBack, onEventDeleted }) => {
-  const [subTab, setSubTab] = useState('places');
-  const [places, setPlaces] = useState([]);
-  const [eventIdeas, setEventIdeas] = useState([]);
-  const [todos, setTodos] = useState([]);
+  const [reminders, setReminders]     = useState([]);
+  const [eventIdeas, setEventIdeas]   = useState([]);
+  const [eventPlans, setEventPlans]   = useState([]);
 
-  const [showItemModal, setShowItemModal] = useState(false);
-  const [editingItem, setEditingItem] = useState(null);
-  const [itemType, setItemType] = useState('place');
+  // Collapsible state for dropdowns
+  const [ideasOpen, setIdeasOpen]   = useState(false);
+  const [planesOpen, setPlanesOpen] = useState(false);
+
+  // Inline add reminder
+  const [showAddReminder, setShowAddReminder] = useState(false);
+  const [reminderText, setReminderText]       = useState('');
+  const [reminderDate, setReminderDate]       = useState('');
+
+  // Modals
+  const [showIdeaModal, setShowIdeaModal]     = useState(false);
+  const [showPlanModal, setShowPlanModal]     = useState(false);
+  const [editingIdea, setEditingIdea]         = useState(null);
+  const [editingPlan, setEditingPlan]         = useState(null);
   const [deleteItemConfirm, setDeleteItemConfirm] = useState({ isOpen: false, item: null, col: '' });
 
-  const [showEventModal, setShowEventModal] = useState(false);
+  const [showEventModal, setShowEventModal]   = useState(false);
   const [showDeleteEvent, setShowDeleteEvent] = useState(false);
 
   const basePath = `couples/${coupleId}/events/${event.id}`;
 
   useEffect(() => {
     const unsubs = [
-      onSnapshot(collection(db, `${basePath}/places`), (snap) => {
-        setPlaces(
+      onSnapshot(collection(db, `${basePath}/todos`), (snap) => {
+        setReminders(
           snap.docs.map((d) => ({ id: d.id, ...d.data() }))
             .sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''))
         );
@@ -719,8 +729,8 @@ const EventDetailView = ({ event, coupleId, onBack, onEventDeleted }) => {
             .sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''))
         );
       }),
-      onSnapshot(collection(db, `${basePath}/todos`), (snap) => {
-        setTodos(
+      onSnapshot(collection(db, `${basePath}/places`), (snap) => {
+        setEventPlans(
           snap.docs.map((d) => ({ id: d.id, ...d.data() }))
             .sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''))
         );
@@ -729,24 +739,54 @@ const EventDetailView = ({ event, coupleId, onBack, onEventDeleted }) => {
     return () => unsubs.forEach((u) => u());
   }, [basePath]);
 
-  const handleSaveItem = async (data) => {
-    const col = subTab === 'places' ? 'places' : subTab === 'ideas' ? 'ideas' : 'todos';
-    if (editingItem) {
-      await updateDoc(doc(db, `${basePath}/${col}`, editingItem.id), data);
+  const handleAddReminder = async () => {
+    if (!reminderText.trim()) return;
+    await addDoc(collection(db, `${basePath}/todos`), {
+      text: reminderText.trim(),
+      completed: false,
+      dueDate: reminderDate || null,
+      createdAt: new Date().toISOString(),
+    });
+    setReminderText('');
+    setReminderDate('');
+    setShowAddReminder(false);
+    toast.success('Recordatorio añadido');
+  };
+
+  const handleToggleReminder = async (rem) => {
+    await updateDoc(doc(db, `${basePath}/todos`, rem.id), { completed: !rem.completed });
+  };
+
+  const handleDeleteReminder = async (rem) => {
+    await deleteDoc(doc(db, `${basePath}/todos`, rem.id));
+  };
+
+  const handleSaveIdea = async (data) => {
+    if (editingIdea) {
+      await updateDoc(doc(db, `${basePath}/ideas`, editingIdea.id), data);
+      toast.success('Actualizado');
     } else {
-      await addDoc(collection(db, `${basePath}/${col}`), { ...data, createdAt: new Date().toISOString() });
+      await addDoc(collection(db, `${basePath}/ideas`), { ...data, createdAt: new Date().toISOString() });
+      toast.success('Añadido');
     }
-    toast.success(editingItem ? 'Actualizado' : 'Agregado');
+    setEditingIdea(null);
+  };
+
+  const handleSavePlan = async (data) => {
+    if (editingPlan) {
+      await updateDoc(doc(db, `${basePath}/places`, editingPlan.id), data);
+      toast.success('Actualizado');
+    } else {
+      await addDoc(collection(db, `${basePath}/places`), { ...data, createdAt: new Date().toISOString() });
+      toast.success('Añadido');
+    }
+    setEditingPlan(null);
   };
 
   const handleDeleteItem = async () => {
     const { item, col } = deleteItemConfirm;
     await deleteDoc(doc(db, `${basePath}/${col}`, item.id));
     toast.success('Eliminado');
-  };
-
-  const handleToggleTodo = async (todo) => {
-    await updateDoc(doc(db, `${basePath}/todos`, todo.id), { completed: !todo.completed });
   };
 
   const handleSaveEvent = async (data) => {
@@ -763,22 +803,10 @@ const EventDetailView = ({ event, coupleId, onBack, onEventDeleted }) => {
     onEventDeleted();
   };
 
-  const openAddItem = () => {
-    setEditingItem(null);
-    setItemType(subTab === 'places' ? 'place' : subTab === 'ideas' ? 'event-idea' : 'todo');
-    setShowItemModal(true);
-  };
-
-  const openEditItem = (item) => {
-    setEditingItem(item);
-    setItemType(subTab === 'places' ? 'place' : subTab === 'ideas' ? 'event-idea' : 'todo');
-    setShowItemModal(true);
-  };
-
   const daysUntil = getDaysUntil(event.date);
   const isFuture = daysUntil !== null && daysUntil > 0;
   const isToday = daysUntil === 0;
-  const completedTodos = todos.filter((t) => t.completed).length;
+  const completedReminders = reminders.filter((r) => r.completed).length;
 
   return (
     <>
@@ -787,74 +815,39 @@ const EventDetailView = ({ event, coupleId, onBack, onEventDeleted }) => {
         <div className="relative aspect-square -mx-4 -mt-6 mb-4 overflow-hidden">
           <img src={event.coverPhotoUrl} alt={event.name} className="w-full h-full object-cover" />
           <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-          <button
-            onClick={onBack}
-            className="absolute top-4 left-4 bg-black/40 backdrop-blur-md text-white p-2 rounded-full shadow-lg"
-          >
+          <button onClick={onBack} className="absolute top-4 left-4 bg-black/40 backdrop-blur-md text-white p-2 rounded-full shadow-lg">
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div className="absolute top-4 right-4 flex gap-2">
-            <button
-              onClick={() => setShowEventModal(true)}
-              className="bg-black/40 backdrop-blur-md text-white p-2 rounded-full shadow-lg"
-            >
+            <button onClick={() => setShowEventModal(true)} className="bg-black/40 backdrop-blur-md text-white p-2 rounded-full shadow-lg">
               <Edit className="w-4 h-4" />
             </button>
-            <button
-              onClick={() => setShowDeleteEvent(true)}
-              className="bg-black/40 backdrop-blur-md text-white p-2 rounded-full shadow-lg"
-            >
+            <button onClick={() => setShowDeleteEvent(true)} className="bg-black/40 backdrop-blur-md text-white p-2 rounded-full shadow-lg">
               <Trash2 className="w-4 h-4" />
             </button>
           </div>
           <div className="absolute bottom-4 left-4 right-4">
             <h1 className="text-xl font-bold text-white">{event.name}</h1>
-            {event.date && (
-              <p className="text-white/80 text-sm mt-0.5">
-                {format(parseDate(event.date), 'd MMM yyyy')}
-              </p>
-            )}
+            {event.date && <p className="text-white/80 text-sm mt-0.5">{format(parseDate(event.date), 'd MMM yyyy')}</p>}
           </div>
         </div>
       ) : (
         <div className="flex items-center gap-3 mb-4">
-          <button onClick={onBack} className="p-1 -ml-1 text-gray-600 dark:text-gray-300">
-            <ArrowLeft className="w-5 h-5" />
-          </button>
+          <button onClick={onBack} className="p-1 -ml-1 text-gray-600 dark:text-gray-300"><ArrowLeft className="w-5 h-5" /></button>
           <div className="flex-1">
             <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">{event.name}</h1>
-            {event.date && (
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                {format(parseDate(event.date), 'd MMM yyyy')}
-              </p>
-            )}
+            {event.date && <p className="text-sm text-gray-500 dark:text-gray-400">{format(parseDate(event.date), 'd MMM yyyy')}</p>}
           </div>
-          <button onClick={() => setShowEventModal(true)} className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
-            <Edit className="w-4 h-4" />
-          </button>
-          <button onClick={() => setShowDeleteEvent(true)} className="p-2 text-gray-400 hover:text-red-500">
-            <Trash2 className="w-4 h-4" />
-          </button>
+          <button onClick={() => setShowEventModal(true)} className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"><Edit className="w-4 h-4" /></button>
+          <button onClick={() => setShowDeleteEvent(true)} className="p-2 text-gray-400 hover:text-red-500"><Trash2 className="w-4 h-4" /></button>
         </div>
       )}
 
       {/* Countdown chip */}
       {daysUntil !== null && (
-        <div
-          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium mb-4 ${
-            isToday
-              ? 'bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-300'
-              : isFuture
-              ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
-              : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'
-          }`}
-        >
+        <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium mb-4 ${isToday ? 'bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-300' : isFuture ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'}`}>
           <Calendar className="w-3.5 h-3.5" />
-          {isToday
-            ? '¡Hoy es el día!'
-            : isFuture
-            ? `Faltan ${daysUntil} día${daysUntil !== 1 ? 's' : ''}`
-            : `Fue hace ${Math.abs(daysUntil)} día${Math.abs(daysUntil) !== 1 ? 's' : ''}`}
+          {isToday ? '¡Hoy es el día!' : isFuture ? `Faltan ${daysUntil} día${daysUntil !== 1 ? 's' : ''}` : `Fue hace ${Math.abs(daysUntil)} día${Math.abs(daysUntil) !== 1 ? 's' : ''}`}
         </div>
       )}
 
@@ -868,110 +861,191 @@ const EventDetailView = ({ event, coupleId, onBack, onEventDeleted }) => {
         </div>
       )}
 
-      {/* Sub-tabs */}
-      <div className="flex gap-1 bg-gray-100 dark:bg-gray-800 rounded-xl p-1 mb-4">
-        {[
-          { id: 'places', label: 'Lugares', icon: MapPin },
-          { id: 'ideas', label: 'Ideas', icon: Gift },
-          { id: 'todos', label: 'To-dos', icon: CheckSquare },
-        ].map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            onClick={() => setSubTab(id)}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-sm font-medium rounded-lg transition-colors ${
-              subTab === id
-                ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm'
-                : 'text-gray-500 dark:text-gray-400'
-            }`}
-          >
-            <Icon className="w-4 h-4" />
-            <span>{label}</span>
-            {id === 'todos' && todos.length > 0 && (
-              <span className="text-xs text-gray-400 dark:text-gray-500">
-                {completedTodos}/{todos.length}
-              </span>
-            )}
-          </button>
-        ))}
-      </div>
-
-      {/* Add button */}
-      <div className="flex justify-end mb-3">
-        <button onClick={openAddItem} className="btn-primary flex items-center gap-1.5 py-2 px-3 text-sm">
-          <Plus className="w-4 h-4" />
-          {subTab === 'places' ? 'Lugar' : subTab === 'ideas' ? 'Idea' : 'To-do'}
-        </button>
-      </div>
-
-      {/* Content */}
-      <div className="space-y-3 pb-4">
-        {subTab === 'todos' ? (
-          todos.length === 0 ? (
-            <EmptyState message="Sin to-dos aún" />
-          ) : (
-            todos.map((todo) => (
-              <div key={todo.id} className="liquid-glass-panel rounded-xl p-3 flex items-center gap-3">
-                <button onClick={() => handleToggleTodo(todo)} className="flex-shrink-0">
-                  <div
-                    className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
-                      todo.completed
-                        ? 'bg-primary-500 border-primary-500'
-                        : 'border-gray-300 dark:border-gray-500'
-                    }`}
-                  >
-                    {todo.completed && <Check className="w-3 h-3 text-white" />}
-                  </div>
-                </button>
-                <span
-                  className={`flex-1 text-sm ${
-                    todo.completed
-                      ? 'line-through text-gray-400 dark:text-gray-500'
-                      : 'text-gray-800 dark:text-gray-200'
-                  }`}
-                >
-                  {todo.text}
+      {/* ── Recordatorios ── */}
+      <div className="liquid-glass-panel rounded-2xl p-4 mb-4">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h3 className="font-semibold text-gray-800 dark:text-gray-200 flex items-center gap-2">
+              <CheckSquare className="w-4 h-4 text-primary-500" />
+              Recordatorios
+              {reminders.length > 0 && (
+                <span className="text-xs text-gray-400 dark:text-gray-500 font-normal">
+                  {completedReminders}/{reminders.length}
                 </span>
-                <div className="flex gap-1">
-                  <button onClick={() => openEditItem(todo)} className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
-                    <Edit className="w-3.5 h-3.5" />
+              )}
+            </h3>
+          </div>
+          <button
+            onClick={() => setShowAddReminder(v => !v)}
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400 text-xs font-semibold hover:bg-primary-100 transition-colors"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Añadir
+          </button>
+        </div>
+
+        {showAddReminder && (
+          <div className="fixed z-[60] liquid-glass-overlay" style={{ top: 0, left: 0, right: 0, bottom: 0, margin: 0 }} onClick={() => { setShowAddReminder(false); setReminderText(''); setReminderDate(''); }}>
+            <div className="flex items-center justify-center h-full px-4 pb-20">
+              <div className="liquid-glass-panel rounded-2xl w-full max-w-xs p-5" onClick={e => e.stopPropagation()}>
+                <div className="flex justify-between items-center mb-2">
+                  <h3 className="font-bold text-lg text-gray-900 dark:text-gray-100">Nuevo recordatorio</h3>
+                  <button onClick={() => { setShowAddReminder(false); setReminderText(''); setReminderDate(''); }}>
+                    <X className="w-5 h-5 text-gray-400" />
                   </button>
-                  <button
-                    onClick={() => setDeleteItemConfirm({ isOpen: true, item: todo, col: 'todos' })}
-                    className="p-1.5 text-gray-400 hover:text-red-500"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
+                </div>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                  Una tarea o cosa que no quieres olvidar
+                </p>
+                <input
+                  autoFocus
+                  type="text"
+                  className="input-field mb-3"
+                  placeholder="Ej. Comprar regalo..."
+                  value={reminderText}
+                  onChange={e => setReminderText(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleAddReminder()}
+                />
+                <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide block mb-1.5">
+                  Fecha límite (opcional)
+                </label>
+                <input
+                  type="date"
+                  className="input-field mb-4"
+                  value={reminderDate}
+                  onChange={e => setReminderDate(e.target.value)}
+                />
+                <div className="flex gap-2">
+                  <button onClick={() => { setShowAddReminder(false); setReminderText(''); setReminderDate(''); }} className="btn-secondary flex-1">
+                    Cancelar
+                  </button>
+                  <button onClick={handleAddReminder} disabled={!reminderText.trim()} className="btn-primary flex-1 disabled:opacity-50">
+                    Añadir
                   </button>
                 </div>
               </div>
-            ))
-          )
-        ) : (subTab === 'places' ? places : eventIdeas).length === 0 ? (
-          <EmptyState message={`Sin ${subTab === 'places' ? 'lugares' : 'ideas'} aún`} />
+            </div>
+          </div>
+        )}
+
+        {reminders.length === 0 ? (
+          <EmptyState message="Sin recordatorios aún" />
         ) : (
-          (subTab === 'places' ? places : eventIdeas).map((item) => (
-            <ItemCard
-              key={item.id}
-              item={item}
-              onEdit={() => openEditItem(item)}
-              onDelete={() =>
-                setDeleteItemConfirm({
-                  isOpen: true,
-                  item,
-                  col: subTab === 'places' ? 'places' : 'ideas',
-                })
-              }
-            />
-          ))
+          <div className="space-y-2">
+            {reminders.map((rem) => (
+              <div key={rem.id} className="flex items-center gap-3">
+                <button onClick={() => handleToggleReminder(rem)} className="flex-shrink-0">
+                  <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${rem.completed ? 'bg-primary-500 border-primary-500' : 'border-gray-300 dark:border-gray-500'}`}>
+                    {rem.completed && <Check className="w-3 h-3 text-white" />}
+                  </div>
+                </button>
+                <div className="flex-1 min-w-0">
+                  <span className={`text-sm ${rem.completed ? 'line-through text-gray-400 dark:text-gray-500' : 'text-gray-800 dark:text-gray-200'}`}>
+                    {rem.text}
+                  </span>
+                  {rem.dueDate && (
+                    <span className="ml-2 text-xs text-blue-500 dark:text-blue-400 inline-flex items-center gap-0.5">
+                      <Calendar className="w-3 h-3" />
+                      {format(new Date(rem.dueDate + 'T12:00:00'), 'd MMM')}
+                    </span>
+                  )}
+                </div>
+                <button onClick={() => handleDeleteReminder(rem)} className="p-1.5 text-gray-300 dark:text-gray-600 hover:text-red-400 flex-shrink-0">
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── Ideas de regalo (collapsible) ── */}
+      <div className="liquid-glass-panel rounded-2xl mb-4 overflow-hidden">
+        <button
+          onClick={() => setIdeasOpen(v => !v)}
+          className="w-full flex items-center justify-between p-4 text-left"
+        >
+          <h3 className="font-semibold text-gray-800 dark:text-gray-200 flex items-center gap-2">
+            <Gift className="w-4 h-4 text-pink-500" />
+            Ideas de regalo
+            {eventIdeas.length > 0 && <span className="text-xs text-gray-400 dark:text-gray-500 font-normal">{eventIdeas.length}</span>}
+          </h3>
+          {ideasOpen ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+        </button>
+        {ideasOpen && (
+          <div className="px-4 pb-4 space-y-3">
+            <div className="flex justify-end">
+              <button onClick={() => { setEditingIdea(null); setShowIdeaModal(true); }} className="btn-primary flex items-center gap-1.5 py-1.5 px-3 text-sm">
+                <Plus className="w-4 h-4" /> Añadir idea
+              </button>
+            </div>
+            {eventIdeas.length === 0 ? (
+              <EmptyState message="Sin ideas de regalo aún" />
+            ) : (
+              eventIdeas.map((item) => (
+                <ItemCard
+                  key={item.id}
+                  item={item}
+                  onEdit={() => { setEditingIdea(item); setShowIdeaModal(true); }}
+                  onDelete={() => setDeleteItemConfirm({ isOpen: true, item, col: 'ideas' })}
+                />
+              ))
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ── Planes del evento (collapsible) ── */}
+      <div className="liquid-glass-panel rounded-2xl mb-4 overflow-hidden">
+        <button
+          onClick={() => setPlanesOpen(v => !v)}
+          className="w-full flex items-center justify-between p-4 text-left"
+        >
+          <h3 className="font-semibold text-gray-800 dark:text-gray-200 flex items-center gap-2">
+            <MapPin className="w-4 h-4 text-blue-500" />
+            Planes
+            {eventPlans.length > 0 && <span className="text-xs text-gray-400 dark:text-gray-500 font-normal">{eventPlans.length}</span>}
+          </h3>
+          {planesOpen ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+        </button>
+        {planesOpen && (
+          <div className="px-4 pb-4 space-y-3">
+            <div className="flex justify-end">
+              <button onClick={() => { setEditingPlan(null); setShowPlanModal(true); }} className="btn-primary flex items-center gap-1.5 py-1.5 px-3 text-sm">
+                <Plus className="w-4 h-4" /> Añadir plan
+              </button>
+            </div>
+            {eventPlans.length === 0 ? (
+              <EmptyState message="Sin planes aún" />
+            ) : (
+              eventPlans.map((plan) => (
+                <ItemCard
+                  key={plan.id}
+                  item={plan}
+                  onEdit={() => { setEditingPlan(plan); setShowPlanModal(true); }}
+                  onDelete={() => setDeleteItemConfirm({ isOpen: true, item: plan, col: 'places' })}
+                />
+              ))
+            )}
+          </div>
         )}
       </div>
 
       {/* Modals */}
       <ItemFormModal
-        isOpen={showItemModal}
-        onClose={() => { setShowItemModal(false); setEditingItem(null); }}
-        onSave={handleSaveItem}
-        editingItem={editingItem}
-        type={itemType}
+        isOpen={showIdeaModal}
+        onClose={() => { setShowIdeaModal(false); setEditingIdea(null); }}
+        onSave={handleSaveIdea}
+        editingItem={editingIdea}
+        type="event-idea"
+      />
+
+      <ItemFormModal
+        isOpen={showPlanModal}
+        onClose={() => { setShowPlanModal(false); setEditingPlan(null); }}
+        onSave={handleSavePlan}
+        editingItem={editingPlan}
+        type="global-idea"
       />
 
       <EventFormModal
@@ -1190,7 +1264,7 @@ const Together = () => {
       {/* Page header */}
       <div className="flex items-center justify-between mb-5">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Together</h1>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Amor</h1>
           {anniversary && (
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
               {anniversary.years > 0

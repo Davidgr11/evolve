@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
+
+const THEME_HEX = { blue: '#3b82f6', purple: '#8b5cf6', arena: '#9e7b5a', slate: '#64748b' };
 import { db, storage } from '../utils/firebase';
 import {
   collection, addDoc, getDocs, updateDoc, deleteDoc, doc
@@ -79,6 +82,7 @@ const formatLastRun = (routine) => {
 
 const Move = () => {
   const { user } = useAuth();
+  const { colorTheme } = useTheme();
   const navigate = useNavigate();
   const [routines, setRoutines] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -295,6 +299,7 @@ Responde solo en texto plano — sin markdown, sin asteriscos, sin encabezados. 
               const TypeIcon = cfg.icon;
               const lastRun = formatLastRun(routine);
               const statusBorder = getStatusBorder(routine);
+              const themeHex = THEME_HEX[colorTheme] ?? '#3b82f6';
 
               const weeklyDone = getWeeklyDone(routine);
               const weeklyGoal = routine.weeklyGoal || 0;
@@ -308,7 +313,10 @@ Responde solo en texto plano — sin markdown, sin asteriscos, sin encabezados. 
 
                   <div className="relative p-4">
                     {/* Type badge */}
-                    <span className={`inline-block text-xs px-2 py-0.5 rounded-full font-semibold uppercase tracking-wide mb-2 ${cfg.badge}`}>
+                    <span
+                      className="inline-block text-xs px-2 py-0.5 rounded-full font-semibold uppercase tracking-wide mb-2"
+                      style={{ backgroundColor: themeHex + '20', color: themeHex }}
+                    >
                       {routine.type}
                     </span>
 
@@ -329,17 +337,14 @@ Responde solo en texto plano — sin markdown, sin asteriscos, sin encabezados. 
                           {Array.from({ length: weeklyGoal }, (_, i) => (
                             <div
                               key={i}
-                              className={`w-2.5 h-2.5 rounded-full transition-colors ${
-                                i < weeklyDone
-                                  ? onTrack ? 'bg-green-400' : 'bg-amber-400'
-                                  : 'bg-gray-200 dark:bg-gray-600'
-                              }`}
+                              className={`w-2.5 h-2.5 rounded-full transition-colors ${i < weeklyDone ? '' : 'bg-gray-200 dark:bg-gray-600'}`}
+                              style={i < weeklyDone ? { backgroundColor: themeHex } : undefined}
                             />
                           ))}
                         </div>
                         <span className="text-xs text-gray-400 dark:text-gray-500">
                           {weeklyDone}/{weeklyGoal} esta semana
-                          {onTrack && <span className="text-green-500 ml-1">✓</span>}
+                          {onTrack && <span className="ml-1" style={{ color: themeHex }}>✓</span>}
                         </span>
                       </div>
                     )}
@@ -350,7 +355,7 @@ Responde solo en texto plano — sin markdown, sin asteriscos, sin encabezados. 
                         <span className="flex items-center gap-1">
                           <span
                             className="w-2 h-2 rounded-full inline-block"
-                            style={{ backgroundColor: cfg.dot }}
+                            style={{ backgroundColor: themeHex }}
                           />
                           {lastRun}
                         </span>

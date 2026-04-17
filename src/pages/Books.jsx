@@ -408,21 +408,19 @@ const Books = () => {
     try {
       const completedItems = learningItems.filter(i => i.completed).map(i => i.name);
       const pendingItems   = learningItems.filter(i => !i.completed).map(i => i.name);
-      const prompt = `Analiza mi progreso de crecimiento personal:
+      const prompt = `Eres un coach de crecimiento personal positivo y motivador. Datos del usuario:
 
 LIBROS: ${readBooks.length} leídos en total, ${booksThisYear} este año (meta: ${annualGoal}).
-Géneros más leídos: ${Object.entries(genreCounts).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([g,c])=>`${g}(${c})`).join(', ') || 'sin datos'}
+APRENDIZAJES: ${completedItems.length} de ${learningItems.length} temas completados.
+Completados: ${completedItems.length > 0 ? completedItems.join(', ') : 'ninguno aún'}
+Por alcanzar: ${pendingItems.length > 0 ? pendingItems.join(', ') : 'ninguno'}
 
-APRENDIZAJES: ${learningItems.length} temas totales
-Completados: ${completedItems.length > 0 ? completedItems.join(', ') : 'ninguno'}
-Pendientes: ${pendingItems.length > 0 ? pendingItems.join(', ') : 'ninguno'}
+Responde directamente en español, sin títulos ni encabezados. Exactamente 3 oraciones:
+1) Qué va muy bien en tu crecimiento (sé genuino y específico con los datos).
+2) De los temas pendientes, cuál es más valioso o interesante y por qué vale la pena perseguirlo.
+3) Una acción concreta y motivadora para esta semana que te acerque a tus metas de aprendizaje.
 
-Responde directamente, sin títulos ni encabezados, en español. Exactamente 3 oraciones seguidas:
-1) Qué va bien en mi crecimiento.
-2) Qué falla o se estanca (sé específico y directo).
-3) La acción concreta más importante que debería hacer esta semana.
-
-Plain text, sin markdown, sin encabezados. Dirígete a mí en segunda persona.`;
+Tono: alentador y enfocado en el potencial. Los temas pendientes son metas emocionantes, no deudas. Plain text, sin markdown. Dirígete en segunda persona.`;
       const text = await callClaude(prompt, 250);
       setAiModal({ type: 'growth-analysis', content: text, loading: false });
     } catch { toast.error('Error al analizar'); setAiModal(null); }
@@ -959,7 +957,7 @@ Plain text, sin markdown, sin encabezados. Dirígete a mí en segunda persona.`;
                     <button onClick={() => setAiModal(null)} className="flex-shrink-0"><X className="w-5 h-5 text-gray-400" /></button>
                   </div>
                   <div className="px-5 py-4 overflow-y-auto">
-                    <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-line">{aiModal.content}</p>
+                    <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-line text-justify">{aiModal.content}</p>
                   </div>
                 </>
               )}
@@ -971,7 +969,7 @@ Plain text, sin markdown, sin encabezados. Dirígete a mí en segunda persona.`;
                     <div className="flex items-start gap-3">
                       {aiModal.book.coverUrl && <img src={aiModal.book.coverUrl} alt="" className="w-10 h-14 object-cover rounded flex-shrink-0" />}
                       <div>
-                        <p className="text-[10px] font-semibold text-amber-500 uppercase tracking-wider mb-0.5">¿De qué trata?</p>
+                        <p className="text-[10px] font-semibold uppercase tracking-wider mb-0.5" style={{ color: THEME_HEX[colorTheme] ?? '#3b82f6' }}>¿De qué trata?</p>
                         <h3 className="font-bold text-base text-gray-900 dark:text-gray-100 leading-tight">{aiModal.book.title}</h3>
                         {aiModal.book.author && <p className="text-xs text-gray-400 mt-0.5">{aiModal.book.author}</p>}
                       </div>
@@ -979,7 +977,7 @@ Plain text, sin markdown, sin encabezados. Dirígete a mí en segunda persona.`;
                     <button onClick={() => setAiModal(null)} className="flex-shrink-0"><X className="w-5 h-5 text-gray-400" /></button>
                   </div>
                   <div className="px-5 py-4 overflow-y-auto">
-                    <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-line">{aiModal.content}</p>
+                    <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-line text-justify">{aiModal.content}</p>
                   </div>
                 </>
               )}

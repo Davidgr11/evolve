@@ -162,6 +162,7 @@ const Food = () => {
   // Weight
   const [weightHistory, setWeightHistory] = useState([]);
   const [showWeightModal, setShowWeightModal] = useState(false);
+  const [showAddWeightModal, setShowAddWeightModal] = useState(false);
   const [newWeightInput, setNewWeightInput] = useState('');
   const [newWeightDate, setNewWeightDate] = useState(toLocalDateStr(new Date()));
   const [savingWeight, setSavingWeight] = useState(false);
@@ -251,6 +252,7 @@ const Food = () => {
       await save({ weightHistory: updated });
       setNewWeightInput('');
       setNewWeightDate(toLocalDateStr(new Date()));
+      setShowAddWeightModal(false);
       toast.success('Registro guardado');
     } finally {
       setSavingWeight(false);
@@ -839,7 +841,7 @@ SUGERENCIA: [nombre corto]: [descripción breve de ingredientes, máx 20 palabra
                           </button>
                           {isOpen && (
                             <div className="px-4 pb-3 pt-0.5">
-                              <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">
+                              <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed whitespace-pre-line">
                                 {option.description || <span className="italic">Sin descripción</span>}
                               </p>
                             </div>
@@ -885,31 +887,14 @@ SUGERENCIA: [nombre corto]: [descripción breve de ingredientes, máx 20 palabra
 
               <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-5">
                 {/* Add new record */}
-                <div>
-                  <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Registrar peso</p>
-                  <div className="flex gap-2 flex-wrap">
-                    <input
-                      type="number"
-                      step="0.1"
-                      value={newWeightInput}
-                      onChange={e => setNewWeightInput(e.target.value)}
-                      placeholder="ej. 75.5 kg"
-                      className="flex-1 min-w-0 px-3 py-2 rounded-xl bg-white/70 dark:bg-gray-700/70 border border-gray-200 dark:border-gray-600 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-300"
-                    />
-                    <input
-                      type="date"
-                      value={newWeightDate}
-                      onChange={e => setNewWeightDate(e.target.value)}
-                      className="px-3 py-2 rounded-xl bg-white/70 dark:bg-gray-700/70 border border-gray-200 dark:border-gray-600 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-300"
-                    />
-                    <button
-                      onClick={handleAddWeight}
-                      disabled={savingWeight || !newWeightInput}
-                      className="btn-primary px-4 py-2 text-sm disabled:opacity-60"
-                    >
-                      {savingWeight ? '...' : 'Guardar'}
-                    </button>
-                  </div>
+                <div className="flex justify-end">
+                  <button
+                    onClick={() => { setNewWeightInput(''); setNewWeightDate(toLocalDateStr(new Date())); setShowAddWeightModal(true); }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/70 dark:bg-gray-800/70 border border-blue-100 dark:border-blue-800 text-blue-600 dark:text-blue-400 hover:bg-white dark:hover:bg-gray-800 text-sm font-medium transition-colors shadow-sm"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Agregar nuevo
+                  </button>
                 </div>
 
                 {weightHistory.length > 0 ? (
@@ -951,6 +936,60 @@ SUGERENCIA: [nombre corto]: [descripción breve de ingredientes, máx 20 palabra
                 ) : (
                   <p className="text-sm text-gray-400 text-center py-4">Sin registros aún.</p>
                 )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Add Weight Sub-Modal ── */}
+      {showAddWeightModal && (
+        <div
+          className="fixed z-[60] liquid-glass-overlay"
+          style={{ top: 0, left: 0, right: 0, bottom: 0, margin: 0 }}
+          onClick={() => setShowAddWeightModal(false)}
+        >
+          <div className="flex items-center justify-center h-full pb-20 px-4">
+            <div className="liquid-glass-panel rounded-2xl w-full max-w-xs p-5" onClick={e => e.stopPropagation()}>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="font-bold text-lg text-gray-900 dark:text-gray-100">Nuevo registro</h3>
+                <button onClick={() => setShowAddWeightModal(false)}>
+                  <X className="w-5 h-5 text-gray-400" />
+                </button>
+              </div>
+              <div className="space-y-3">
+                <div>
+                  <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide block mb-1">Peso (kg)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    autoFocus
+                    value={newWeightInput}
+                    onChange={e => setNewWeightInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && newWeightInput) handleAddWeight(); }}
+                    placeholder="ej. 75.5"
+                    className="input-field"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide block mb-1">Fecha</label>
+                  <input
+                    type="date"
+                    value={newWeightDate}
+                    onChange={e => setNewWeightDate(e.target.value)}
+                    className="input-field"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-2 mt-4">
+                <button onClick={() => setShowAddWeightModal(false)} className="btn-secondary flex-1">Cancelar</button>
+                <button
+                  onClick={handleAddWeight}
+                  disabled={savingWeight || !newWeightInput}
+                  className="btn-primary flex-1 disabled:opacity-60"
+                >
+                  {savingWeight ? 'Guardando...' : 'Guardar'}
+                </button>
               </div>
             </div>
           </div>

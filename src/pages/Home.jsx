@@ -978,7 +978,6 @@ Plain text, sin markdown, en español.`;
       {/* ── Header ── */}
       <div className="flex items-center justify-between pt-1">
         <div>
-          <p className="text-sm text-gray-400 dark:text-gray-500">Hola {firstName}, gusto verte</p>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 leading-tight">Inicio</h1>
         </div>
         <button
@@ -988,8 +987,8 @@ Plain text, sin markdown, en español.`;
           {profilePhoto ? (
             <img src={profilePhoto} alt="Perfil" className="w-full h-full object-cover" />
           ) : (
-            <div className="w-full h-full bg-primary-100 dark:bg-primary-900 flex items-center justify-center">
-              <span className="text-base font-bold text-primary-600 dark:text-primary-300">
+            <div className="w-full h-full bg-white/70 dark:bg-gray-800/70 flex items-center justify-center">
+              <span className="text-base font-bold text-gray-700 dark:text-gray-300">
                 {(user?.displayName || user?.email || '?')[0].toUpperCase()}
               </span>
             </div>
@@ -1313,7 +1312,7 @@ Plain text, sin markdown, en español.`;
                 </button>
                 {claudeRec && (
                   <div className="mt-3 p-3 bg-gradient-to-r from-blue-50 to-primary-50 dark:from-blue-900/20 dark:to-primary-900/20 rounded-xl border border-blue-100 dark:border-blue-800">
-                    <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{claudeRec}</p>
+                    <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed text-justify">{claudeRec}</p>
                   </div>
                 )}
               </div>
@@ -1504,8 +1503,8 @@ Plain text, sin markdown, en español.`;
                   {profilePhoto ? (
                     <img src={profilePhoto} alt="Perfil" className="w-full h-full object-cover" />
                   ) : (
-                    <div className="w-full h-full bg-primary-100 dark:bg-primary-900 flex items-center justify-center">
-                      <span className="text-2xl font-bold text-primary-600 dark:text-primary-300">
+                    <div className="w-full h-full bg-white/70 dark:bg-gray-800/70 flex items-center justify-center">
+                      <span className="text-2xl font-bold text-gray-700 dark:text-gray-300">
                         {(user?.displayName || user?.email || '?')[0].toUpperCase()}
                       </span>
                     </div>

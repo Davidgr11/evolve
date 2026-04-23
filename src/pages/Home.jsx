@@ -2,11 +2,11 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { db, storage } from '../utils/firebase';
-import { doc, getDoc, setDoc, collection, getDocs, updateDoc, deleteDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, getDocs, updateDoc, deleteDoc, arrayUnion } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import imageCompression from 'browser-image-compression';
 import {
-  RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer,
+  RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer,
 } from 'recharts';
 import {
   Salad, Zap, Moon, Smile, BookOpen,
@@ -25,6 +25,9 @@ import {
   arrayMove, SortableContext, useSortable, rectSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { callClaude } from '../utils/cloudApi';
+import { getMessaging, getToken, isSupported, onMessage } from 'firebase/messaging';
+import { app } from '../utils/firebase';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const toLocalDateStr = (d) => {
@@ -41,34 +44,13 @@ const getLast7Days = () =>
     return toLocalDateStr(d);
   });
 
-const callClaude = async (prompt, maxTokens = 600) => {
-  const k = import.meta.env.VITE_CLAUDE_API_KEY;
-  if (!k) throw new Error('no key');
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': k,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
-    },
-    body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: maxTokens,
-      messages: [{ role: 'user', content: prompt }],
-    }),
-  });
-  if (!res.ok) throw new Error(`API ${res.status}`);
-  return (await res.json()).content[0].text;
-};
-
 // ─── Pillar config ─────────────────────────────────────────────────────────────
 const PILLARS = [
-  { key: 'nutricion',   label: 'Nutrición',   icon: Salad,    color: 'text-green-500',  desc: 'Alimentación e hidratación — qué comes y cuánta agua tomas cada día.'                                   },
-  { key: 'ejercicio',   label: 'Actividad',   icon: Zap,      color: 'text-orange-500', desc: 'Actividad física semanal — qué tan seguido cumples tus rutinas de movimiento.'                           },
-  { key: 'sueno',       label: 'Sueño',       icon: Moon,     color: 'text-purple-500', desc: 'Calidad del descanso — hábitos antes de dormir, horario regular y no comer tarde.'                       },
-  { key: 'emocional',   label: 'Emocional',   icon: Smile,    color: 'text-blue-500',   desc: 'Bienestar mental — presencia y reflexión, socialización y cómo procesas tus emociones del día.'         },
-  { key: 'crecimiento', label: 'Crecimiento', icon: BookOpen, color: 'text-amber-500',  desc: 'Aprendizaje continuo — si cada día lees, escuchas un podcast o aprendes algo nuevo (65%), tus temas del año completados (15%) y tu meta de libros (20%).' },
+  { key: 'nutricion',   label: 'Nutrición',   icon: Salad,    color: 'text-green-500',  desc: 'Alimentación e hidratación — qué comes y cuánta agua tomas cada día.',                                    calc: 'Promedio diario de: comidas balanceadas (40%), hidratación (30%) y ausencia de excesos (30%).' },
+  { key: 'ejercicio',   label: 'Actividad',   icon: Zap,      color: 'text-orange-500', desc: 'Actividad física semanal — qué tan seguido cumples tus rutinas de movimiento.',                            calc: 'Frecuencia semanal de ejercicio: días activos vs. tu objetivo semanal (100 = cumples todos los días objetivo).' },
+  { key: 'sueno',       label: 'Sueño',       icon: Moon,     color: 'text-purple-500', desc: 'Calidad del descanso — hábitos antes de dormir, horario regular y no comer tarde.',                        calc: 'Promedio de tus hábitos nocturnos: pantallas, hora de dormir, cena ligera y consistencia de horario.' },
+  { key: 'emocional',   label: 'Emocional',   icon: Smile,    color: 'text-blue-500',   desc: 'Bienestar mental — presencia y reflexión, socialización y cómo procesas tus emociones del día.',          calc: 'Promedio de: mindfulness/meditación (30%), socialización positiva (30%), diario/reflexión (20%) y estado emocional general (20%).' },
+  { key: 'crecimiento', label: 'Crecimiento', icon: BookOpen, color: 'text-amber-500',  desc: 'Aprendizaje continuo — si cada día lees, escuchas un podcast o aprendes algo nuevo.',                    calc: 'Hábito diario de aprendizaje (leer, podcast, curso) (65%) + temas del año completados (15%) + avance en meta de libros (20%).' },
 ];
 
 const SCORE_COLOR = (s) =>
@@ -204,6 +186,52 @@ const SOCIAL_OPTIONS = [
   { value: 2, emoji: '🌱', label: 'Hice algún esfuerzo extra, saliendo de mi zona de confort',     accent: 'border-green-400 bg-green-50/60 dark:bg-green-900/20 text-green-800 dark:text-green-300'},
 ];
 
+// ─── Sleep check-in modal (morning) ──────────────────────────────────────────
+const SleepCheckinModal = ({ existing, onSave, onClose }) => {
+  const [sleepHabits, setSleepHabits] = useState(
+    existing ?? { noDevices: false, fixedSchedule: false, noEatingBefore: false }
+  );
+  return (
+    <div className="fixed z-50 liquid-glass-overlay" style={{ top: 0, left: 0, right: 0, bottom: 0, margin: 0 }} onClick={onClose}>
+      <div className="flex items-center justify-center h-full pb-20 px-4">
+        <div
+          className="liquid-glass-panel rounded-2xl w-full max-w-lg flex flex-col overflow-hidden"
+          style={{ maxHeight: 'calc(90vh - 80px)' }}
+          onClick={e => e.stopPropagation()}
+        >
+          <div className="flex items-center justify-between px-5 pt-5 pb-3 flex-shrink-0">
+            <div className="w-7" />
+            <div className="flex items-center gap-2">
+              <Moon className="w-4 h-4 text-purple-400" />
+              <h3 className="font-bold text-base text-gray-900 dark:text-gray-100">Sueño de anoche</h3>
+            </div>
+            <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
+          </div>
+          <div className="flex-1 min-h-0 overflow-y-auto px-5 pb-5 space-y-4">
+            <p className="text-sm text-gray-500 dark:text-gray-400">Marca lo que aplicó para tu noche de ayer</p>
+            <div className="space-y-2">
+              {SLEEP_HABITS.map(h => (
+                <button key={h.key} onClick={() => setSleepHabits(s => ({ ...s, [h.key]: !s[h.key] }))}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-all text-left ${sleepHabits[h.key] ? 'border-purple-400 bg-purple-50/60 dark:bg-purple-900/20' : 'border-gray-200 dark:border-gray-700 bg-white/50 dark:bg-gray-800/50'}`}>
+                  <span className="text-xl flex-shrink-0">{h.emoji}</span>
+                  <span className={`text-sm font-medium flex-1 ${sleepHabits[h.key] ? 'text-purple-800 dark:text-purple-300' : 'text-gray-700 dark:text-gray-300'}`}>{h.label}</span>
+                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${sleepHabits[h.key] ? 'bg-purple-500 border-purple-500' : 'border-gray-300 dark:border-gray-600'}`}>
+                    {sleepHabits[h.key] && <span className="text-white text-xs leading-none">✓</span>}
+                  </div>
+                </button>
+              ))}
+            </div>
+            <button onClick={() => { onSave(sleepHabits); onClose(); }} className="btn-primary w-full py-3">
+              Guardar sueño
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── Evening check-in modal ───────────────────────────────────────────────────
 const CheckinModal = ({ existing, onSave, onClose }) => {
   const alreadyDone = !!existing?.savedAt;
 
@@ -213,7 +241,6 @@ const CheckinModal = ({ existing, onSave, onClose }) => {
   const [presenceLevel, setPresence]    = useState(existing?.presenceLevel ?? null);
   const [communityLevel, setCommunity]  = useState(existing?.communityLevel ?? null);
   const [emotionText, setEmotionText]   = useState('');
-  const [sleepHabits, setSleepHabits]   = useState(existing?.sleepHabits ?? { noDevices: false, fixedSchedule: false, noEatingBefore: false });
   const [growth, setGrowth]             = useState(existing?.growth ?? null);
   const [coachResponse, setCoachResponse] = useState(existing?.aiResponse ?? '');
   const [saving, setSaving]             = useState(false);
@@ -224,7 +251,6 @@ const CheckinModal = ({ existing, onSave, onClose }) => {
     growth,
     emotionText: extra.emotionText ?? '',
     emotionScore: extra.emotionScore ?? null,
-    sleepHabits,
     aiResponse: extra.aiResponse ?? '',
     savedAt: new Date().toISOString(),
   });
@@ -268,7 +294,7 @@ Criterios para el score:
     }
   };
 
-  const TOTAL_STEPS = 4;
+  const TOTAL_STEPS = 3;
   const canGoBack = step > 1 && !saving && !coachResponse;
 
   return (
@@ -287,7 +313,7 @@ Criterios para el score:
             }
             {!alreadyDone && (
               <div className="flex gap-1.5">
-                {[1, 2, 3, 4].map(d => (
+                {[1, 2, 3].map(d => (
                   <div key={d} className={`h-1.5 rounded-full transition-all ${d === step ? 'w-6 bg-primary-500' : d < step ? 'w-1.5 bg-primary-300' : 'w-1.5 bg-gray-200 dark:bg-gray-700'}`} />
                 ))}
               </div>
@@ -351,33 +377,8 @@ Criterios para el score:
               </>
             )}
 
-            {/* ── Step 2: Sueño ── */}
+            {/* ── Step 2: Crecimiento ── */}
             {!alreadyDone && step === 2 && (
-              <>
-                <div>
-                  <h3 className="font-bold text-lg text-gray-900 dark:text-gray-100">Sueño de anoche</h3>
-                  <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">Marca lo que aplique</p>
-                </div>
-                <div className="space-y-2">
-                  {SLEEP_HABITS.map(h => (
-                    <button key={h.key} onClick={() => setSleepHabits(s => ({ ...s, [h.key]: !s[h.key] }))}
-                      className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-all text-left ${sleepHabits[h.key] ? 'border-purple-400 bg-purple-50/60 dark:bg-purple-900/20' : 'border-gray-200 dark:border-gray-700 bg-white/50 dark:bg-gray-800/50'}`}>
-                      <span className="text-xl flex-shrink-0">{h.emoji}</span>
-                      <span className={`text-sm font-medium flex-1 ${sleepHabits[h.key] ? 'text-purple-800 dark:text-purple-300' : 'text-gray-700 dark:text-gray-300'}`}>{h.label}</span>
-                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${sleepHabits[h.key] ? 'bg-purple-500 border-purple-500' : 'border-gray-300 dark:border-gray-600'}`}>
-                        {sleepHabits[h.key] && <span className="text-white text-xs leading-none">✓</span>}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-                <button onClick={() => setStep(3)} className="btn-primary w-full py-3 flex items-center justify-center gap-2">
-                  Siguiente <ChevronRight className="w-4 h-4" />
-                </button>
-              </>
-            )}
-
-            {/* ── Step 3: Crecimiento ── */}
-            {!alreadyDone && step === 3 && (
               <>
                 <div>
                   <h3 className="font-bold text-lg text-gray-900 dark:text-gray-100">Crecimiento</h3>
@@ -392,14 +393,14 @@ Criterios para el score:
                     </button>
                   ))}
                 </div>
-                <button onClick={() => setStep(4)} className="btn-primary w-full py-3 flex items-center justify-center gap-2">
+                <button onClick={() => setStep(3)} className="btn-primary w-full py-3 flex items-center justify-center gap-2">
                   Siguiente <ChevronRight className="w-4 h-4" />
                 </button>
               </>
             )}
 
-            {/* ── Step 4: Emocional ── */}
-            {!alreadyDone && step === 4 && (
+            {/* ── Step 3: Emocional ── */}
+            {!alreadyDone && step === 3 && (
               <>
                 <h3 className="font-bold text-lg text-gray-900 dark:text-gray-100">Emocional</h3>
                 <div className="space-y-2">
@@ -479,9 +480,11 @@ const Home = () => {
   // ── Settings / profile ──
   const [profilePhoto, setProfilePhoto]   = useState(null);
   const [showProfileModal, setShowProfileModal] = useState(false);
-  const [phrase, setPhrase]               = useState('');
+  const [quotes, setQuotes]               = useState([]);
+  const [quoteIndex, setQuoteIndex]       = useState(0);
   const [showPhraseModal, setShowPhraseModal] = useState(false);
   const [phraseInput, setPhraseInput]     = useState('');
+  const [editingQuoteIdx, setEditingQuoteIdx] = useState(null); // null = adding new
 
   // ── Pillars ──
   const [scores, setScores] = useState({ nutricion: 0, ejercicio: 0, sueno: 0, emocional: 0, crecimiento: 0 });
@@ -493,6 +496,10 @@ const Home = () => {
   const [todayCheckin, setTodayCheckin]   = useState(null);
   const [checkIns, setCheckIns]           = useState({});
   const [showCheckin, setShowCheckin]     = useState(false);
+  const [showSleepCheckin, setShowSleepCheckin] = useState(false);
+  const [notifPermission, setNotifPermission] = useState(
+    typeof Notification !== 'undefined' ? Notification.permission : 'default'
+  );
 
   // ── Analysis ──
   const [showAnalysis, setShowAnalysis]   = useState(false);
@@ -523,6 +530,7 @@ const Home = () => {
       loadSettings();
       loadData();
       loadGoals();
+      registerFCMToken();
     }
   }, [user]);
 
@@ -532,6 +540,73 @@ const Home = () => {
     if (selectedGoal) setProgressInput(String(selectedGoal.currentValue || 0));
   }, [selectedGoal?.id]);
 
+  // ── FCM ──────────────────────────────────────────────────────────────────────
+  const saveFCMToken = async () => {
+    try {
+      if (!('Notification' in window) || !('serviceWorker' in navigator)) return;
+      const supported = await isSupported();
+      if (!supported) return;
+      if (Notification.permission !== 'granted') return;
+      const vapidKey = import.meta.env.VITE_VAPID_KEY;
+      if (!vapidKey || vapidKey === 'REEMPLAZA_CON_TU_VAPID_KEY') return;
+      const messaging = getMessaging(app);
+      const swReg = await navigator.serviceWorker.ready;
+      const token = await getToken(messaging, { vapidKey, serviceWorkerRegistration: swReg });
+      if (token) {
+        await setDoc(
+          doc(db, 'fcmTokens', user.uid),
+          { tokens: arrayUnion(token), updatedAt: new Date().toISOString() },
+          { merge: true }
+        );
+      }
+      // When app is in foreground, show native notification through the SW
+      onMessage(messaging, async (payload) => {
+        const title = payload.notification?.title || '';
+        const body  = payload.notification?.body  || '';
+        if (!title) return;
+        try {
+          const reg = await navigator.serviceWorker.ready;
+          await reg.showNotification(title, {
+            body: body || '',
+            icon: '/icon-192x192.png',
+            badge: '/icon-192x192.png',
+            vibrate: [200, 100, 200],
+          });
+        } catch {
+          toast.success(`${title}${body ? ` — ${body}` : ''}`);
+        }
+      });
+    } catch (err) {
+      console.error('FCM token error:', err);
+    }
+  };
+
+  const registerFCMToken = async () => {
+    if (!('Notification' in window) || !('serviceWorker' in navigator)) return;
+    setNotifPermission(Notification.permission);
+    if (Notification.permission === 'granted') await saveFCMToken();
+  };
+
+  const handleEnableNotifications = async () => {
+    try {
+      if (!('Notification' in window)) {
+        toast.error('Tu dispositivo no soporta notificaciones');
+        return;
+      }
+      const permission = await Notification.requestPermission();
+      setNotifPermission(permission);
+      if (permission === 'granted') {
+        await saveFCMToken();
+        toast.success('Notificaciones activadas');
+      } else {
+        toast.error('Permiso denegado — actívalas desde los ajustes del sistema');
+      }
+    } catch (err) {
+      console.error('FCM permission error:', err);
+    }
+  };
+
+
   // ── Loaders ──────────────────────────────────────────────────────────────────
   const loadSettings = async () => {
     try {
@@ -540,7 +615,23 @@ const Home = () => {
         getDoc(doc(db, `users/${user.uid}/settings`, 'motivationalQuote')),
       ]);
       if (profileSnap.exists() && profileSnap.data().photoUrl) setProfilePhoto(profileSnap.data().photoUrl);
-      if (quoteSnap.exists()) setPhrase(quoteSnap.data().quote || '');
+      if (quoteSnap.exists()) {
+        const d = quoteSnap.data();
+        const today = new Date().toLocaleDateString('en-CA');
+        let qs = d.quotes || (d.quote ? [d.quote] : []);
+        setQuotes(qs);
+        if (qs.length) {
+          let idx = d.quoteIndex ?? 0;
+          if (d.quoteDate !== today) {
+            // New day: advance index
+            idx = (idx + (d.quoteDate ? 1 : 0)) % qs.length;
+            // Save updated index + date back to Firestore (fire-and-forget)
+            setDoc(doc(db, `users/${user.uid}/settings`, 'motivationalQuote'),
+              { quoteIndex: idx, quoteDate: today }, { merge: true }).catch(() => {});
+          }
+          setQuoteIndex(idx);
+        }
+      }
     } catch {}
   };
 
@@ -701,22 +792,59 @@ const Home = () => {
   };
 
   // ── Phrase ───────────────────────────────────────────────────────────────────
-  const handleSavePhrase = async () => {
-    const trimmed = phraseInput.trim();
-    setPhrase(trimmed);
-    setShowPhraseModal(false);
+  const saveQuotes = async (updated, idx = quoteIndex) => {
+    setQuotes(updated);
+    const safeIdx = updated.length ? idx % updated.length : 0;
+    setQuoteIndex(safeIdx);
     try {
-      await setDoc(doc(db, `users/${user.uid}/settings`, 'motivationalQuote'), { quote: trimmed });
+      await setDoc(doc(db, `users/${user.uid}/settings`, 'motivationalQuote'),
+        { quotes: updated, quoteIndex: safeIdx }, { merge: true });
     } catch { toast.error('Error al guardar'); }
   };
+
+  const handleSavePhrase = async () => {
+    const trimmed = phraseInput.trim();
+    if (!trimmed) return;
+    const updated = editingQuoteIdx !== null
+      ? quotes.map((q, i) => i === editingQuoteIdx ? trimmed : q)
+      : [...quotes, trimmed];
+    setShowPhraseModal(false);
+    await saveQuotes(updated);
+  };
+
+  const handleDeleteQuote = async (idx) => {
+    await saveQuotes(quotes.filter((_, i) => i !== idx));
+  };
+
+  const todayQuote = quotes.length ? (quotes[quoteIndex % quotes.length] ?? '') : '';
 
   // ── Check-in ─────────────────────────────────────────────────────────────────
   const handleSaveCheckin = async (entry) => {
     try {
       const cutoff = new Date();
       cutoff.setDate(cutoff.getDate() - 14);
+      const existing = checkIns[todayStr] || {};
+      // Preserve morning sleep data if already filled
+      const merged = { ...existing, ...entry };
+      if (existing.sleepHabits) merged.sleepHabits = existing.sleepHabits;
+      if (existing.sleepFilledAt) merged.sleepFilledAt = existing.sleepFilledAt;
       const cleaned = Object.fromEntries(
-        Object.entries({ ...checkIns, [todayStr]: entry })
+        Object.entries({ ...checkIns, [todayStr]: merged })
+          .filter(([d]) => new Date(d) >= cutoff)
+      );
+      await setDoc(doc(db, `users/${user.uid}/wellbeing`, 'data'), { checkIns: cleaned }, { merge: true });
+      await loadData();
+    } catch { toast.error('Error al guardar'); }
+  };
+
+  const handleSaveSleepCheckin = async (sleepHabits) => {
+    try {
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - 14);
+      const existing = checkIns[todayStr] || {};
+      const merged = { ...existing, sleepHabits, sleepFilledAt: new Date().toISOString() };
+      const cleaned = Object.fromEntries(
+        Object.entries({ ...checkIns, [todayStr]: merged })
           .filter(([d]) => new Date(d) >= cutoff)
       );
       await setDoc(doc(db, `users/${user.uid}/wellbeing`, 'data'), { checkIns: cleaned }, { merge: true });
@@ -999,11 +1127,11 @@ Plain text, sin markdown, en español.`;
       {/* ── Personal phrase ── */}
       <div className="flex items-center gap-2 px-1">
         <button
-          onClick={() => { setPhraseInput(phrase); setShowPhraseModal(true); }}
+          onClick={() => { setPhraseInput(''); setEditingQuoteIdx(null); setShowPhraseModal(true); }}
           className="flex-1 text-left flex items-center gap-2 group"
         >
-          <span className={`text-lg italic flex-1 leading-snug ${phrase ? (THEME_PALETTE[colorTheme]?.text ?? 'text-blue-500') : 'text-gray-300 dark:text-gray-600'}`}>
-            {phrase ? `"${phrase}"` : 'Añade una frase para ti mismo...'}
+          <span className={`text-lg italic flex-1 leading-snug ${todayQuote ? (THEME_PALETTE[colorTheme]?.text ?? 'text-blue-500') : 'text-gray-300 dark:text-gray-600'}`}>
+            {todayQuote ? `"${todayQuote}"` : 'Añade una frase para ti mismo...'}
           </span>
           <Pencil className={`w-3.5 h-3.5 flex-shrink-0 opacity-0 group-hover:opacity-60 transition-opacity ${THEME_PALETTE[colorTheme]?.text ?? 'text-blue-500'}`} />
         </button>
@@ -1011,44 +1139,84 @@ Plain text, sin markdown, en español.`;
 
       {/* ── Section: Check in ── */}
       {(() => {
-        const isAfterCheckinTime = new Date().getHours() >= 19;
+        const hour = new Date().getHours();
+        const isSleepWindow = hour >= 6 && hour < 12;
+        const isEveningWindow = hour >= 18;
+        const sleepFilled = !!checkIns[todayStr]?.sleepFilledAt;
         return (
           <>
-            <p className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Check in</p>
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Check in</p>
+              {'Notification' in window && notifPermission !== 'granted' && (
+                <button onClick={handleEnableNotifications} className="text-xs text-blue-500 dark:text-blue-400 hover:text-blue-600 transition-colors">🔔 Activar avisos</button>
+              )}
+            </div>
 
-            {!isAfterCheckinTime && !todayCheckin ? (
+            {/* Morning sleep card */}
+            {(isSleepWindow || sleepFilled) && (
+              <button
+                onClick={() => isSleepWindow && !sleepFilled && setShowSleepCheckin(true)}
+                className={`w-full rounded-2xl p-4 flex items-center gap-3 transition-all ${
+                  sleepFilled
+                    ? 'bg-purple-50/80 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700/50'
+                    : 'liquid-glass-panel active:scale-[0.99]'
+                }`}
+              >
+                {sleepFilled
+                  ? <CheckCircle className="w-5 h-5 text-purple-500 flex-shrink-0" />
+                  : <Moon className="w-5 h-5 text-purple-400 flex-shrink-0" />
+                }
+                <div className="text-left min-w-0">
+                  <p className="font-semibold text-sm text-gray-900 dark:text-gray-100">
+                    {sleepFilled ? 'Sueño registrado' : 'Sueño de anoche'}
+                  </p>
+                  <p className="text-sm text-gray-400 dark:text-gray-500 truncate">
+                    {sleepFilled ? 'Hábitos de sueño guardados' : 'Toca para registrar · disponible hasta las 12pm'}
+                  </p>
+                </div>
+                {!sleepFilled && isSleepWindow && <ChevronRight className="w-4 h-4 text-gray-400 ml-auto flex-shrink-0" />}
+              </button>
+            )}
+
+            {/* Evening check-in */}
+            {isEveningWindow ? (
+              <button
+                onClick={() => setShowCheckin(true)}
+                className={`w-full rounded-2xl p-4 flex items-center gap-3 transition-all active:scale-[0.99] ${
+                  todayCheckin
+                    ? 'bg-green-50/80 dark:bg-green-900/20 border border-green-200 dark:border-green-700/50'
+                    : 'liquid-glass-panel'
+                }`}
+              >
+                {todayCheckin
+                  ? <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
+                  : <div className="w-5 h-5 rounded-full border-2 border-gray-300 dark:border-gray-600 flex-shrink-0" />
+                }
+                <div className="text-left min-w-0">
+                  <p className="font-semibold text-sm text-gray-900 dark:text-gray-100">
+                    {todayCheckin ? 'Check-in listo' : 'Check-in de hoy'}
+                  </p>
+                  <p className="text-sm text-gray-400 dark:text-gray-500 truncate">
+                    {todayCheckin ? 'Toca para ver tu feedback' : 'Nutrición · crecimiento · emocional'}
+                  </p>
+                </div>
+                <ChevronRight className="w-4 h-4 text-gray-400 ml-auto flex-shrink-0" />
+              </button>
+            ) : !todayCheckin && (
               <div className="flex items-center gap-3 px-4 py-3 rounded-2xl liquid-glass-panel">
                 <span className="text-2xl">🌙</span>
                 <div>
                   <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">Vuelve más tarde</p>
-                  <p className="text-sm text-gray-400 dark:text-gray-500">Podrás llenar tu check in a partir de las 7pm</p>
+                  <p className="text-sm text-gray-400 dark:text-gray-500">
+                    {isSleepWindow
+                      ? 'Check-in disponible desde las 6pm'
+                      : hour < 6
+                      ? 'Sueño desde las 6am · Check-in desde las 6pm'
+                      : 'Check-in disponible desde las 6pm'
+                    }
+                  </p>
                 </div>
               </div>
-            ) : (
-              <>
-                <button
-                  onClick={() => setShowCheckin(true)}
-                  className={`w-full rounded-2xl p-4 flex items-center gap-3 transition-all active:scale-[0.99] ${
-                    todayCheckin
-                      ? 'bg-green-50/80 dark:bg-green-900/20 border border-green-200 dark:border-green-700/50'
-                      : 'liquid-glass-panel'
-                  }`}
-                >
-                  {todayCheckin
-                    ? <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
-                    : <div className="w-5 h-5 rounded-full border-2 border-gray-300 dark:border-gray-600 flex-shrink-0" />
-                  }
-                  <div className="text-left min-w-0">
-                    <p className="font-semibold text-sm text-gray-900 dark:text-gray-100">
-                      {todayCheckin ? 'Check-in listo' : 'Check-in de hoy'}
-                    </p>
-                    <p className="text-sm text-gray-400 truncate">
-                      {todayCheckin ? 'Toca para ver tu feedback' : 'Nutrición · sueño · crecimiento · emocional'}
-                    </p>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-gray-400 ml-auto flex-shrink-0" />
-                </button>
-              </>
             )}
           </>
         );
@@ -1077,6 +1245,7 @@ Plain text, sin markdown, en español.`;
           <RadarChart data={radarData} margin={{ top: 10, right: 22, bottom: 10, left: 22 }}>
             <PolarGrid stroke="rgba(107,114,128,0.15)" />
             <PolarAngleAxis dataKey="pilar" tick={<RadarTick />} />
+            <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
             <Radar dataKey="score" stroke={THEME_PALETTE[colorTheme]?.hex ?? '#3b82f6'} fill={THEME_PALETTE[colorTheme]?.hex ?? '#3b82f6'} fillOpacity={0.22} strokeWidth={2} />
           </RadarChart>
         </ResponsiveContainer>
@@ -1113,6 +1282,7 @@ Plain text, sin markdown, en español.`;
                 <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">{p.label}</span>
               </div>
               <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">{p.desc}</p>
+              <p className="text-xs text-gray-400 dark:text-gray-500 leading-relaxed mt-1.5">📊 {p.calc}</p>
             </div>
           ) : null;
         })()}
@@ -1160,6 +1330,14 @@ Plain text, sin markdown, en español.`;
       )}
 
       {/* ── Check-in modal ── */}
+      {showSleepCheckin && (
+        <SleepCheckinModal
+          existing={checkIns[todayStr]?.sleepHabits}
+          onSave={handleSaveSleepCheckin}
+          onClose={() => setShowSleepCheckin(false)}
+        />
+      )}
+
       {showCheckin && (
         <CheckinModal
           existing={todayCheckin}
@@ -1449,7 +1627,7 @@ Plain text, sin markdown, en español.`;
       />
 
       {/* ── Profile modal ── */}
-      {/* ── Phrase modal ── */}
+      {/* ── Quotes modal ── */}
       {showPhraseModal && (
         <div
           className="fixed z-50 liquid-glass-overlay"
@@ -1458,26 +1636,58 @@ Plain text, sin markdown, en español.`;
         >
           <div className="flex items-center justify-center h-full px-4 pb-20">
             <div className="liquid-glass-panel rounded-2xl w-full max-w-sm p-5" onClick={e => e.stopPropagation()}>
-              <div className="flex justify-between items-center mb-2">
-                <h3 className="font-bold text-lg text-gray-900 dark:text-gray-100">Tu frase personal</h3>
+              <div className="flex justify-between items-center mb-1">
+                <h3 className="font-bold text-lg text-gray-900 dark:text-gray-100">Mis frases</h3>
                 <button onClick={() => setShowPhraseModal(false)}><X className="w-5 h-5 text-gray-400" /></button>
               </div>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                Una frase que te inspire o te represente
-              </p>
-              <textarea
-                autoFocus
-                className="input-field resize-none mb-4"
-                rows={3}
-                maxLength={150}
-                placeholder="Escribe tu frase aquí..."
-                value={phraseInput}
-                onChange={e => setPhraseInput(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSavePhrase(); } }}
-              />
-              <div className="flex gap-2">
-                <button onClick={() => setShowPhraseModal(false)} className="btn-secondary flex-1">Cancelar</button>
-                <button onClick={handleSavePhrase} className="btn-primary flex-1">Guardar</button>
+              <p className="text-xs text-gray-400 dark:text-gray-500 mb-3">Se muestran de forma rotativa, una por día.</p>
+
+              {/* List of existing quotes */}
+              {quotes.length > 0 && (
+                <div className="space-y-2 mb-4 max-h-48 overflow-y-auto">
+                  {quotes.map((q, i) => (
+                    <div key={i} className={`flex items-start gap-2 px-3 py-2 rounded-xl border ${i === quoteIndex % quotes.length ? 'border-primary-300 dark:border-primary-600 bg-primary-50 dark:bg-primary-900/20' : 'border-gray-100 dark:border-gray-700/50 bg-gray-50 dark:bg-gray-800/40'}`}>
+                      <p className="flex-1 text-sm italic text-gray-700 dark:text-gray-300 leading-snug">"{q}"</p>
+                      <div className="flex gap-1 flex-shrink-0 mt-0.5">
+                        <button onClick={() => { setPhraseInput(q); setEditingQuoteIdx(i); }} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button onClick={() => handleDeleteQuote(i)} className="text-gray-400 hover:text-red-500 transition-colors">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Add / edit input */}
+              <div className="space-y-2">
+                <textarea
+                  autoFocus={editingQuoteIdx === null}
+                  className="input-field resize-none"
+                  rows={2}
+                  maxLength={150}
+                  placeholder={editingQuoteIdx !== null ? 'Editar frase...' : 'Nueva frase...'}
+                  value={phraseInput}
+                  onChange={e => setPhraseInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSavePhrase(); } }}
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => { setPhraseInput(''); setEditingQuoteIdx(null); }}
+                    className="btn-secondary flex-1"
+                  >
+                    {editingQuoteIdx !== null ? 'Cancelar edición' : 'Limpiar'}
+                  </button>
+                  <button
+                    onClick={handleSavePhrase}
+                    disabled={!phraseInput.trim()}
+                    className="btn-primary flex-1"
+                  >
+                    {editingQuoteIdx !== null ? 'Actualizar' : 'Agregar'}
+                  </button>
+                </div>
               </div>
             </div>
           </div>

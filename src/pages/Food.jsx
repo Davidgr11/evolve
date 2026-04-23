@@ -21,6 +21,7 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
 import { format, parseISO } from 'date-fns';
+import { callClaude as _callClaude } from '../utils/cloudApi';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 const toLocalDateStr = (d) => {
@@ -84,24 +85,7 @@ const LIFESTYLE_OPTIONS = [
 
 // ─── Claude helper ────────────────────────────────────────────────────────
 const callClaude = async (prompt, maxTokens = 600) => {
-  const apiKey = import.meta.env.VITE_CLAUDE_API_KEY;
-  if (!apiKey || apiKey === 'your_claude_api_key_here') throw new Error('no key');
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
-    },
-    body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: maxTokens,
-      messages: [{ role: 'user', content: prompt }],
-    }),
-  });
-  if (!res.ok) throw new Error(`API ${res.status}`);
-  return (await res.json()).content[0].text.trim()
+  return (await _callClaude(prompt, maxTokens)).trim()
     .replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim();
 };
 
@@ -130,6 +114,9 @@ const SortableShoppingItem = ({ item, onToggle, onEdit, onDelete }) => {
         <p className={`text-sm font-medium truncate ${item.purchased ? 'line-through text-gray-400' : 'text-gray-900 dark:text-gray-100'}`}>
           {item.title}
         </p>
+        {item.note && (
+          <p className="text-xs text-gray-400 dark:text-gray-500 truncate mt-0.5">{item.note}</p>
+        )}
         {(item.label1 || item.label2) && (
           <div className="flex gap-1 mt-1 flex-wrap">
             {[item.label1, item.label2].filter(Boolean).map(l => (
@@ -172,7 +159,7 @@ const Food = () => {
   const [availableLabels, setAvailableLabels] = useState([]);
   const [showShoppingModal, setShowShoppingModal] = useState(false);
   const [shoppingItemModal, setShoppingItemModal] = useState(null); // null | 'add' | item
-  const [shoppingForm, setShoppingForm] = useState({ title: '' });
+  const [shoppingForm, setShoppingForm] = useState({ title: '', note: '' });
   const [selectedLabels, setSelectedLabels] = useState([]);
   // Labels modal
   const [showLabelsModal, setShowLabelsModal] = useState(false);
@@ -285,6 +272,7 @@ const Food = () => {
     const item = {
       id: editing?.id || Date.now().toString(),
       title: shoppingForm.title.trim(),
+      note: shoppingForm.note.trim(),
       purchased: editing?.purchased || false,
       label1: selectedLabels[0] || '',
       label2: selectedLabels[1] || '',
@@ -316,7 +304,7 @@ const Food = () => {
   };
 
   const openEditItem = (item) => {
-    setShoppingForm({ title: item.title });
+    setShoppingForm({ title: item.title, note: item.note || '' });
     setSelectedLabels([item.label1, item.label2].filter(Boolean));
     setShoppingItemModal(item);
   };
@@ -1507,6 +1495,17 @@ SUGERENCIA: [nombre corto]: [descripción breve de ingredientes, máx 20 palabra
                     className="input-field"
                     placeholder="Nombre del ítem"
                     autoFocus
+                  />
+                </div>
+                <div>
+                  <label className="label">Nota <span className="text-gray-400 font-normal">(opcional)</span></label>
+                  <input
+                    type="text"
+                    value={shoppingForm.note}
+                    onChange={e => setShoppingForm(f => ({ ...f, note: e.target.value }))}
+                    className="input-field"
+                    placeholder="p.ej. marca, cantidad..."
+                    maxLength={80}
                   />
                 </div>
                 {availableLabels.length > 0 && (

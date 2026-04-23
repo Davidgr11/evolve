@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { db, storage } from '../utils/firebase';
 import { collection, getDocs, doc, setDoc, deleteDoc, updateDoc } from 'firebase/firestore';
+import { callClaude } from '../utils/cloudApi';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import imageCompression from 'browser-image-compression';
 import { useForm } from 'react-hook-form';
@@ -181,8 +182,7 @@ const Goals = () => {
         let imagePath = editingGoal.imagePath;
 
         if (file) {
-          if (file.size > 2 * 1024 * 1024) { toast.error('Image must be < 2MB'); return; }
-          const compressed = await imageCompression(file, { maxSizeMB: 1, maxWidthOrHeight: 1024, useWebWorker: true });
+          const compressed = await imageCompression(file, { maxSizeMB: 1, maxWidthOrHeight: 1200, useWebWorker: true });
           const ts = Date.now();
           const newPath = `users/${user.uid}/goals/${ts}_${file.name}`;
           await uploadBytes(ref(storage, newPath), compressed);
@@ -223,11 +223,10 @@ const Goals = () => {
     // Create new
     if (!file) { toast.error('Please select an image'); return; }
     if (goals.length >= 20) { toast.error('Maximum 20 goals'); return; }
-    if (file.size > 2 * 1024 * 1024) { toast.error('Image must be < 2MB'); return; }
 
     setUploading(true);
     try {
-      const compressed = await imageCompression(file, { maxSizeMB: 1, maxWidthOrHeight: 1024, useWebWorker: true });
+      const compressed = await imageCompression(file, { maxSizeMB: 1, maxWidthOrHeight: 1200, useWebWorker: true });
       const ts = Date.now();
       const imagePath = `users/${user.uid}/goals/${ts}_${file.name}`;
       await uploadBytes(ref(storage, imagePath), compressed);
@@ -311,11 +310,6 @@ const Goals = () => {
   };
 
   const handleGetRecommendation = async (goal) => {
-    const apiKey = import.meta.env.VITE_CLAUDE_API_KEY;
-    if (!apiKey || apiKey === 'your_claude_api_key_here') {
-      toast.error('Add your Claude API key to the .env file');
-      return;
-    }
     setClaudeLoading(true);
     setClaudeRec('');
     try {
@@ -328,24 +322,8 @@ const Goals = () => {
         ? `My goal: "${goal.description}". Target: ${goal.target} ${goal.unit || ''}. Current: ${goal.currentValue || 0} ${goal.unit || ''} (${progress}%). Give me ONE specific, actionable recommendation to make faster progress. Be direct — max 3 sentences.`
         : `My goal: "${goal.description}". Not completed yet. Give me ONE specific, actionable first step to accomplish this. Be direct — max 3 sentences.`;
 
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true',
-        },
-        body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: 150,
-          messages: [{ role: 'user', content: prompt }],
-        }),
-      });
-
-      if (!response.ok) throw new Error(`API error ${response.status}`);
-      const data = await response.json();
-      setClaudeRec(data.content[0].text);
+      const text = await callClaude(prompt, 150);
+      setClaudeRec(text);
     } catch (err) {
       toast.error('Failed to get recommendation');
       console.error(err);

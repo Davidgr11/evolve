@@ -9,9 +9,10 @@ import {
 import toast from '../utils/toast';
 import {
   Plus, X, BookOpen, Search, Sparkles, Star,
-  Loader2, RefreshCw, Trash2, Edit, ChevronDown, ChevronUp,
+  Loader2, RefreshCw, Trash2, Edit, ChevronDown, ChevronUp, Pencil,
 } from 'lucide-react';
 import ConfirmModal from '../components/ConfirmModal';
+import { callClaude, searchGoogleBooks } from '../utils/cloudApi';
 
 const LEARNING_EMOJIS = ['💡', '🎯', '📖', '🔬', '🎨', '💻', '🌍', '⚡', '🔑', '🧠', '🚀', '🎵'];
 const getItemEmoji = (id) => LEARNING_EMOJIS[Number(id.slice(-3)) % LEARNING_EMOJIS.length];
@@ -29,42 +30,6 @@ const STATUS_LABEL_ES = {
   read:       'Leídos',
   'to read':  'Por leer',
   interested: 'Interesado',
-};
-
-// ─── Google Books API ─────────────────────────────────────────────────────────
-const gbCache = {};
-
-const searchGoogleBooks = async (query, retries = 3) => {
-  if (!query.trim()) return [];
-  const key = query.trim().toLowerCase();
-  if (gbCache[key]) return gbCache[key];
-
-  const apiKey = import.meta.env.VITE_GOOGLE_BOOKS_API_KEY;
-  const keyParam = apiKey ? `&key=${apiKey}` : '';
-  const url = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=6&fields=items(id,volumeInfo(title,authors,categories,imageLinks))${keyParam}`;
-
-  for (let attempt = 0; attempt < retries; attempt++) {
-    const res = await fetch(url);
-    if (res.status === 429) {
-      if (attempt < retries - 1) {
-        await new Promise(r => setTimeout(r, 1000 * 2 ** attempt));
-        continue;
-      }
-      return [];
-    }
-    if (!res.ok) return [];
-    const data = await res.json();
-    const results = (data.items || []).map(item => ({
-      googleId: item.id,
-      title: item.volumeInfo?.title || '',
-      author: item.volumeInfo?.authors?.[0] || '',
-      category: item.volumeInfo?.categories?.[0] || '',
-      coverUrl: item.volumeInfo?.imageLinks?.thumbnail?.replace('http://', 'https://') || '',
-    }));
-    gbCache[key] = results;
-    return results;
-  }
-  return [];
 };
 
 const fetchCoverForBook = async (book) => {
@@ -358,28 +323,7 @@ const Books = () => {
     } catch { toast.error('Error al eliminar'); }
   };
 
-  // ── AI ─────────────────────────────────────────────────────────────────────
-  const getApiKey = () => {
-    const k = import.meta.env.VITE_CLAUDE_API_KEY;
-    if (!k || k === 'your_claude_api_key_here') { toast.error('Agrega tu API key de Claude'); return null; }
-    return k;
-  };
-
-  const callClaude = async (prompt, maxTokens = 400) => {
-    const apiKey = getApiKey();
-    if (!apiKey) throw new Error('no key');
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
-      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] }),
-    });
-    if (!res.ok) throw new Error(`API ${res.status}`);
-    const data = await res.json();
-    return data.content[0].text;
-  };
-
   const handleAiSuggestions = async (exclude = []) => {
-    if (!getApiKey()) return;
     const topRead = readBooks.filter(b => b.rating && parseInt(b.rating) >= 4).slice(0, 15)
       .map(b => `"${b.title}" de ${b.author || 'desconocido'} (${b.category || 'general'}, ${b.rating}★)`);
     if (topRead.length === 0) { toast.error('Califica algunos libros leídos primero (4+ estrellas)'); return; }
@@ -403,7 +347,6 @@ const Books = () => {
   };
 
   const handleGrowthAnalysis = async () => {
-    if (!getApiKey()) return;
     setAiModal({ type: 'growth-analysis', content: '', loading: true });
     try {
       const completedItems = learningItems.filter(i => i.completed).map(i => i.name);
@@ -427,7 +370,6 @@ Tono: alentador y enfocado en el potencial. Los temas pendientes son metas emoci
   };
 
   const handleAiSummary = async (book) => {
-    if (!getApiKey()) return;
     setAiModal({ type: 'summary', book, content: '', loading: true });
     try {
       const prompt = `Dame un resumen conciso de las ideas clave y "llaves de oro" del libro "${book.title}"${book.author ? ` de ${book.author}` : ''}. Enfócate en los insights más accionables y memorables. Estructura: primero 1 oración sobre de qué trata el libro, luego 4-6 ideas clave como bullets cortos (usa • como bullet). Solo texto plano, sin markdown. IMPORTANTE: responde en el mismo idioma que el título del libro.`;
@@ -437,7 +379,6 @@ Tono: alentador y enfocado en el potencial. Los temas pendientes son metas emoci
   };
 
   const handleAiSynopsis = async (book) => {
-    if (!getApiKey()) return;
     setAiModal({ type: 'synopsis', book, content: '', loading: true });
     try {
       const prompt = `Explícame el libro "${book.title}"${book.author ? ` de ${book.author}` : ''} como si lo tuviera en mi lista de lectura pero no recuerdo bien de qué trata. Cubre: de qué trata (su premisa central), algo sobre el autor y por qué es creíble en este tema, y por qué vale la pena leerlo. Máximo 3 párrafos cortos. Solo texto plano, sin markdown. IMPORTANTE: responde en el mismo idioma que el título del libro.`;
@@ -523,9 +464,9 @@ Tono: alentador y enfocado en el potencial. Los temas pendientes son metas emoci
             const allDone = total > 0 && completedCount >= total;
             const themeHex = THEME_HEX[colorTheme] ?? '#3b82f6';
             return (
-              <div className="flex items-start justify-between mb-3">
-                <div>
-                  <div className="flex items-end gap-2 mb-2">
+              <>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-end gap-2">
                     <span className="text-4xl font-bold leading-none" style={{ color: themeHex }}>
                       {completedCount}
                     </span>
@@ -534,23 +475,23 @@ Tono: alentador y enfocado en el potencial. Los temas pendientes son metas emoci
                     </span>
                     {allDone && total > 0 && <span className="text-sm mb-0.5">🎉</span>}
                   </div>
-                  {total > 0 && (
-                    <div className="h-2.5 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden w-36">
-                      <div
-                        className="h-full rounded-full transition-all duration-500"
-                        style={{ width: `${Math.min(100, completedCount / total * 100)}%`, backgroundColor: themeHex }}
-                      />
-                    </div>
-                  )}
+                  <button
+                    onClick={() => setShowAddLearningModal(true)}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white/70 dark:bg-gray-800/70 border border-blue-100 dark:border-blue-800 text-blue-600 dark:text-blue-400 hover:bg-white dark:hover:bg-gray-800 transition-colors text-sm font-medium shadow-sm flex-shrink-0"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Añadir
+                  </button>
                 </div>
-                <button
-                  onClick={() => setShowAddLearningModal(true)}
-                  className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white/70 dark:bg-gray-800/70 border border-blue-100 dark:border-blue-800 text-blue-600 dark:text-blue-400 hover:bg-white dark:hover:bg-gray-800 transition-colors text-sm font-medium shadow-sm flex-shrink-0 mt-1"
-                >
-                  <Plus className="w-4 h-4" />
-                  Añadir
-                </button>
-              </div>
+                {total > 0 && (
+                  <div className="h-2.5 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden mb-3">
+                    <div
+                      className="h-full rounded-full transition-all duration-500"
+                      style={{ width: `${Math.min(100, completedCount / total * 100)}%`, backgroundColor: themeHex }}
+                    />
+                  </div>
+                )}
+              </>
             );
           })()}
 
@@ -590,33 +531,30 @@ Tono: alentador y enfocado en el potencial. Los temas pendientes son metas emoci
         </div>
 
         {/* ── Libros ── */}
-        <div className="flex justify-between items-center">
-          <p className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Libros</p>
-          <button onClick={openAddModal} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/70 dark:bg-gray-800/70 border border-blue-100 dark:border-blue-800 text-blue-600 dark:text-blue-400 hover:bg-white dark:hover:bg-gray-800 transition-colors text-sm font-medium shadow-sm">
-            <Plus className="w-4 h-4" />
-            Añadir libro
-          </button>
-        </div>
+        <p className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Libros</p>
 
         {/* Stats panel */}
         <div className="px-4 py-4 liquid-glass-panel rounded-2xl space-y-4">
           <div className="space-y-4">
             {/* Annual goal */}
             <div>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-bold text-gray-700 dark:text-gray-300">Meta de lectura {currentYear}</span>
-                <button onClick={() => { setGoalInput(String(annualGoal)); setShowGoalModal(true); }} className="text-xs text-blue-500 dark:text-blue-400 font-semibold">
-                  Editar meta
-                </button>
-              </div>
               {(() => {
                 const hex = THEME_HEX[colorTheme] ?? '#3b82f6';
                 return (
                   <>
-                    <div className="flex items-end gap-3 mb-2">
-                      <span className="text-4xl font-bold leading-none" style={{ color: hex }}>{booksThisYear}</span>
-                      <span className="text-lg text-gray-400 dark:text-gray-500 mb-0.5">/ {annualGoal} libros</span>
-                      {booksThisYear >= annualGoal && <span className="text-sm mb-0.5">🎉</span>}
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-end gap-3">
+                        <span className="text-4xl font-bold leading-none" style={{ color: hex }}>{booksThisYear}</span>
+                        <span className="text-lg text-gray-400 dark:text-gray-500 mb-0.5">/ {annualGoal} libros</span>
+                        {booksThisYear >= annualGoal && <span className="text-sm mb-0.5">🎉</span>}
+                        <button onClick={() => { setGoalInput(String(annualGoal)); setShowGoalModal(true); }} className="mb-0.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                      <button onClick={openAddModal} className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white/70 dark:bg-gray-800/70 border border-blue-100 dark:border-blue-800 text-blue-600 dark:text-blue-400 hover:bg-white dark:hover:bg-gray-800 transition-colors text-sm font-medium shadow-sm flex-shrink-0">
+                        <Plus className="w-4 h-4" />
+                        Añadir
+                      </button>
                     </div>
                     <div className="h-3 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
                       <div

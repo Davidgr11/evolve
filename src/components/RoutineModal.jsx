@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { storage } from '../utils/firebase';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import imageCompression from 'browser-image-compression';
 import toast from '../utils/toast';
 import { X, Plus, Trash2, ChevronDown, ChevronUp, Sparkles, Loader2 } from 'lucide-react';
 import ImageUpload from './ImageUpload';
+import { callClaude as _callClaude } from '../utils/cloudApi';
 
 // ── free-exercise-db image lookup (GitHub-hosted, no API key) ────────────────
 // Repo: https://github.com/yuhonas/free-exercise-db  (~873 exercises)
@@ -56,28 +57,8 @@ const fetchExerciseImage = async (exerciseName) => {
 
 // ── Claude helper ─────────────────────────────────────────────────────────────
 const callClaude = async (prompt, maxTokens = 300) => {
-  const apiKey = import.meta.env.VITE_CLAUDE_API_KEY;
-  if (!apiKey || apiKey === 'your_claude_api_key_here') throw new Error('no key');
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
-    },
-    body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: maxTokens,
-      messages: [{ role: 'user', content: prompt }],
-    }),
-  });
-  if (!res.ok) throw new Error(`API ${res.status}`);
-  return (await res.json()).content[0].text
-    .trim()
-    .replace(/^```(?:json)?\n?/, '')
-    .replace(/\n?```$/, '')
-    .trim();
+  return (await _callClaude(prompt, maxTokens)).trim()
+    .replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim();
 };
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -193,13 +174,14 @@ Return ONLY a JSON array:
     reader.readAsDataURL(file);
   };
 
-  const uploadImage = async (file) => {
+  const uploadImage = async (file, oldImagePath) => {
     try {
       setUploading(true);
-      const compressed = await imageCompression(file, { maxSizeMB: 1, maxWidthOrHeight: 1024, useWebWorker: true });
+      const compressed = await imageCompression(file, { maxSizeMB: 1, maxWidthOrHeight: 1200, useWebWorker: true });
       const imagePath = `users/${user.uid}/exercises/${Date.now()}_${file.name}`;
       const storageRef = ref(storage, imagePath);
       await uploadBytes(storageRef, compressed);
+      if (oldImagePath) { try { await deleteObject(ref(storage, oldImagePath)); } catch {} }
       return { imageUrl: await getDownloadURL(storageRef), imagePath };
     } catch { return null; }
     finally { setUploading(false); }
@@ -213,7 +195,7 @@ Return ONLY a JSON array:
       exercises.map(async (ex) => {
         const pending = pendingImages[ex._id];
         if (pending?.file) {
-          const up = await uploadImage(pending.file);
+          const up = await uploadImage(pending.file, ex.imagePath || '');
           return { name: ex.name, repetitions: ex.repetitions, instructions: ex.instructions || '', imageUrl: up?.imageUrl || ex.imageUrl, imagePath: up?.imagePath || '' };
         }
         return { name: ex.name, repetitions: ex.repetitions, instructions: ex.instructions || '', imageUrl: ex.imageUrl || '', imagePath: ex.imagePath || '' };

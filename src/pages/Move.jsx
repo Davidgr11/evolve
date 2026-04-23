@@ -8,6 +8,7 @@ import { db, storage } from '../utils/firebase';
 import {
   collection, addDoc, getDocs, updateDoc, deleteDoc, doc
 } from 'firebase/firestore';
+import { callClaude } from '../utils/cloudApi';
 import { ref, deleteObject } from 'firebase/storage';
 import toast from '../utils/toast';
 import {
@@ -139,11 +140,6 @@ const Move = () => {
     (stats.month.running || 0) + (stats.month.sports || 0);
 
   const handleAnalyze = async () => {
-    const apiKey = import.meta.env.VITE_CLAUDE_API_KEY;
-    if (!apiKey || apiKey === 'your_claude_api_key_here') {
-      toast.error('Add your Claude API key to the .env file');
-      return;
-    }
     setClaudeLoading(true);
     setClaudeAnalysis('');
     try {
@@ -155,23 +151,8 @@ Acumulado del año (${monthsElapsed}/12 meses): ${totalYear} sesiones, ${stats.y
 
 Responde solo en texto plano — sin markdown, sin asteriscos, sin encabezados. Sé conciso: 1 oración sobre lo que más destaca, 1 oración con la acción más útil que puedo tomar ahora mismo. Responde en español.`;
 
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true',
-        },
-        body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: 120,
-          messages: [{ role: 'user', content: prompt }],
-        }),
-      });
-      if (!res.ok) throw new Error(`API error ${res.status}`);
-      const data = await res.json();
-      setClaudeAnalysis(data.content[0].text);
+      const text = await callClaude(prompt, 120);
+      setClaudeAnalysis(text);
     } catch (err) {
       toast.error('Failed to get analysis');
       console.error(err);

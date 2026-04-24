@@ -48,7 +48,7 @@ const getLast7Days = () =>
 // ─── Pillar config ─────────────────────────────────────────────────────────────
 const PILLARS = [
   { key: 'nutricion',   label: 'Nutrición',   icon: Salad,    color: 'text-green-500',  desc: 'Promedio de los últimos 7 días con datos: alimentación del plan (50%) e hidratación (50%), tomados del check-in diario. Días sin check-in no se cuentan.' },
-  { key: 'ejercicio',   label: 'Actividad',   icon: Zap,      color: 'text-orange-500', desc: 'Índice de cumplimiento de tus rutinas activas. Si la rutina tiene meta semanal, se mide qué tan cerca estás de cumplirla. Si no tiene meta y la hiciste en 7 días, cuenta como 100%.' },
+  { key: 'ejercicio',   label: 'Actividad',   icon: Zap,      color: 'text-orange-500', desc: 'Si hoy completaste alguna rutina sin meta fija, el score es 100 automáticamente. Si no, se promedian solo las rutinas con meta semanal: se mide qué tan cerca estás de cumplir la frecuencia esperada según tu última sesión.' },
   { key: 'sueno',       label: 'Sueño',       icon: Moon,     color: 'text-purple-500', desc: 'Promedio de los últimos 7 días: hábitos nocturnos (sin pantallas, horario fijo, cena ligera) en 60% + nivel de descanso al despertar en 40%.' },
   { key: 'emocional',   label: 'Emocional',   icon: Smile,    color: 'text-blue-500',   desc: 'Sesiones de meditación registradas en la pestaña Medita (80%) + calificación de tu reflexión escrita en el check-in vespertino (20%).' },
   { key: 'crecimiento', label: 'Crecimiento', icon: BookOpen, color: 'text-amber-500',  desc: 'Aprendizaje diario del check-in de los últimos 7 días (65%) + temas de Mente completados (15%) + libros leídos este año vs. tu meta (20%).' },
@@ -579,8 +579,7 @@ const Home = () => {
       if (token) {
         await setDoc(
           doc(db, 'fcmTokens', user.uid),
-          { tokens: arrayUnion(token), updatedAt: new Date().toISOString() },
-          { merge: true }
+          { tokens: [token], updatedAt: new Date().toISOString() },
         );
       }
       // When app is in foreground, show native notification through the SW
@@ -691,37 +690,55 @@ const Home = () => {
         nutricion = Math.round(nutritionWeek.reduce((a, b) => a + b, 0) / nutritionWeek.length);
       }
 
-      // ── Ejercicio
+      // ── Ejercicio (historical scores stored in wellbeing/data.ejercicioScores)
       let ejercicio = 0;
+      const ejercicioScores = wellbeingSnap.exists() ? (wellbeingSnap.data().ejercicioScores || {}) : {};
+
+      // Calculate today's score from current routine state
+      let todayEjercicioScore = null;
       if (!routinesSnap.empty) {
         const routines = routinesSnap.docs.map(d => d.data());
         if (routines.length > 0) {
           const now = Date.now();
-          const weekCutoff = new Date(weekStart + 'T00:00:00').getTime();
           const todayStart = new Date(todayStr + 'T00:00:00').getTime();
 
-          // If any no-goal routine was completed today → perfect score
           const doneNoGoalToday = routines.some(r =>
             !(r.weeklyGoal > 0) && r.lastRun && new Date(r.lastRun).getTime() >= todayStart
           );
 
           if (doneNoGoalToday) {
-            ejercicio = 100;
+            todayEjercicioScore = 100;
           } else {
-            const rScores = routines.map(r => {
-              if (!r.lastRun) return 0;
-              const lastRunTime = new Date(r.lastRun).getTime();
-              if (r.weeklyGoal > 0) {
+            const goalRoutines = routines.filter(r => r.weeklyGoal > 0);
+            if (goalRoutines.length > 0) {
+              const rScores = goalRoutines.map(r => {
+                if (!r.lastRun) return 0;
+                const lastRunTime = new Date(r.lastRun).getTime();
                 const daysSince = (now - lastRunTime) / (1000 * 60 * 60 * 24);
                 const expectedGap = 7 / r.weeklyGoal;
                 return Math.max(0, 1 - Math.max(0, daysSince - expectedGap) / (2 * expectedGap));
-              }
-              return lastRunTime >= weekCutoff ? 1 : 0;
-            });
-            ejercicio = Math.min(100, Math.round(rScores.reduce((a, b) => a + b, 0) / rScores.length * 100));
+              });
+              todayEjercicioScore = Math.min(100, Math.round(rScores.reduce((a, b) => a + b, 0) / goalRoutines.length * 100));
+            }
           }
         }
       }
+
+      // Persist today's score alongside existing historical scores (trimmed to 14 days)
+      if (todayEjercicioScore !== null) {
+        const eCutoff = new Date(); eCutoff.setDate(eCutoff.getDate() - 14);
+        const cleanedES = Object.fromEntries(
+          Object.entries({ ...ejercicioScores, [todayStr]: todayEjercicioScore })
+            .filter(([d]) => new Date(d) >= eCutoff)
+        );
+        setDoc(doc(db, `users/${user.uid}/wellbeing`, 'data'), { ejercicioScores: cleanedES }, { merge: true }).catch(() => {});
+      }
+
+      // 7-day average: use stored score for past days, live score for today
+      const ejercicioDays = last7.map(d =>
+        d === todayStr ? todayEjercicioScore : (ejercicioScores[d] ?? null)
+      ).filter(v => v !== null);
+      if (ejercicioDays.length) ejercicio = Math.round(ejercicioDays.reduce((a, b) => a + b, 0) / ejercicioDays.length);
 
       // ── Sueño, Emocional, Comunidad
       let sueno = 0, emocional = 0, comunidad = 0;

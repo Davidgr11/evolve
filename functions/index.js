@@ -8,6 +8,7 @@ admin.initializeApp();
 
 const claudeApiKey = defineSecret('CLAUDE_API_KEY');
 const googleBooksApiKey = defineSecret('GOOGLE_BOOKS_API_KEY');
+const openaiApiKey = defineSecret('OPENAI_API_KEY');
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -110,7 +111,7 @@ exports.checkinReminder9pm = onSchedule(
 
 // ── Test notification ─────────────────────────────────────────────────────────
 
-exports.sendTestNotification = onCall({ region: 'us-central1' }, async (request) => {
+exports.sendTestNotification = onCall({ region: 'us-central1', cors: true }, async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Authentication required');
   const tokenDoc = await admin.firestore().doc(`fcmTokens/${request.auth.uid}`).get();
   if (!tokenDoc.exists) {
@@ -127,7 +128,7 @@ exports.sendTestNotification = onCall({ region: 'us-central1' }, async (request)
 // ── Claude API proxy ──────────────────────────────────────────────────────────
 
 exports.callClaude = onCall(
-  { secrets: [claudeApiKey], region: 'us-central1' },
+  { secrets: [claudeApiKey], region: 'us-central1', cors: true },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Authentication required');
     const { prompt, maxTokens = 400 } = request.data;
@@ -144,10 +145,41 @@ exports.callClaude = onCall(
   }
 );
 
+// ── OpenAI Text-to-Speech proxy ───────────────────────────────────────────────
+
+exports.ttsSpeak = onCall(
+  { secrets: [openaiApiKey], region: 'us-central1', cors: true },
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Authentication required');
+    const { text, voice = 'nova' } = request.data;
+    if (!text || typeof text !== 'string') throw new HttpsError('invalid-argument', 'text required');
+    const res = await fetch('https://api.openai.com/v1/audio/speech', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openaiApiKey.value()}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini-tts',
+        input: text,
+        voice,
+        instructions: 'Habla en español latinoamericano, con tono calmado, pausado y suave. No uses pronunciación en inglés.',
+        response_format: 'mp3',
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.text();
+      throw new HttpsError('internal', `OpenAI TTS error: ${err}`);
+    }
+    const buf = await res.arrayBuffer();
+    return { audioBase64: Buffer.from(buf).toString('base64') };
+  }
+);
+
 // ── Google Books proxy ────────────────────────────────────────────────────────
 
 exports.searchBooks = onCall(
-  { secrets: [googleBooksApiKey], region: 'us-central1' },
+  { secrets: [googleBooksApiKey], region: 'us-central1', cors: true },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Authentication required');
     const { query } = request.data;

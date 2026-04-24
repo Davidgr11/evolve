@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import ConfirmModal from '../components/ConfirmModal';
 import { callClaude, searchGoogleBooks } from '../utils/cloudApi';
+import confetti from 'canvas-confetti';
 
 const LEARNING_EMOJIS = ['💡', '🎯', '📖', '🔬', '🎨', '💻', '🌍', '⚡', '🔑', '🧠', '🚀', '🎵'];
 const getItemEmoji = (id) => LEARNING_EMOJIS[Number(id.slice(-3)) % LEARNING_EMOJIS.length];
@@ -288,17 +289,33 @@ const Books = () => {
     setSaving(true);
     try {
       const data = { ...bookForm, finishedDate: bookForm.status === 'read' ? bookForm.finishedDate : null, rating: bookForm.status === 'read' ? bookForm.rating : null };
+      let justFinished = false;
       if (editingBook) {
         await updateDoc(doc(db, `users/${user.uid}/books`, editingBook.id), data);
-        if (editingBook.status !== 'read' && data.status === 'read' && data.finishedDate)
+        if (editingBook.status !== 'read' && data.status === 'read' && data.finishedDate) {
           await updateBookStats(new Date(data.finishedDate).getFullYear(), 1);
-        else if (editingBook.status === 'read' && data.status !== 'read' && editingBook.finishedDate)
+          justFinished = true;
+        } else if (editingBook.status === 'read' && data.status !== 'read' && editingBook.finishedDate)
           await updateBookStats(new Date(editingBook.finishedDate).getFullYear(), -1);
         toast.success('Libro actualizado');
       } else {
         await addDoc(collection(db, `users/${user.uid}/books`), data);
-        if (data.status === 'read' && data.finishedDate) await updateBookStats(new Date(data.finishedDate).getFullYear(), 1);
+        if (data.status === 'read' && data.finishedDate) {
+          await updateBookStats(new Date(data.finishedDate).getFullYear(), 1);
+          justFinished = true;
+        }
         toast.success('Libro añadido');
+      }
+      if (justFinished) {
+        setShowModal(false);
+        const end = Date.now() + 2800;
+        const iv = setInterval(() => {
+          if (Date.now() > end) return clearInterval(iv);
+          const t = (end - Date.now()) / 2800;
+          confetti({ startVelocity: 28, spread: 340, ticks: 55, particleCount: Math.round(45 * t), origin: { x: Math.random(), y: Math.random() - 0.15 } });
+        }, 220);
+        loadData();
+        return;
       }
       setShowModal(false);
       loadData();

@@ -7,6 +7,7 @@ import Home from './pages/Home';
 import Move from './pages/Move';
 import Food from './pages/Food';
 import Books from './pages/Books';
+import Meditate from './pages/Meditate';
 import Together from './pages/Together';
 import Wellbeing from './pages/Wellbeing';
 import Profile from './pages/Profile';
@@ -31,6 +32,7 @@ function App() {
               <Route path="/move" element={<Move />} />
               <Route path="/food" element={<Food />} />
               <Route path="/books" element={<Books />} />
+              <Route path="/meditate" element={<Meditate />} />
               <Route path="/together" element={<Together />} />
               <Route path="/wellbeing" element={<Wellbeing />} />
               <Route path="/profile" element={<Profile />} />

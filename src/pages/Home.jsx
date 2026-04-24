@@ -9,8 +9,8 @@ import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer,
 } from 'recharts';
 import {
-  Salad, Zap, Moon, Smile, BookOpen,
-  ChevronRight, Sparkles, CheckCircle, AlertCircle, X, Loader2, ChevronLeft, Info,
+  Salad, Zap, Moon, Smile, BookOpen, Users,
+  ChevronRight, ChevronDown, ChevronUp, Sparkles, CheckCircle, AlertCircle, X, Loader2, ChevronLeft, Info,
   Plus, Edit, Trash2, TrendingUp, LogOut, Pencil, GripVertical,
 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
@@ -28,6 +28,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { callClaude } from '../utils/cloudApi';
 import { getMessaging, getToken, isSupported, onMessage } from 'firebase/messaging';
 import { app } from '../utils/firebase';
+import CoupleSection from '../components/CoupleSection';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const toLocalDateStr = (d) => {
@@ -46,11 +47,12 @@ const getLast7Days = () =>
 
 // ─── Pillar config ─────────────────────────────────────────────────────────────
 const PILLARS = [
-  { key: 'nutricion',   label: 'Nutrición',   icon: Salad,    color: 'text-green-500',  desc: 'Alimentación e hidratación — qué comes y cuánta agua tomas cada día.',                                    calc: 'Promedio diario de: comidas balanceadas (40%), hidratación (30%) y ausencia de excesos (30%).' },
-  { key: 'ejercicio',   label: 'Actividad',   icon: Zap,      color: 'text-orange-500', desc: 'Actividad física semanal — qué tan seguido cumples tus rutinas de movimiento.',                            calc: 'Frecuencia semanal de ejercicio: días activos vs. tu objetivo semanal (100 = cumples todos los días objetivo).' },
-  { key: 'sueno',       label: 'Sueño',       icon: Moon,     color: 'text-purple-500', desc: 'Calidad del descanso — hábitos antes de dormir, horario regular y no comer tarde.',                        calc: 'Promedio de tus hábitos nocturnos: pantallas, hora de dormir, cena ligera y consistencia de horario.' },
-  { key: 'emocional',   label: 'Emocional',   icon: Smile,    color: 'text-blue-500',   desc: 'Bienestar mental — presencia y reflexión, socialización y cómo procesas tus emociones del día.',          calc: 'Promedio de: mindfulness/meditación (30%), socialización positiva (30%), diario/reflexión (20%) y estado emocional general (20%).' },
-  { key: 'crecimiento', label: 'Crecimiento', icon: BookOpen, color: 'text-amber-500',  desc: 'Aprendizaje continuo — si cada día lees, escuchas un podcast o aprendes algo nuevo.',                    calc: 'Hábito diario de aprendizaje (leer, podcast, curso) (65%) + temas del año completados (15%) + avance en meta de libros (20%).' },
+  { key: 'nutricion',   label: 'Nutrición',   icon: Salad,    color: 'text-green-500',  desc: 'Promedio de los últimos 7 días con datos: alimentación del plan (50%) e hidratación (50%), tomados del check-in diario. Días sin check-in no se cuentan.' },
+  { key: 'ejercicio',   label: 'Actividad',   icon: Zap,      color: 'text-orange-500', desc: 'Índice de cumplimiento de tus rutinas activas. Si la rutina tiene meta semanal, se mide qué tan cerca estás de cumplirla. Si no tiene meta y la hiciste en 7 días, cuenta como 100%.' },
+  { key: 'sueno',       label: 'Sueño',       icon: Moon,     color: 'text-purple-500', desc: 'Promedio de los últimos 7 días: hábitos nocturnos (sin pantallas, horario fijo, cena ligera) en 60% + nivel de descanso al despertar en 40%.' },
+  { key: 'emocional',   label: 'Emocional',   icon: Smile,    color: 'text-blue-500',   desc: 'Sesiones de meditación registradas en la pestaña Medita (80%) + calificación de tu reflexión escrita en el check-in vespertino (20%).' },
+  { key: 'crecimiento', label: 'Crecimiento', icon: BookOpen, color: 'text-amber-500',  desc: 'Aprendizaje diario del check-in de los últimos 7 días (65%) + temas de Mente completados (15%) + libros leídos este año vs. tu meta (20%).' },
+  { key: 'comunidad',   label: 'Comunidad',   icon: Users,    color: 'text-pink-500',   desc: 'Nivel de socialización de los últimos 7 días con datos: si no socializaste (0), con personas cómodas (65%) o saliste de tu zona de confort (100%).' },
 ];
 
 const SCORE_COLOR = (s) =>
@@ -187,10 +189,19 @@ const SOCIAL_OPTIONS = [
 ];
 
 // ─── Sleep check-in modal (morning) ──────────────────────────────────────────
+const RESTEDNESS_OPTIONS = [
+  { value: 1, emoji: '😫', label: 'Agotado' },
+  { value: 2, emoji: '😔', label: 'Cansado' },
+  { value: 3, emoji: '😐', label: 'Regular' },
+  { value: 4, emoji: '😌', label: 'Descansado' },
+  { value: 5, emoji: '😄', label: 'Muy bien' },
+];
+
 const SleepCheckinModal = ({ existing, onSave, onClose }) => {
   const [sleepHabits, setSleepHabits] = useState(
     existing ?? { noDevices: false, fixedSchedule: false, noEatingBefore: false }
   );
+  const [restedness, setRestedness] = useState(existing?.restedness ?? 0);
   return (
     <div className="fixed z-50 liquid-glass-overlay" style={{ top: 0, left: 0, right: 0, bottom: 0, margin: 0 }} onClick={onClose}>
       <div className="flex items-center justify-center h-full pb-20 px-4">
@@ -221,7 +232,19 @@ const SleepCheckinModal = ({ existing, onSave, onClose }) => {
                 </button>
               ))}
             </div>
-            <button onClick={() => { onSave(sleepHabits); onClose(); }} className="btn-primary w-full py-3">
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">¿Cómo te sientes de descansado?</p>
+              <div className="grid grid-cols-5 gap-1.5">
+                {RESTEDNESS_OPTIONS.map(o => (
+                  <button key={o.value} onClick={() => setRestedness(o.value)}
+                    className={`py-2.5 rounded-xl flex flex-col items-center gap-1 transition-all border-2 ${restedness === o.value ? 'border-purple-400 bg-purple-50/60 dark:bg-purple-900/20' : 'border-gray-200 dark:border-gray-700 bg-white/50 dark:bg-gray-800/50'}`}>
+                    <span className="text-xl">{o.emoji}</span>
+                    <span className={`text-[10px] font-medium text-center leading-tight ${restedness === o.value ? 'text-purple-800 dark:text-purple-300' : 'text-gray-500 dark:text-gray-400'}`}>{o.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <button onClick={() => { onSave({ ...sleepHabits, restedness: restedness || null }); onClose(); }} className="btn-primary w-full py-3">
               Guardar sueño
             </button>
           </div>
@@ -352,7 +375,7 @@ Criterios para el score:
                   <div className="grid grid-cols-3 gap-2">
                     {MEAL_OPTIONS.map(o => (
                       <button key={o.value} onClick={() => setMeal(o.value)}
-                        className={`py-3 rounded-xl flex flex-col items-center gap-1 transition-all border-2 ${mealAdherence === o.value ? `${o.accent} border-transparent` : 'bg-white/50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400'}`}>
+                        className={`py-3 rounded-xl flex flex-col items-center gap-1 transition-all border-2 ${mealAdherence === o.value ? o.accent : 'bg-white/50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400'}`}>
                         <span className="text-xl">{o.emoji}</span>
                         <span className="text-xs font-medium text-center leading-tight">{o.label}</span>
                       </button>
@@ -364,7 +387,7 @@ Criterios para el score:
                   <div className="grid grid-cols-3 gap-2">
                     {WATER_OPTIONS.map(o => (
                       <button key={o.value} onClick={() => setWater(o.value)}
-                        className={`py-3 rounded-xl flex flex-col items-center gap-1 transition-all border-2 ${waterIntake === o.value ? `${o.accent} border-transparent` : 'bg-white/50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400'}`}>
+                        className={`py-3 rounded-xl flex flex-col items-center gap-1 transition-all border-2 ${waterIntake === o.value ? o.accent : 'bg-white/50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400'}`}>
                         <span className="text-xl">{o.emoji}</span>
                         <span className="text-xs font-medium text-center leading-tight">{o.label}</span>
                       </button>
@@ -387,7 +410,7 @@ Criterios para el score:
                 <div className="grid grid-cols-2 gap-2">
                   {GROWTH_OPTIONS.map(o => (
                     <button key={o.value} onClick={() => setGrowth(o.value)}
-                      className={`py-3 rounded-xl flex flex-col items-center gap-1.5 transition-all border-2 ${growth === o.value ? `${o.accent} border-transparent` : 'bg-white/50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400'}`}>
+                      className={`py-3 rounded-xl flex flex-col items-center gap-1.5 transition-all border-2 ${growth === o.value ? o.accent : 'bg-white/50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400'}`}>
                       <span className="text-2xl">{o.emoji}</span>
                       <span className="text-xs font-medium text-center leading-tight">{o.label}</span>
                     </button>
@@ -409,7 +432,7 @@ Criterios para el score:
                   <div className="grid grid-cols-3 gap-2">
                     {PRESENCE_OPTIONS.map(o => (
                       <button key={o.value} onClick={() => setPresence(o.value)}
-                        className={`py-3 rounded-xl flex flex-col items-center gap-1 transition-all border-2 ${presenceLevel === o.value ? `${o.accent} border-transparent` : 'bg-white/50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400'}`}>
+                        className={`py-3 rounded-xl flex flex-col items-center gap-1 transition-all border-2 ${presenceLevel === o.value ? o.accent : 'bg-white/50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400'}`}>
                         <span className="text-xl">{o.emoji}</span>
                         <span className="text-xs font-medium">{o.label}</span>
                       </button>
@@ -421,7 +444,7 @@ Criterios para el score:
                   <div className="space-y-2">
                     {SOCIAL_OPTIONS.map(o => (
                       <button key={o.value} onClick={() => setCommunity(o.value)}
-                        className={`w-full py-2.5 px-3 rounded-xl text-sm text-left transition-all border-2 flex items-center gap-3 ${communityLevel === o.value ? `${o.accent} border-transparent` : 'bg-white/50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300'}`}>
+                        className={`w-full py-2.5 px-3 rounded-xl text-sm text-left transition-all border-2 flex items-center gap-3 ${communityLevel === o.value ? o.accent : 'bg-white/50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300'}`}>
                         <span className="text-lg flex-shrink-0">{o.emoji}</span>
                         <span className="font-medium">{o.label}</span>
                       </button>
@@ -487,7 +510,7 @@ const Home = () => {
   const [editingQuoteIdx, setEditingQuoteIdx] = useState(null); // null = adding new
 
   // ── Pillars ──
-  const [scores, setScores] = useState({ nutricion: 0, ejercicio: 0, sueno: 0, emocional: 0, crecimiento: 0 });
+  const [scores, setScores] = useState({ nutricion: 0, ejercicio: 0, sueno: 0, emocional: 0, crecimiento: 0, comunidad: 0 });
   const [openInfo, setOpenInfo]           = useState(null);
   const [loading, setLoading]             = useState(true);
   const [allData, setAllData]             = useState({});
@@ -508,7 +531,9 @@ const Home = () => {
 
   // ── Goals ──
   const [goals, setGoals]                 = useState([]);
-  const [loadingGoals, setLoadingGoals]   = useState(true);
+  const [loadingGoals, setLoadingGoals]   = useState(false);
+  const [goalsOpen, setGoalsOpen]         = useState(false);
+  const [goalsLoaded, setGoalsLoaded]     = useState(false);
   const [showGoalModal, setShowGoalModal] = useState(false);
   const [editingGoal, setEditingGoal]     = useState(null);
   const [goalType, setGoalType]           = useState('binary');
@@ -529,7 +554,6 @@ const Home = () => {
     if (user) {
       loadSettings();
       loadData();
-      loadGoals();
       registerFCMToken();
     }
   }, [user]);
@@ -671,55 +695,73 @@ const Home = () => {
       let ejercicio = 0;
       if (!routinesSnap.empty) {
         const routines = routinesSnap.docs.map(d => d.data());
-        const routinesWithGoal = routines.filter(r => r.weeklyGoal > 0);
-        if (routinesWithGoal.length > 0) {
+        if (routines.length > 0) {
           const now = Date.now();
-          const rScores = routinesWithGoal.map(r => {
-            if (!r.lastRun) return 0;
-            const daysSince = (now - new Date(r.lastRun).getTime()) / (1000 * 60 * 60 * 24);
-            const expectedGap = 7 / r.weeklyGoal;
-            return Math.max(0, 1 - Math.max(0, daysSince - expectedGap) / (2 * expectedGap));
-          });
-          ejercicio = Math.min(100, Math.round(rScores.reduce((a, b) => a + b, 0) / rScores.length * 100));
-        } else {
-          const cutoff = new Date(weekStart + 'T00:00:00').getTime();
-          const thisWeekRuns = routinesSnap.docs.filter(d => {
-            const { lastRun } = d.data();
-            return lastRun && new Date(lastRun).getTime() >= cutoff;
-          }).length;
-          ejercicio = Math.min(100, thisWeekRuns * 25);
+          const weekCutoff = new Date(weekStart + 'T00:00:00').getTime();
+          const todayStart = new Date(todayStr + 'T00:00:00').getTime();
+
+          // If any no-goal routine was completed today → perfect score
+          const doneNoGoalToday = routines.some(r =>
+            !(r.weeklyGoal > 0) && r.lastRun && new Date(r.lastRun).getTime() >= todayStart
+          );
+
+          if (doneNoGoalToday) {
+            ejercicio = 100;
+          } else {
+            const rScores = routines.map(r => {
+              if (!r.lastRun) return 0;
+              const lastRunTime = new Date(r.lastRun).getTime();
+              if (r.weeklyGoal > 0) {
+                const daysSince = (now - lastRunTime) / (1000 * 60 * 60 * 24);
+                const expectedGap = 7 / r.weeklyGoal;
+                return Math.max(0, 1 - Math.max(0, daysSince - expectedGap) / (2 * expectedGap));
+              }
+              return lastRunTime >= weekCutoff ? 1 : 0;
+            });
+            ejercicio = Math.min(100, Math.round(rScores.reduce((a, b) => a + b, 0) / rScores.length * 100));
+          }
         }
       }
 
-      // ── Sueño, Emocional
-      let sueno = 0, emocional = 0;
+      // ── Sueño, Emocional, Comunidad
+      let sueno = 0, emocional = 0, comunidad = 0;
       let todayCI = null;
       if (wellbeingSnap.exists()) {
         const cis = wellbeingSnap.data().checkIns || {};
         todayCI = cis[todayStr] || null;
         setCheckIns(cis);
 
+        // Sueño: 7-day avg, 60% habits + 40% restedness
         const sleepScores = last7.map(d => {
           const h = cis[d]?.sleepHabits;
           if (!h) return null;
-          return (h.noDevices ? 1 : 0) + (h.fixedSchedule ? 1 : 0) + (h.noEatingBefore ? 1 : 0);
+          const habitsScore = ((h.noDevices ? 1 : 0) + (h.fixedSchedule ? 1 : 0) + (h.noEatingBefore ? 1 : 0)) / 3 * 100;
+          const restednessScore = h.restedness ? (h.restedness - 1) / 4 * 100 : null;
+          return restednessScore != null ? habitsScore * 0.6 + restednessScore * 0.4 : habitsScore;
         }).filter(v => v !== null);
-        if (sleepScores.length) sueno = Math.round(sleepScores.reduce((a, b) => a + b, 0) / (sleepScores.length * 3) * 100);
+        if (sleepScores.length) sueno = Math.round(sleepScores.reduce((a, b) => a + b, 0) / sleepScores.length);
 
+        // Emocional: 80% meditation sessions (Meditate tab) + 20% emotionScore from check-in textarea
+        const meditations = wellbeingSnap.data().meditations || {};
         const emocionalDays = last7.map(d => {
           const ci = cis[d];
-          if (!ci) return null;
-          const emotionScore = ci.emotionScore != null ? ci.emotionScore
-            : (ci.journal?.trim().length > 0 ? 60 : null);
-          const pl = ci.presenceLevel ?? ci.meditationLevel;
-          const presenceScore = pl === 2 ? 90 : pl === 1 ? 70 : (ci.meditated === true ? 90 : 0);
-          const cl = ci.communityLevel;
-          const socialScore = cl === 2 ? 100 : cl === 1 ? 65 : cl === 0 ? 0
-            : Math.min(100, (ci.community || 0) * 20);
-          if (emotionScore == null) return (presenceScore + socialScore) / 2;
-          return (emotionScore + presenceScore + socialScore) / 3;
+          const meditationCount = (meditations[d] || []).length;
+          if (meditationCount === 0 && !ci?.savedAt) return null;
+          const meditationScore = meditationCount >= 2 ? 100 : meditationCount === 1 ? 75 : 0;
+          const emotionScore = ci?.emotionScore != null ? ci.emotionScore : null;
+          if (emotionScore != null) return meditationScore * 0.8 + emotionScore * 0.2;
+          if (meditationCount > 0) return meditationScore * 0.8;
+          return null;
         }).filter(v => v !== null);
         if (emocionalDays.length) emocional = Math.round(emocionalDays.reduce((a, b) => a + b, 0) / emocionalDays.length);
+
+        // Comunidad: 7-day avg of communityLevel from check-in
+        const comunidadDays = last7.map(d => {
+          const cl = cis[d]?.communityLevel;
+          if (cl == null) return null;
+          return cl === 2 ? 100 : cl === 1 ? 65 : 0;
+        }).filter(v => v !== null);
+        if (comunidadDays.length) comunidad = Math.round(comunidadDays.reduce((a, b) => a + b, 0) / comunidadDays.length);
       }
 
       // ── Crecimiento (65% daily learning · 15% learning items · 20% books goal)
@@ -754,7 +796,7 @@ const Home = () => {
         crecimiento = Math.round(0.65 * dailyLearning + 0.15 * learningScore + 0.20 * booksScore);
       }
 
-      const computed = { nutricion, ejercicio, sueno, emocional, crecimiento };
+      const computed = { nutricion, ejercicio, sueno, emocional, crecimiento, comunidad };
       setScores(computed);
       setTodayCheckin(todayCI);
 
@@ -898,6 +940,16 @@ Plain text, sin markdown, en español.`;
       setAnalysisText(text);
     } catch { toast.error('Error al analizar'); }
     finally { setAnalysisLoading(false); }
+  };
+
+  // ── Goals open/close ─────────────────────────────────────────────────────────
+  const handleToggleGoals = () => {
+    const opening = !goalsOpen;
+    setGoalsOpen(opening);
+    if (opening && !goalsLoaded) {
+      setGoalsLoaded(true);
+      loadGoals();
+    }
   };
 
   // ── Goals drag-and-drop ───────────────────────────────────────────────────────
@@ -1183,26 +1235,26 @@ Plain text, sin markdown, en español.`;
               <button
                 onClick={() => setShowCheckin(true)}
                 className={`w-full rounded-2xl p-4 flex items-center gap-3 transition-all active:scale-[0.99] ${
-                  todayCheckin
+                  todayCheckin?.savedAt
                     ? 'bg-green-50/80 dark:bg-green-900/20 border border-green-200 dark:border-green-700/50'
                     : 'liquid-glass-panel'
                 }`}
               >
-                {todayCheckin
+                {todayCheckin?.savedAt
                   ? <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
                   : <div className="w-5 h-5 rounded-full border-2 border-gray-300 dark:border-gray-600 flex-shrink-0" />
                 }
                 <div className="text-left min-w-0">
                   <p className="font-semibold text-sm text-gray-900 dark:text-gray-100">
-                    {todayCheckin ? 'Check-in listo' : 'Check-in de hoy'}
+                    {todayCheckin?.savedAt ? 'Check-in listo' : 'Check-in de hoy'}
                   </p>
                   <p className="text-sm text-gray-400 dark:text-gray-500 truncate">
-                    {todayCheckin ? 'Toca para ver tu feedback' : 'Nutrición · crecimiento · emocional'}
+                    {todayCheckin?.savedAt ? 'Toca para ver tu feedback' : 'Nutrición · crecimiento · emocional'}
                   </p>
                 </div>
                 <ChevronRight className="w-4 h-4 text-gray-400 ml-auto flex-shrink-0" />
               </button>
-            ) : !todayCheckin && (
+            ) : !todayCheckin?.savedAt && (
               <div className="flex items-center gap-3 px-4 py-3 rounded-2xl liquid-glass-panel">
                 <span className="text-2xl">🌙</span>
                 <div>
@@ -1223,7 +1275,10 @@ Plain text, sin markdown, en español.`;
       })()}
 
       {/* ── Section: Mis Pilares ── */}
-      <p className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Mis Pilares</p>
+      <div className="flex items-baseline gap-2">
+        <p className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Mis Pilares</p>
+        <span className="text-xs text-gray-400 dark:text-gray-500">últimos 7 días</span>
+      </div>
 
       <div className="liquid-glass-panel rounded-2xl p-4">
         {/* Top row: global score + analyze button */}
@@ -1282,7 +1337,6 @@ Plain text, sin markdown, en español.`;
                 <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">{p.label}</span>
               </div>
               <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">{p.desc}</p>
-              <p className="text-xs text-gray-400 dark:text-gray-500 leading-relaxed mt-1.5">📊 {p.calc}</p>
             </div>
           ) : null;
         })()}
@@ -1290,8 +1344,13 @@ Plain text, sin markdown, en español.`;
 
       {/* ── Section: Metas ── */}
       <div className="flex items-center justify-between">
-        <p className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Metas</p>
-        {goals.length < 20 && (
+        <button onClick={handleToggleGoals} className="flex items-center gap-2">
+          <p className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Metas</p>
+          {goalsOpen
+            ? <ChevronUp className="w-4 h-4 text-gray-400" />
+            : <ChevronDown className="w-4 h-4 text-gray-400" />}
+        </button>
+        {goalsOpen && goals.length < 20 && (
           <button
             onClick={handleAddNewGoal}
             className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-700/50 text-primary-600 dark:text-primary-400 text-sm font-semibold hover:bg-primary-100 dark:hover:bg-primary-900/30 transition-colors"
@@ -1302,7 +1361,7 @@ Plain text, sin markdown, en español.`;
         )}
       </div>
 
-      {loadingGoals ? (
+      {goalsOpen && (loadingGoals ? (
         <div className="flex justify-center py-10">
           <div className="w-8 h-8 border-4 border-primary-200 border-t-primary-500 rounded-full animate-spin" />
         </div>
@@ -1327,7 +1386,10 @@ Plain text, sin markdown, en español.`;
             </div>
           </SortableContext>
         </DndContext>
-      )}
+      ))}
+
+      {/* ── Section: Pareja ── */}
+      <CoupleSection />
 
       {/* ── Check-in modal ── */}
       {showSleepCheckin && (

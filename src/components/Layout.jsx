@@ -1,13 +1,13 @@
 import { Outlet, NavLink } from 'react-router-dom';
-import { Home, Zap, Salad, Lightbulb, Heart } from 'lucide-react';
+import { Home, Zap, Salad, Lightbulb, Wind } from 'lucide-react';
 
 const Layout = () => {
   const navItems = [
-    { path: '/home', icon: Home, label: 'Inicio' },
-    { path: '/food', icon: Salad, label: 'Nutrición' },
-    { path: '/move', icon: Zap, label: 'Actividad' },
-    { path: '/books', icon: Lightbulb, label: 'Mente' },
-    { path: '/together', icon: Heart, label: 'Amor' },
+    { path: '/home',     icon: Home,      label: 'Inicio' },
+    { path: '/food',     icon: Salad,     label: 'Nutre' },
+    { path: '/move',     icon: Zap,       label: 'Activa' },
+    { path: '/books',    icon: Lightbulb, label: 'Aprende' },
+    { path: '/meditate', icon: Wind,      label: 'Medita' },
   ];
 
   return (

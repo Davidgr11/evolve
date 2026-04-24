@@ -172,6 +172,18 @@ html.dark[data-color-theme="slate"] .app-bg                      { background: #
   animation: float 4s ease-in-out infinite;
 }
 
+@keyframes meditation-bg {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.meditation-bg {
+  background: linear-gradient(-45deg, #5b21b6, #6d28d9, #4c1d95, #7c3aed, #5b21b6);
+  background-size: 400% 400%;
+  animation: meditation-bg 14s ease infinite;
+}
+
 @layer components {
   .btn-primary {
     @apply bg-primary-500 hover:bg-primary-600 dark:bg-primary-600 dark:hover:bg-primary-700 text-white font-medium py-2 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed;

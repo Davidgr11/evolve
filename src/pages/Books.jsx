@@ -18,12 +18,12 @@ import confetti from 'canvas-confetti';
 const LEARNING_EMOJIS = ['💡', '🎯', '📖', '🔬', '🎨', '💻', '🌍', '⚡', '🔑', '🧠', '🚀', '🎵'];
 const getItemEmoji = (id) => LEARNING_EMOJIS[Number(id.slice(-3)) % LEARNING_EMOJIS.length];
 
-const THEME_HEX = { blue: '#3b82f6', purple: '#8b5cf6', arena: '#9e7b5a', slate: '#64748b' };
+const THEME_HEX = { blue: '#3b82f6', purple: '#8b5cf6', orange: '#f97316', teal: '#0d9488' };
 const THEME_BG  = {
   blue:   'bg-blue-500   border-blue-500',
   purple: 'bg-purple-500 border-purple-500',
-  arena:  'bg-amber-700  border-amber-700',
-  slate:  'bg-slate-500  border-slate-500',
+  orange: 'bg-orange-500 border-orange-500',
+  teal:   'bg-teal-600   border-teal-600',
 };
 
 const STATUS_LABEL_ES = {

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 
-const THEME_HEX = { blue: '#3b82f6', purple: '#8b5cf6', arena: '#9e7b5a', slate: '#64748b' };
+const THEME_HEX = { blue: '#3b82f6', purple: '#8b5cf6', orange: '#f97316', teal: '#0d9488' };
 import { db, storage } from '../utils/firebase';
 import {
   collection, addDoc, getDocs, updateDoc, deleteDoc, doc

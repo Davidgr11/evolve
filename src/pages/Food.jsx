@@ -863,7 +863,7 @@ SUGERENCIA: [nombre corto]: [descripción breve de ingredientes, máx 20 palabra
           <div className="flex items-center justify-center h-full pb-20 px-4">
             <div
               className="liquid-glass-panel rounded-2xl w-full max-w-md flex flex-col overflow-hidden"
-              style={{ maxHeight: 'calc(90vh - 80px)' }}
+              style={{ maxHeight: 'calc(84vh - 80px)' }}
               onClick={e => e.stopPropagation()}
             >
               <div className="flex justify-between items-center px-5 pt-5 pb-4 flex-shrink-0 border-b border-white/30 dark:border-white/10">
@@ -994,7 +994,7 @@ SUGERENCIA: [nombre corto]: [descripción breve de ingredientes, máx 20 palabra
           <div className="flex items-center justify-center h-full pb-20 px-4">
             <div
               className="liquid-glass-panel rounded-2xl w-full max-w-md flex flex-col overflow-hidden"
-              style={{ maxHeight: 'calc(90vh - 80px)' }}
+              style={{ maxHeight: 'calc(84vh - 80px)' }}
               onClick={e => e.stopPropagation()}
             >
               <div className="flex justify-between items-center px-5 pt-5 pb-4 flex-shrink-0 border-b border-white/30 dark:border-white/10">
@@ -1077,7 +1077,7 @@ SUGERENCIA: [nombre corto]: [descripción breve de ingredientes, máx 20 palabra
           <div className="flex items-center justify-center h-full pb-20 px-4">
             <div
               className="liquid-glass-panel rounded-2xl w-full max-w-md flex flex-col overflow-hidden"
-              style={{ maxHeight: 'calc(90vh - 80px)' }}
+              style={{ maxHeight: 'calc(84vh - 80px)' }}
               onClick={e => e.stopPropagation()}
             >
               <div className="flex justify-between items-center px-5 pt-5 pb-4 flex-shrink-0 border-b border-white/30 dark:border-white/10">
@@ -1185,7 +1185,7 @@ SUGERENCIA: [nombre corto]: [descripción breve de ingredientes, máx 20 palabra
           <div className="flex items-center justify-center h-full pb-20 px-4">
             <div
               className="liquid-glass-panel rounded-2xl w-full max-w-md flex flex-col overflow-hidden"
-              style={{ maxHeight: 'calc(90vh - 80px)' }}
+              style={{ maxHeight: 'calc(84vh - 80px)' }}
               onClick={e => e.stopPropagation()}
             >
               <div className="flex justify-between items-center px-5 pt-5 pb-4 flex-shrink-0 border-b border-white/30 dark:border-white/10">
@@ -1281,7 +1281,7 @@ SUGERENCIA: [nombre corto]: [descripción breve de ingredientes, máx 20 palabra
           <div className="flex items-center justify-center h-full pb-20 px-4">
             <div
               className="liquid-glass-panel rounded-2xl w-full max-w-sm flex flex-col overflow-hidden"
-              style={{ maxHeight: 'calc(90vh - 80px)' }}
+              style={{ maxHeight: 'calc(84vh - 80px)' }}
               onClick={e => e.stopPropagation()}
             >
               <div className="flex items-center justify-between gap-3 px-5 pt-5 pb-4 flex-shrink-0 border-b border-white/30 dark:border-white/10">
@@ -1388,7 +1388,7 @@ SUGERENCIA: [nombre corto]: [descripción breve de ingredientes, máx 20 palabra
           <div className="flex items-center justify-center h-full pb-20 px-4">
             <div
               className="liquid-glass-panel rounded-2xl w-full max-w-sm flex flex-col overflow-hidden"
-              style={{ maxHeight: 'calc(90vh - 80px)' }}
+              style={{ maxHeight: 'calc(84vh - 80px)' }}
               onClick={e => e.stopPropagation()}
             >
               <div className="flex justify-between items-center px-5 pt-5 pb-4 flex-shrink-0 border-b border-white/30 dark:border-white/10">
@@ -1564,7 +1564,7 @@ SUGERENCIA: [nombre corto]: [descripción breve de ingredientes, máx 20 palabra
           <div className="flex items-center justify-center h-full pb-20 px-4">
             <div
               className="liquid-glass-panel rounded-2xl w-full max-w-md flex flex-col"
-              style={{ maxHeight: 'calc(90vh - 80px)' }}
+              style={{ maxHeight: 'calc(84vh - 80px)' }}
               onClick={e => e.stopPropagation()}
             >
               <div className="flex justify-between items-center px-5 pt-5 pb-4 flex-shrink-0 border-b border-white/30 dark:border-white/10">

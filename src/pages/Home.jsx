@@ -11,7 +11,7 @@ import {
 import {
   Salad, Zap, Moon, Smile, BookOpen, Users,
   ChevronRight, ChevronDown, ChevronUp, Sparkles, CheckCircle, AlertCircle, X, Loader2, ChevronLeft, Info,
-  Plus, Edit, Trash2, TrendingUp, LogOut, Pencil, GripVertical,
+  Plus, Edit, Trash2, TrendingUp, LogOut, Pencil, GripVertical, Eye,
 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import confetti from 'canvas-confetti';
@@ -62,15 +62,15 @@ const SCORE_COLOR = (s) =>
 const THEME_PALETTE = {
   blue:   { text: 'text-blue-500 dark:text-blue-400',     hex: '#3b82f6' },
   purple: { text: 'text-purple-500 dark:text-purple-400', hex: '#8b5cf6' },
-  arena:  { text: 'text-amber-800 dark:text-amber-600',   hex: '#9e7b5a' },
-  slate:  { text: 'text-slate-500 dark:text-slate-400',   hex: '#64748b' },
+  orange: { text: 'text-orange-500 dark:text-orange-400', hex: '#f97316' },
+  teal:   { text: 'text-teal-600 dark:text-teal-400',     hex: '#0d9488' },
 };
 
 const COLOR_THEMES = [
-  { id: 'blue',   label: 'Azul',    bg: '#3b82f6', appBg: '#c2dce8' },
-  { id: 'purple', label: 'Morado',  bg: '#8b5cf6', appBg: '#dcd4f0' },
-  { id: 'arena',  label: 'Arena',   bg: '#9e7b5a', appBg: '#ede5d8' },
-  { id: 'slate',  label: 'Pizarra', bg: '#64748b', appBg: '#dce0e8' },
+  { id: 'blue',   label: 'Azul',       bg: '#3b82f6', appBg: '#c2dce8' },
+  { id: 'purple', label: 'Morado',     bg: '#8b5cf6', appBg: '#dcd4f0' },
+  { id: 'orange', label: 'Naranja',    bg: '#f97316', appBg: '#fff1e6' },
+  { id: 'teal',   label: 'Verde Azul', bg: '#0d9488', appBg: '#d0f2f0' },
 ];
 
 const RadarTick = ({ x, y, payload, textAnchor }) => (
@@ -207,7 +207,7 @@ const SleepCheckinModal = ({ existing, onSave, onClose }) => {
       <div className="flex items-center justify-center h-full pb-20 px-4">
         <div
           className="liquid-glass-panel rounded-2xl w-full max-w-lg flex flex-col overflow-hidden"
-          style={{ maxHeight: 'calc(90vh - 80px)' }}
+          style={{ maxHeight: 'calc(84vh - 80px)' }}
           onClick={e => e.stopPropagation()}
         >
           <div className="flex items-center justify-between px-5 pt-5 pb-3 flex-shrink-0">
@@ -325,7 +325,7 @@ Criterios para el score:
       <div className="flex items-center justify-center h-full pb-20 px-4">
         <div
           className="liquid-glass-panel rounded-2xl w-full max-w-lg flex flex-col overflow-hidden"
-          style={{ maxHeight: 'calc(90vh - 80px)' }}
+          style={{ maxHeight: 'calc(84vh - 80px)' }}
           onClick={e => e.stopPropagation()}
         >
           {/* Header */}
@@ -507,7 +507,8 @@ const Home = () => {
   const [quoteIndex, setQuoteIndex]       = useState(0);
   const [showPhraseModal, setShowPhraseModal] = useState(false);
   const [phraseInput, setPhraseInput]     = useState('');
-  const [editingQuoteIdx, setEditingQuoteIdx] = useState(null); // null = adding new
+  const [editingQuoteIdx, setEditingQuoteIdx] = useState(null);
+  const [showPhraseInput, setShowPhraseInput] = useState(false);
 
   // ── Pillars ──
   const [scores, setScores] = useState({ nutricion: 0, ejercicio: 0, sueno: 0, emocional: 0, crecimiento: 0, comunidad: 0 });
@@ -867,7 +868,7 @@ const Home = () => {
     const updated = editingQuoteIdx !== null
       ? quotes.map((q, i) => i === editingQuoteIdx ? trimmed : q)
       : [...quotes, trimmed];
-    setShowPhraseModal(false);
+    setPhraseInput(''); setEditingQuoteIdx(null); setShowPhraseInput(false);
     await saveQuotes(updated);
   };
 
@@ -1011,7 +1012,7 @@ Plain text, sin markdown, en español.`;
         let imagePath = editingGoal.imagePath;
 
         if (file) {
-          if (file.size > 2 * 1024 * 1024) { toast.error('La imagen debe ser < 2MB'); return; }
+          // no size restriction — imageCompression handles it
           const compressed = await imageCompression(file, { maxSizeMB: 1, maxWidthOrHeight: 1024, useWebWorker: true });
           const ts = Date.now();
           const newPath = `users/${user.uid}/goals/${ts}_${file.name}`;
@@ -1125,9 +1126,13 @@ Plain text, sin markdown, en español.`;
       const progress = isMeasurable && goal.target > 0
         ? Math.round((goal.currentValue || 0) / goal.target * 100)
         : null;
+      const now = new Date();
+      const currentMonth = now.getMonth() + 1;
+      const monthName = now.toLocaleString('es-MX', { month: 'long' });
+      const expectedProgress = Math.round(currentMonth / 12 * 100);
       const prompt = isMeasurable
-        ? `Mi meta: "${goal.description}". Objetivo: ${goal.target} ${goal.unit || ''}. Actual: ${goal.currentValue || 0} ${goal.unit || ''} (${progress}%). Dame UNA recomendación específica y accionable para avanzar más rápido. Sé directo — máx 3 oraciones en español.`
-        : `Mi meta: "${goal.description}". Aún no la he logrado. Dame UN primer paso específico y accionable para lograrlo. Sé directo — máx 3 oraciones en español.`;
+        ? `Meta anual: "${goal.description}". Objetivo al 31 de diciembre: ${goal.target} ${goal.unit || ''}. Avance actual: ${goal.currentValue || 0} ${goal.unit || ''} (${progress}%). Hoy es ${monthName} (mes ${currentMonth}/12), por lo que lo esperado a esta fecha sería ~${expectedProgress}% del objetivo. Dame UNA recomendación específica y accionable considerando si voy adelantado, a tiempo o atrasado respecto al año. Sé directo — máx 3 oraciones en español.`
+        : `Meta anual: "${goal.description}". Hoy es ${monthName} (mes ${currentMonth}/12), quedan ${12 - currentMonth} meses del año. Aún no la he logrado. Dame UN primer paso concreto y accionable para lograrlo antes de diciembre. Sé directo — máx 3 oraciones en español.`;
       const text = await callClaude(prompt, 150);
       setClaudeRec(text);
     } catch { toast.error('No se pudo obtener recomendación'); }
@@ -1194,15 +1199,16 @@ Plain text, sin markdown, en español.`;
       </div>
 
       {/* ── Personal phrase ── */}
-      <div className="flex items-center gap-2 px-1">
+      <div className="flex items-start gap-3 px-1">
+        <p className={`text-base italic flex-1 leading-snug ${todayQuote ? (THEME_PALETTE[colorTheme]?.text ?? 'text-blue-500') : 'text-gray-300 dark:text-gray-600'}`}>
+          {todayQuote ? `"${todayQuote}"` : 'Añade una frase motivacional para ti mismo...'}
+        </p>
         <button
-          onClick={() => { setPhraseInput(''); setEditingQuoteIdx(null); setShowPhraseModal(true); }}
-          className="flex-1 text-left flex items-center gap-2 group"
+          onClick={() => { setEditingQuoteIdx(null); setPhraseInput(''); setShowPhraseModal(true); }}
+          className={`flex-shrink-0 mt-0.5 opacity-50 hover:opacity-90 transition-opacity ${THEME_PALETTE[colorTheme]?.text ?? 'text-blue-500'}`}
+          aria-label="Ver mis frases"
         >
-          <span className={`text-lg italic flex-1 leading-snug ${todayQuote ? (THEME_PALETTE[colorTheme]?.text ?? 'text-blue-500') : 'text-gray-300 dark:text-gray-600'}`}>
-            {todayQuote ? `"${todayQuote}"` : 'Añade una frase para ti mismo...'}
-          </span>
-          <Pencil className={`w-3.5 h-3.5 flex-shrink-0 opacity-0 group-hover:opacity-60 transition-opacity ${THEME_PALETTE[colorTheme]?.text ?? 'text-blue-500'}`} />
+          <Eye className="w-4 h-4" />
         </button>
       </div>
 
@@ -1513,17 +1519,17 @@ Plain text, sin markdown, en español.`;
               </div>
 
               {selectedGoal.type === 'measurable' && (selectedGoal.target || 0) > 0 && (
-                <div className="mb-5 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800">
+                <div className="mb-5 p-4 rounded-xl border" style={{ background: THEME_PALETTE[colorTheme]?.hex + '12', borderColor: THEME_PALETTE[colorTheme]?.hex + '40' }}>
                   <div className="flex justify-between text-sm mb-2">
                     <span className="text-gray-600 dark:text-gray-400 font-medium">Progreso</span>
                     <span className="font-semibold text-gray-800 dark:text-gray-200">
                       {selectedGoal.currentValue || 0} / {selectedGoal.target} {selectedGoal.unit || ''}
                     </span>
                   </div>
-                  <div className="h-2.5 bg-blue-100 dark:bg-blue-900/40 rounded-full overflow-hidden mb-3">
+                  <div className="h-2.5 rounded-full overflow-hidden mb-3" style={{ background: THEME_PALETTE[colorTheme]?.hex + '25' }}>
                     <div
-                      className="h-full bg-gradient-to-r from-blue-400 to-primary-400 rounded-full transition-all duration-700"
-                      style={{ width: `${Math.min(100, Math.round((selectedGoal.currentValue || 0) / selectedGoal.target * 100))}%` }}
+                      className="h-full rounded-full transition-all duration-700"
+                      style={{ width: `${Math.min(100, Math.round((selectedGoal.currentValue || 0) / selectedGoal.target * 100))}%`, background: THEME_PALETTE[colorTheme]?.hex }}
                     />
                   </div>
                   {selectedGoal.status !== 'accomplished' && (
@@ -1562,13 +1568,14 @@ Plain text, sin markdown, en español.`;
                 <button
                   onClick={() => handleGetRecommendation(selectedGoal)}
                   disabled={claudeLoading}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-gradient-to-r from-blue-50 to-primary-50 dark:from-blue-900/20 dark:to-primary-900/20 border border-blue-100 dark:border-blue-800 text-blue-700 dark:text-blue-300 hover:from-blue-100 font-medium text-sm disabled:opacity-60 transition-colors"
+                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border font-medium text-sm disabled:opacity-60 transition-colors"
+                  style={{ background: THEME_PALETTE[colorTheme]?.hex + '12', borderColor: THEME_PALETTE[colorTheme]?.hex + '40', color: THEME_PALETTE[colorTheme]?.hex }}
                 >
                   <Sparkles className="w-4 h-4" />
                   {claudeLoading ? 'Obteniendo recomendación...' : 'Obtener recomendación de IA'}
                 </button>
                 {claudeRec && (
-                  <div className="mt-3 p-3 bg-gradient-to-r from-blue-50 to-primary-50 dark:from-blue-900/20 dark:to-primary-900/20 rounded-xl border border-blue-100 dark:border-blue-800">
+                  <div className="mt-3 p-3 rounded-xl border" style={{ background: THEME_PALETTE[colorTheme]?.hex + '0e', borderColor: THEME_PALETTE[colorTheme]?.hex + '30' }}>
                     <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed text-justify">{claudeRec}</p>
                   </div>
                 )}
@@ -1588,7 +1595,7 @@ Plain text, sin markdown, en español.`;
           <div className="flex items-center justify-center h-full pb-20 px-4">
             <div
               className="liquid-glass-panel rounded-2xl w-full max-w-md flex flex-col"
-              style={{ maxHeight: 'calc(90vh - 80px)' }}
+              style={{ maxHeight: 'calc(84vh - 80px)' }}
               onClick={e => e.stopPropagation()}
             >
               <div className="relative z-10 flex justify-between items-center px-6 pt-6 pb-4 flex-shrink-0 border-b border-white/30 dark:border-white/10">
@@ -1647,7 +1654,7 @@ Plain text, sin markdown, en español.`;
                   )}
 
                   <div>
-                    <label className="label">Imagen{!editingGoal && ' *'} (máx 2MB)</label>
+                    <label className="label">Imagen{!editingGoal && ' *'}</label>
                     <ImageUpload
                       id="goal-image-input"
                       disabled={uploading}
@@ -1711,24 +1718,24 @@ Plain text, sin markdown, en español.`;
         <div
           className="fixed z-50 liquid-glass-overlay"
           style={{ top: 0, left: 0, right: 0, bottom: 0, margin: 0 }}
-          onClick={() => setShowPhraseModal(false)}
+          onClick={() => { setShowPhraseModal(false); setShowPhraseInput(false); setEditingQuoteIdx(null); }}
         >
           <div className="flex items-center justify-center h-full px-4 pb-20">
             <div className="liquid-glass-panel rounded-2xl w-full max-w-sm p-5" onClick={e => e.stopPropagation()}>
               <div className="flex justify-between items-center mb-1">
                 <h3 className="font-bold text-lg text-gray-900 dark:text-gray-100">Mis frases</h3>
-                <button onClick={() => setShowPhraseModal(false)}><X className="w-5 h-5 text-gray-400" /></button>
+                <button onClick={() => { setShowPhraseModal(false); setShowPhraseInput(false); setEditingQuoteIdx(null); }}><X className="w-5 h-5 text-gray-400" /></button>
               </div>
-              <p className="text-xs text-gray-400 dark:text-gray-500 mb-3">Se muestran de forma rotativa, una por día.</p>
+              <p className="text-sm text-gray-400 dark:text-gray-500 mb-3">Se muestran de forma rotativa, una por día.</p>
 
               {/* List of existing quotes */}
               {quotes.length > 0 && (
-                <div className="space-y-2 mb-4 max-h-48 overflow-y-auto">
+                <div className="space-y-2 mb-4 max-h-52 overflow-y-auto">
                   {quotes.map((q, i) => (
                     <div key={i} className={`flex items-start gap-2 px-3 py-2 rounded-xl border ${i === quoteIndex % quotes.length ? 'border-primary-300 dark:border-primary-600 bg-primary-50 dark:bg-primary-900/20' : 'border-gray-100 dark:border-gray-700/50 bg-gray-50 dark:bg-gray-800/40'}`}>
                       <p className="flex-1 text-sm italic text-gray-700 dark:text-gray-300 leading-snug">"{q}"</p>
                       <div className="flex gap-1 flex-shrink-0 mt-0.5">
-                        <button onClick={() => { setPhraseInput(q); setEditingQuoteIdx(i); }} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
+                        <button onClick={() => { setPhraseInput(q); setEditingQuoteIdx(i); setShowPhraseInput(true); }} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
                           <Pencil className="w-3.5 h-3.5" />
                         </button>
                         <button onClick={() => handleDeleteQuote(i)} className="text-gray-400 hover:text-red-500 transition-colors">
@@ -1740,34 +1747,42 @@ Plain text, sin markdown, en español.`;
                 </div>
               )}
 
-              {/* Add / edit input */}
-              <div className="space-y-2">
-                <textarea
-                  autoFocus={editingQuoteIdx === null}
-                  className="input-field resize-none"
-                  rows={2}
-                  maxLength={150}
-                  placeholder={editingQuoteIdx !== null ? 'Editar frase...' : 'Nueva frase...'}
-                  value={phraseInput}
-                  onChange={e => setPhraseInput(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSavePhrase(); } }}
-                />
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => { setPhraseInput(''); setEditingQuoteIdx(null); }}
-                    className="btn-secondary flex-1"
-                  >
-                    {editingQuoteIdx !== null ? 'Cancelar edición' : 'Limpiar'}
-                  </button>
-                  <button
-                    onClick={handleSavePhrase}
-                    disabled={!phraseInput.trim()}
-                    className="btn-primary flex-1"
-                  >
-                    {editingQuoteIdx !== null ? 'Actualizar' : 'Agregar'}
-                  </button>
+              {/* Add / edit input — only shown when requested */}
+              {(showPhraseInput || editingQuoteIdx !== null) ? (
+                <div className="space-y-2">
+                  <textarea
+                    className="input-field resize-none"
+                    rows={2}
+                    maxLength={150}
+                    placeholder={editingQuoteIdx !== null ? 'Editar frase...' : 'Nueva frase...'}
+                    value={phraseInput}
+                    onChange={e => setPhraseInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSavePhrase(); } }}
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => { setPhraseInput(''); setEditingQuoteIdx(null); setShowPhraseInput(false); }}
+                      className="btn-secondary flex-1"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={handleSavePhrase}
+                      disabled={!phraseInput.trim()}
+                      className="btn-primary flex-1"
+                    >
+                      {editingQuoteIdx !== null ? 'Actualizar' : 'Agregar'}
+                    </button>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <button
+                  onClick={() => { setPhraseInput(''); setShowPhraseInput(true); }}
+                  className="w-full py-2 rounded-xl border border-dashed border-gray-300 dark:border-gray-600 text-sm text-gray-400 dark:text-gray-500 hover:border-primary-400 hover:text-primary-500 transition-colors"
+                >
+                  + Nueva frase
+                </button>
+              )}
             </div>
           </div>
         </div>

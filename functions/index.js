@@ -160,10 +160,9 @@ exports.ttsSpeak = onCall(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini-tts',
+        model: 'tts-1-hd',
         input: text,
         voice,
-        instructions: 'Habla en español latinoamericano, con tono calmado, pausado y suave. No uses pronunciación en inglés.',
         response_format: 'mp3',
       }),
     });
@@ -177,6 +176,32 @@ exports.ttsSpeak = onCall(
 );
 
 // ── Google Books proxy ────────────────────────────────────────────────────────
+
+// ── Google Cloud Text-to-Speech ───────────────────────────────────────────────
+
+exports.ttsGCloud = onCall(
+  { region: 'us-central1', cors: true },
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Authentication required');
+    const { text, voice = 'es-US-Journey-F' } = request.data;
+    if (!text || typeof text !== 'string') throw new HttpsError('invalid-argument', 'text required');
+
+    const textToSpeech = require('@google-cloud/text-to-speech');
+    const client = new textToSpeech.TextToSpeechClient();
+
+    const [response] = await client.synthesizeSpeech({
+      input: { text },
+      voice: { languageCode: 'es-US', name: voice },
+      audioConfig: {
+        audioEncoding: 'MP3',
+        speakingRate: 0.88,
+        pitch: -1.0,
+      },
+    });
+
+    return { audioBase64: Buffer.from(response.audioContent).toString('base64') };
+  }
+);
 
 exports.searchBooks = onCall(
   { secrets: [googleBooksApiKey], region: 'us-central1', cors: true },

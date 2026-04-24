@@ -283,7 +283,7 @@ const SettingsModal = ({ isOpen, onClose, couple, coupleId }) => {
   return (
     <div className="fixed z-50 liquid-glass-overlay" style={{ top: 0, left: 0, right: 0, bottom: 0, margin: 0 }} onClick={onClose}>
       <div className="flex items-center justify-center h-full pb-20 px-4">
-        <div className="liquid-glass-panel rounded-2xl w-full max-w-md flex flex-col" style={{ maxHeight: 'calc(90vh - 80px)' }} onClick={(e) => e.stopPropagation()}>
+        <div className="liquid-glass-panel rounded-2xl w-full max-w-md flex flex-col" style={{ maxHeight: 'calc(84vh - 80px)' }} onClick={(e) => e.stopPropagation()}>
           <div className="flex justify-between items-center px-5 pt-5 pb-4 flex-shrink-0 border-b border-white/30 dark:border-white/10">
             <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Configuración de pareja</h2>
             <button onClick={onClose} className="text-gray-500 hover:text-gray-700 dark:text-gray-400"><X className="w-6 h-6" /></button>
@@ -356,7 +356,7 @@ const EventFormModal = ({ isOpen, onClose, onSave, editingEvent, coupleId }) => 
   return (
     <div className="fixed z-50 liquid-glass-overlay" style={{ top: 0, left: 0, right: 0, bottom: 0, margin: 0 }} onClick={onClose}>
       <div className="flex items-center justify-center h-full pb-20 px-4">
-        <div className="liquid-glass-panel rounded-2xl w-full max-w-md flex flex-col" style={{ maxHeight: 'calc(90vh - 80px)' }} onClick={(e) => e.stopPropagation()}>
+        <div className="liquid-glass-panel rounded-2xl w-full max-w-md flex flex-col" style={{ maxHeight: 'calc(84vh - 80px)' }} onClick={(e) => e.stopPropagation()}>
           <div className="flex justify-between items-center px-5 pt-5 pb-4 flex-shrink-0 border-b border-white/30 dark:border-white/10">
             <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">
               {editingEvent ? 'Editar evento' : 'Nuevo evento'}
@@ -439,7 +439,7 @@ const ItemFormModal = ({ isOpen, onClose, onSave, editingItem, type }) => {
   return (
     <div className="fixed z-50 liquid-glass-overlay" style={{ top: 0, left: 0, right: 0, bottom: 0, margin: 0 }} onClick={onClose}>
       <div className="flex items-center justify-center h-full pb-20 px-4">
-        <div className="liquid-glass-panel rounded-2xl w-full max-w-md flex flex-col" style={{ maxHeight: 'calc(90vh - 80px)' }} onClick={(e) => e.stopPropagation()}>
+        <div className="liquid-glass-panel rounded-2xl w-full max-w-md flex flex-col" style={{ maxHeight: 'calc(84vh - 80px)' }} onClick={(e) => e.stopPropagation()}>
           <div className="flex justify-between items-center px-5 pt-5 pb-4 flex-shrink-0 border-b border-white/30 dark:border-white/10">
             <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">{titles[type]}</h2>
             <button onClick={onClose} className="text-gray-500 hover:text-gray-700 dark:text-gray-400"><X className="w-6 h-6" /></button>
@@ -547,7 +547,7 @@ const PlansModal = ({ isOpen, onClose, coupleId, ideas, setIdeas }) => {
   return (
     <div className="fixed z-50 liquid-glass-overlay" style={{ top: 0, left: 0, right: 0, bottom: 0, margin: 0 }} onClick={onClose}>
       <div className="flex items-center justify-center h-full pb-20 px-4">
-        <div className="liquid-glass-panel rounded-2xl w-full max-w-md flex flex-col" style={{ maxHeight: 'calc(90vh - 80px)' }} onClick={(e) => e.stopPropagation()}>
+        <div className="liquid-glass-panel rounded-2xl w-full max-w-md flex flex-col" style={{ maxHeight: 'calc(84vh - 80px)' }} onClick={(e) => e.stopPropagation()}>
           <div className="flex justify-between items-center px-5 pt-5 pb-4 flex-shrink-0 border-b border-white/30 dark:border-white/10">
             <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Planes</h2>
             <div className="flex items-center gap-2">
@@ -736,7 +736,7 @@ const EventDetailModal = ({ isOpen, onClose, event, coupleId, onEventDeleted }) 
   return (
     <div className="fixed z-50 liquid-glass-overlay" style={{ top: 0, left: 0, right: 0, bottom: 0, margin: 0 }} onClick={onClose}>
       <div className="flex items-center justify-center h-full pb-20 px-4">
-        <div className="liquid-glass-panel rounded-2xl w-full max-w-md flex flex-col overflow-hidden" style={{ maxHeight: 'calc(90vh - 80px)' }} onClick={(e) => e.stopPropagation()}>
+        <div className="liquid-glass-panel rounded-2xl w-full max-w-md flex flex-col overflow-hidden" style={{ maxHeight: 'calc(84vh - 80px)' }} onClick={(e) => e.stopPropagation()}>
 
           {/* Header */}
           {event.coverPhotoUrl ? (
@@ -1174,6 +1174,7 @@ const CoupleSection = () => {
           />
 
           <EventDetailModal
+            key={selectedEventId ?? 'none'}
             isOpen={!!selectedEventId && !!selectedEvent}
             onClose={() => setSelectedEventId(null)}
             event={selectedEvent}

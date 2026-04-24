@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
 import { db } from '../utils/firebase';
 import { doc, getDoc, setDoc, updateDoc, increment, arrayUnion } from 'firebase/firestore';
 import { useForm } from 'react-hook-form';
@@ -8,10 +9,15 @@ import toast from '../utils/toast';
 import { Play, Pause, X, Check, ChevronRight } from 'lucide-react';
 import ConfirmModal from '../components/ConfirmModal';
 
+const THEME_HEX = { blue: '#3b82f6', purple: '#8b5cf6', orange: '#f97316', teal: '#0d9488' };
+
+const TYPE_LABEL = { stretch: 'Estiramiento', workout: 'Entrenamiento', running: 'Correr', sports: 'Deporte' };
+
 const RoutineExecution = () => {
   const { routineId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { colorTheme } = useTheme();
   const [routine, setRoutine] = useState(null);
   const [loading, setLoading] = useState(true);
   const [currentSeries, setCurrentSeries] = useState(1);
@@ -23,6 +29,8 @@ const RoutineExecution = () => {
   const timerRef = useRef(null);
 
   const { register, handleSubmit } = useForm();
+
+  const themeHex = THEME_HEX[colorTheme] ?? '#3b82f6';
 
   useEffect(() => {
     loadRoutine();
@@ -66,9 +74,8 @@ const RoutineExecution = () => {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
     const secs = seconds % 60;
-    return `${hours.toString().padStart(2, '0')}:${minutes
-      .toString()
-      .padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    if (hours > 0) return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    return `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
   const handleComplete = () => {
@@ -76,18 +83,15 @@ const RoutineExecution = () => {
     const isLastSeries = currentSeries === routine.series;
 
     if (isLastExercise && isLastSeries) {
-      // Finished all exercises
       if (routine.type !== 'stretch') {
         setShowStatsModal(true);
       } else {
         saveStatistics();
       }
     } else if (isLastExercise) {
-      // Move to next series
       setCurrentSeries(prev => prev + 1);
       setCurrentExerciseIndex(0);
     } else {
-      // Move to next exercise
       setCurrentExerciseIndex(prev => prev + 1);
     }
   };
@@ -130,30 +134,18 @@ const RoutineExecution = () => {
         await updateDoc(statsRef, updates);
       } else {
         const newStats = {
-          stretch: 0,
-          workout: 0,
-          running: 0,
-          sports: 0,
-          effort: [],
-          calories: 0,
-          km: 0
+          stretch: 0, workout: 0, running: 0, sports: 0,
+          effort: [], calories: 0, km: 0
         };
 
         newStats[routine.type] = 1;
-        if (statsData.effort) {
-          newStats.effort = [parseInt(statsData.effort)];
-        }
-        if (statsData.calories) {
-          newStats.calories = parseInt(statsData.calories);
-        }
-        if (statsData.km) {
-          newStats.km = parseFloat(statsData.km);
-        }
+        if (statsData.effort) newStats.effort = [parseInt(statsData.effort)];
+        if (statsData.calories) newStats.calories = parseInt(statsData.calories);
+        if (statsData.km) newStats.km = parseFloat(statsData.km);
 
         await setDoc(statsRef, newStats);
       }
 
-      // Update routine's lastRun and totalRuns
       const todayStr = new Date().toISOString().split('T')[0];
       await updateDoc(doc(db, `users/${user.uid}/routines`, routineId), {
         lastRun: new Date().toISOString(),
@@ -175,8 +167,8 @@ const RoutineExecution = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="text-gray-500">Cargando rutina...</div>
+      <div className="flex items-center justify-center h-screen app-bg">
+        <div className="text-gray-500 dark:text-gray-400">Cargando rutina...</div>
       </div>
     );
   }
@@ -184,97 +176,128 @@ const RoutineExecution = () => {
   if (!routine) return null;
 
   const currentExercise = routine.exercises[currentExerciseIndex];
+  const isLastExercise = currentExerciseIndex === routine.exercises.length - 1;
+  const isLastSeries = currentSeries === routine.series;
+  const totalSteps = routine.series * routine.exercises.length;
+  const completedSteps = (currentSeries - 1) * routine.exercises.length + currentExerciseIndex;
+  const progressPct = Math.round(completedSteps / totalSteps * 100);
+
+  const btnLabel = isLastExercise && isLastSeries
+    ? 'Completar rutina'
+    : isLastExercise
+    ? `Siguiente ronda (${currentSeries + 1}/${routine.series})`
+    : 'Siguiente ejercicio';
 
   return (
-    <div className="min-h-screen app-bg dark:bg-gray-900 text-gray-900 dark:text-gray-100 p-4">
-      <div className="max-w-2xl mx-auto">
-        {/* Header */}
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{routine.name}</h1>
-          <button onClick={handleExit} className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
-            <X className="w-6 h-6" />
-          </button>
+    <div
+      className="min-h-screen app-bg flex flex-col"
+      style={{ paddingTop: 'env(safe-area-inset-top)' }}
+    >
+      {/* Top bar */}
+      <div className="flex justify-between items-center px-4 pt-4 pb-2">
+        <div className="flex-1 min-w-0 pr-3">
+          <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+            {TYPE_LABEL[routine.type] ?? routine.type}
+          </p>
+          <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100 leading-tight truncate">
+            {routine.name}
+          </h1>
+        </div>
+        <button
+          onClick={handleExit}
+          className="w-9 h-9 flex items-center justify-center rounded-full bg-white/60 dark:bg-gray-700/60 text-gray-500 dark:text-gray-400 flex-shrink-0"
+        >
+          <X className="w-5 h-5" />
+        </button>
+      </div>
+
+      {/* Timer + progress */}
+      <div className="liquid-glass-panel mx-4 rounded-2xl p-5 mb-4">
+        <div
+          className="text-6xl font-mono font-bold text-center leading-none mb-4"
+          style={{ color: themeHex }}
+        >
+          {formatTime(elapsedTime)}
         </div>
 
-        {/* Timer */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg p-6 mb-6 text-center shadow-sm border border-gray-200 dark:border-gray-700">
-          <div className="text-5xl font-mono font-bold mb-2 text-gray-900 dark:text-gray-100">{formatTime(elapsedTime)}</div>
+        {/* Progress bar */}
+        <div className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden mb-3">
+          <div
+            className="h-full rounded-full transition-all duration-500"
+            style={{ width: `${progressPct}%`, backgroundColor: themeHex }}
+          />
+        </div>
+
+        {/* Stats row */}
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-gray-500 dark:text-gray-400">
+            Ronda <span className="font-semibold text-gray-700 dark:text-gray-300">{currentSeries}</span>/{routine.series}
+          </span>
           <button
             onClick={() => setIsPaused(!isPaused)}
-            className="text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 flex items-center gap-2 mx-auto"
+            className="flex items-center gap-1.5 text-sm font-semibold px-3 py-1.5 rounded-xl transition-colors"
+            style={{ color: themeHex, backgroundColor: themeHex + '15' }}
           >
-            {isPaused ? (
-              <>
-                <Play className="w-5 h-5" /> Reanudar
-              </>
-            ) : (
-              <>
-                <Pause className="w-5 h-5" /> Pausar
-              </>
-            )}
+            {isPaused
+              ? <><Play className="w-3.5 h-3.5" /> Reanudar</>
+              : <><Pause className="w-3.5 h-3.5" /> Pausar</>}
           </button>
+          <span className="text-sm text-gray-500 dark:text-gray-400">
+            <span className="font-semibold text-gray-700 dark:text-gray-300">{currentExerciseIndex + 1}</span>/{routine.exercises.length}
+          </span>
         </div>
+      </div>
 
-        {/* Progress */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg p-4 mb-6 shadow-sm border border-gray-200 dark:border-gray-700">
-          <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400 mb-2">
-            <span>
-              Ejercicio {currentExerciseIndex + 1} de {routine.exercises.length}
-            </span>
-            <span>
-              Ronda {currentSeries} de {routine.series}
-            </span>
-          </div>
-          <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-            <div
-              className="bg-primary-500 dark:bg-primary-400 h-2 rounded-full transition-all"
-              style={{
-                width: `${
-                  ((currentSeries - 1) * routine.exercises.length +
-                    currentExerciseIndex +
-                    1) /
-                  (routine.series * routine.exercises.length) *
-                  100
-                }%`
-              }}
-            />
-          </div>
-        </div>
-
-        {/* Current Exercise */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg p-6 mb-6 shadow-sm border border-gray-200 dark:border-gray-700">
-          <h2 className="text-2xl font-bold mb-4 text-gray-900 dark:text-gray-100">{currentExercise.name}</h2>
-
-          {currentExercise.imageUrl && (
-            <img
-              src={currentExercise.imageUrl}
-              alt={currentExercise.name}
-              className="w-full h-64 object-cover rounded-lg mb-4"
-            />
-          )}
-
-          {!currentExercise.imageUrl && currentExercise.instructions && (
-            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 mb-4 border border-blue-200 dark:border-blue-700/40">
-              <p className="text-xs font-semibold text-blue-500 dark:text-blue-400 uppercase tracking-wide mb-1">Cómo hacerlo</p>
-              <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{currentExercise.instructions}</p>
+      {/* Exercise card */}
+      <div className="mx-4 liquid-glass-panel rounded-2xl overflow-hidden mb-4">
+        {currentExercise.imageUrl && (
+          <div className="pt-2.5 px-2.5">
+            <div className="w-full aspect-square rounded-2xl overflow-hidden">
+              <img
+                src={currentExercise.imageUrl}
+                alt={currentExercise.name}
+                className="w-full h-full object-cover"
+              />
             </div>
-          )}
+          </div>
+        )}
+
+        <div className="p-5">
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 leading-tight mb-3">
+            {currentExercise.name}
+          </h2>
 
           {currentExercise.repetitions && (
-            <div className="bg-gray-100 dark:bg-gray-700 rounded-lg p-4 text-center border border-gray-200 dark:border-gray-600">
-              <p className="text-lg font-medium text-gray-900 dark:text-gray-100">{currentExercise.repetitions}</p>
+            <div
+              className="inline-flex items-center px-4 py-2 rounded-xl mb-3 self-start"
+              style={{ backgroundColor: themeHex + '15', color: themeHex }}
+            >
+              <span className="text-base font-semibold">{currentExercise.repetitions}</span>
             </div>
           )}
-        </div>
 
-        {/* Complete Button */}
+          {currentExercise.instructions && (
+            <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+              {currentExercise.instructions}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Complete button */}
+      <div
+        className="px-4"
+        style={{ paddingBottom: 'max(24px, env(safe-area-inset-bottom))' }}
+      >
         <button
           onClick={handleComplete}
-          className="w-full bg-primary-500 hover:bg-primary-600 text-white font-bold py-4 px-6 rounded-lg flex items-center justify-center gap-2 transition-colors"
+          className="w-full text-white font-bold py-4 px-6 rounded-2xl flex items-center justify-center gap-2 transition-opacity active:opacity-80"
+          style={{ backgroundColor: themeHex }}
         >
-          <Check className="w-6 h-6" />
-          Completar ejercicio
-          <ChevronRight className="w-6 h-6" />
+          {isLastExercise && isLastSeries
+            ? <Check className="w-5 h-5" />
+            : <ChevronRight className="w-5 h-5" />}
+          {btnLabel}
         </button>
       </div>
 
@@ -285,44 +308,43 @@ const RoutineExecution = () => {
           style={{ top: 0, left: 0, right: 0, bottom: 0, margin: 0 }}
         >
           <div className="flex items-center justify-center h-full pb-20 px-4">
-          <div className="liquid-glass-panel rounded-2xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-xl font-bold mb-1 text-gray-900 dark:text-gray-100">¡Rutina completada!</h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">Registra los datos de tu sesión (opcional)</p>
+            <div className="liquid-glass-panel rounded-2xl w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
+              <h2 className="text-xl font-bold mb-1 text-gray-900 dark:text-gray-100">¡Rutina completada!</h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">Registra los datos de tu sesión (opcional)</p>
 
-            <form onSubmit={handleSubmit(onSubmitStats)} className="space-y-4">
-              <div>
-                <label className="label">Calorías</label>
-                <input
-                  type="number"
-                  min="0"
-                  className="input-field"
-                  placeholder="kcal quemadas"
-                  {...register('calories')}
-                />
-              </div>
+              <form onSubmit={handleSubmit(onSubmitStats)} className="space-y-4">
+                <div>
+                  <label className="label">Calorías</label>
+                  <input
+                    type="number"
+                    min="0"
+                    className="input-field"
+                    placeholder="kcal quemadas"
+                    {...register('calories')}
+                  />
+                </div>
 
-              <div>
-                <label className="label">Kilómetros</label>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.1"
-                  className="input-field"
-                  placeholder="km recorridos"
-                  {...register('km')}
-                />
-              </div>
+                <div>
+                  <label className="label">Kilómetros</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    className="input-field"
+                    placeholder="km recorridos"
+                    {...register('km')}
+                  />
+                </div>
 
-              <button type="submit" className="btn-primary w-full">
-                Guardar y completar
-              </button>
-            </form>
-          </div>
+                <button type="submit" className="btn-primary w-full">
+                  Guardar y completar
+                </button>
+              </form>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Exit Confirmation Modal */}
       <ConfirmModal
         isOpen={showExitConfirm}
         onClose={() => setShowExitConfirm(false)}

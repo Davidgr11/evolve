@@ -261,7 +261,6 @@ const CheckinModal = ({ existing, onSave, onClose }) => {
   const [step, setStep]                 = useState(1);
   const [mealAdherence, setMeal]        = useState(existing?.mealAdherence ?? null);
   const [waterIntake, setWater]         = useState(existing?.waterIntake ?? null);
-  const [presenceLevel, setPresence]    = useState(existing?.presenceLevel ?? null);
   const [communityLevel, setCommunity]  = useState(existing?.communityLevel ?? null);
   const [emotionText, setEmotionText]   = useState('');
   const [growth, setGrowth]             = useState(existing?.growth ?? null);
@@ -270,7 +269,7 @@ const CheckinModal = ({ existing, onSave, onClose }) => {
 
   const buildEntry = (extra = {}) => ({
     mealAdherence, waterIntake,
-    presenceLevel, communityLevel,
+    communityLevel,
     growth,
     emotionText: extra.emotionText ?? '',
     emotionScore: extra.emotionScore ?? null,
@@ -286,12 +285,11 @@ const CheckinModal = ({ existing, onSave, onClose }) => {
         onClose();
         return;
       }
-      const presLabel   = presenceLevel === 2 ? '2+ veces' : presenceLevel === 1 ? 'una vez' : 'no';
       const socialLabel = SOCIAL_OPTIONS.find(o => o.value === communityLevel)?.label ?? 'no indicó';
       const prompt = `El usuario describe cómo se sintió hoy y cómo manejó sus emociones.
 
 TEXTO: "${emotionText.trim()}"
-CONTEXTO: presencia/reflexión ${presLabel} · socialización: ${socialLabel}
+CONTEXTO: socialización: ${socialLabel}
 
 Devuelve SOLO JSON:
 {"score": <0-100>, "response": "<2-3 oraciones empáticas en español, conectando con algo específico de su texto>"}
@@ -426,19 +424,6 @@ Criterios para el score:
             {!alreadyDone && step === 3 && (
               <>
                 <h3 className="font-bold text-lg text-gray-900 dark:text-gray-100">Emocional</h3>
-                <div className="space-y-2">
-                  <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Presencia y reflexión</p>
-                  <p className="text-sm text-gray-400 dark:text-gray-500">¿Te diste un espacio para respirar, meditar, agradecer o reflexionar?</p>
-                  <div className="grid grid-cols-3 gap-2">
-                    {PRESENCE_OPTIONS.map(o => (
-                      <button key={o.value} onClick={() => setPresence(o.value)}
-                        className={`py-3 rounded-xl flex flex-col items-center gap-1 transition-all border-2 ${presenceLevel === o.value ? o.accent : 'bg-white/50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400'}`}>
-                        <span className="text-xl">{o.emoji}</span>
-                        <span className="text-xs font-medium">{o.label}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
                 <div className="space-y-2">
                   <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Socialización</p>
                   <div className="space-y-2">

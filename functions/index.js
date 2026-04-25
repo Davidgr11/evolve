@@ -160,7 +160,7 @@ exports.ttsSpeak = onCall(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'tts-1-hd',
+        model: 'tts-1',
         input: text,
         voice,
         response_format: 'mp3',

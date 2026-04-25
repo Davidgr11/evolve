@@ -721,6 +721,7 @@ const Meditate = () => {
     if (id === 'none') { setPreviewId(null); setPreviewProgress(0); return; }
 
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    ctx.resume(); // required on iOS Safari — context starts suspended
     previewCtxRef.current = ctx;
     previewRef.current = startAmbient(id, ctx);
     setPreviewId(id);
@@ -776,6 +777,7 @@ const Meditate = () => {
     if (audioCtxRef.current) {
       setTimeout(() => { try { audioCtxRef.current?.close(); } catch {} audioCtxRef.current = null; }, 3200);
     }
+    if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
     if (!completed) {
       setStep('setup'); setShowThemes(false); setElapsed(0); setPhrase(''); setPhraseOn(false);
       spokenRef.current = new Set(); audioBuffsRef.current = [];
@@ -803,13 +805,13 @@ const Meditate = () => {
   }, [user]);
 
   // ── Begin session ──
-  const beginSession = useCallback((phrases, secs, buffers, onComplete) => {
+  const beginSession = useCallback((phrases, secs, buffers, ctx, onComplete) => {
     phrasesRef.current    = phrases;
     timesRef.current      = phraseTimes(secs, phrases.length);
     spokenRef.current     = new Set();
     audioBuffsRef.current = buffers || [];
 
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    // ctx already created + resumed synchronously in the user gesture handler
     audioCtxRef.current = ctx;
     ambientRef.current  = startAmbient(sound, ctx);
 
@@ -849,6 +851,21 @@ const Meditate = () => {
     if (!isCustom && !themeId) { toast.error('Selecciona una temática'); return; }
     if (isCustom && !customText.trim()) { toast.error('Escribe sobre qué quieres meditar'); return; }
 
+    // Create and unlock AudioContext synchronously HERE, inside the user gesture,
+    // before any await. iOS Safari suspends any context created after an await.
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    ctx.resume();
+
+    // Declare as media playback so iOS uses media volume (not ringer switch)
+    // and interrupts other audio (music/podcasts) correctly.
+    if ('mediaSession' in navigator) {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: 'Meditación guiada',
+        artist: 'Evolve',
+      });
+      navigator.mediaSession.playbackState = 'playing';
+    }
+
     setIsLoading(true);
     let rawPhrases = [];
     let themeLabel = 'Personalizado';
@@ -864,24 +881,25 @@ const Meditate = () => {
         rawPhrases = txt.split('\n').map(l => l.trim()).filter(Boolean).slice(0, count);
       } else {
         const theme = findTheme(themeId);
-        if (!theme) { toast.error('Selecciona una temática'); setIsLoading(false); return; }
+        if (!theme) { toast.error('Selecciona una temática'); ctx.close(); setIsLoading(false); return; }
         rawPhrases = selectPhrases(theme.phrases, duration.mins);
         themeLabel = theme.label;
       }
 
-      const tmpCtx = new (window.AudioContext || window.webkitAudioContext)();
+      // Decode using the same already-running ctx — no tmpCtx needed
       const buffers = await Promise.all(rawPhrases.map(async (text) => {
         try {
           const b64 = await ttsSpeak(text);
-          return await decodeBase64Audio(tmpCtx, b64);
+          return await decodeBase64Audio(ctx, b64);
         } catch { return null; }
       }));
-      await tmpCtx.close();
 
       setIsLoading(false);
       setCompletedMeta({ mins: duration.mins, themeLabel });
-      beginSession(rawPhrases, duration.secs, buffers, () => saveMeditation(themeLabel, duration.mins, tid));
+      beginSession(rawPhrases, duration.secs, buffers, ctx, () => saveMeditation(themeLabel, duration.mins, tid));
     } catch {
+      ctx.close();
+      if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
       setIsLoading(false);
       toast.error('Error al iniciar la sesión');
     }

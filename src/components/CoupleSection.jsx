@@ -392,7 +392,7 @@ const EventFormModal = ({ isOpen, onClose, onSave, editingEvent, coupleId }) => 
 
 // ── ItemFormModal ─────────────────────────────────────────────────────────────
 
-const ItemFormModal = ({ isOpen, onClose, onSave, editingItem, type }) => {
+const ItemFormModal = ({ isOpen, onClose, onSave, editingItem, type, hideDate = false }) => {
   const [name, setName] = useState('');
   const [price, setPrice] = useState('');
   const [url, setUrl] = useState('');
@@ -479,7 +479,7 @@ const ItemFormModal = ({ isOpen, onClose, onSave, editingItem, type }) => {
                   <label className="label">URL / Link</label>
                   <input className="input-field" type="text" inputMode="url" placeholder="https://..." value={url} onChange={(e) => setUrl(e.target.value)} />
                 </div>
-                {type === 'global-idea' && (
+                {type === 'global-idea' && !hideDate && (
                   <div>
                     <label className="label">Fecha</label>
                     <input type="date" className="input-field" value={planDate} onChange={(e) => setPlanDate(e.target.value)} />
@@ -802,27 +802,6 @@ const EventDetailModal = ({ isOpen, onClose, event, coupleId, onEventDeleted }) 
                 </button>
               </div>
 
-              {showAddReminder && (
-                <div className="fixed z-[60] liquid-glass-overlay" style={{ top: 0, left: 0, right: 0, bottom: 0, margin: 0 }} onClick={() => { setShowAddReminder(false); setReminderText(''); setReminderDate(''); }}>
-                  <div className="flex items-center justify-center h-full px-4 pb-20">
-                    <div className="liquid-glass-panel rounded-2xl w-full max-w-xs p-5" onClick={e => e.stopPropagation()}>
-                      <div className="flex justify-between items-center mb-2">
-                        <h3 className="font-bold text-lg text-gray-900 dark:text-gray-100">Nuevo recordatorio</h3>
-                        <button onClick={() => { setShowAddReminder(false); setReminderText(''); setReminderDate(''); }}><X className="w-5 h-5 text-gray-400" /></button>
-                      </div>
-                      <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">Una tarea o cosa que no quieres olvidar</p>
-                      <input autoFocus type="text" className="input-field mb-3" placeholder="Ej. Comprar regalo..." value={reminderText} onChange={e => setReminderText(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddReminder()} />
-                      <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide block mb-1.5">Fecha límite (opcional)</label>
-                      <input type="date" className="input-field mb-4" value={reminderDate} onChange={e => setReminderDate(e.target.value)} />
-                      <div className="flex gap-2">
-                        <button onClick={() => { setShowAddReminder(false); setReminderText(''); setReminderDate(''); }} className="btn-secondary flex-1">Cancelar</button>
-                        <button onClick={handleAddReminder} disabled={!reminderText.trim()} className="btn-primary flex-1 disabled:opacity-50">Añadir</button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
               {reminders.length === 0 ? (
                 <EmptyState message="Sin recordatorios aún" />
               ) : (
@@ -845,41 +824,6 @@ const EventDetailModal = ({ isOpen, onClose, event, coupleId, onEventDeleted }) 
                       <button onClick={() => handleDeleteReminder(rem)} className="p-1.5 text-gray-300 dark:text-gray-600 hover:text-red-400 flex-shrink-0"><Trash2 className="w-3.5 h-3.5" /></button>
                     </div>
                   ))}
-                </div>
-              )}
-            </div>
-
-            {/* Ideas de regalo (collapsible) */}
-            <div className="liquid-glass-panel rounded-2xl overflow-hidden">
-              <button onClick={() => setIdeasOpen(v => !v)} className="w-full flex items-center justify-between p-4 text-left">
-                <h3 className="font-semibold text-gray-800 dark:text-gray-200 flex items-center gap-2">
-                  <Gift className="w-4 h-4 text-pink-500" />
-                  Ideas de regalo
-                  {eventIdeas.length > 0 && <span className="text-xs text-gray-400 dark:text-gray-500 font-normal">{eventIdeas.length}</span>}
-                </h3>
-                {ideasOpen ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
-              </button>
-              {ideasOpen && (
-                <div className="px-4 pb-4 space-y-3">
-                  <div className="flex justify-end">
-                    <button onClick={() => { setEditingIdea(null); setShowIdeaModal(true); }} className="btn-primary flex items-center gap-1.5 py-1.5 px-3 text-sm">
-                      <Plus className="w-4 h-4" /> Añadir idea
-                    </button>
-                  </div>
-                  {eventIdeas.length === 0 ? <EmptyState message="Sin ideas de regalo aún" /> : (
-                    <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleIdeasDragEnd}>
-                      <SortableContext items={eventIdeas.map((i) => i.id)} strategy={verticalListSortingStrategy}>
-                        <div className="space-y-3">
-                          {eventIdeas.map((item) => (
-                            <SortableItemCard key={item.id} item={item}
-                              onEdit={() => { setEditingIdea(item); setShowIdeaModal(true); }}
-                              onDelete={() => setDeleteItemConfirm({ isOpen: true, item, col: 'ideas' })}
-                            />
-                          ))}
-                        </div>
-                      </SortableContext>
-                    </DndContext>
-                  )}
                 </div>
               )}
             </div>
@@ -918,12 +862,67 @@ const EventDetailModal = ({ isOpen, onClose, event, coupleId, onEventDeleted }) 
                 </div>
               )}
             </div>
+
+            {/* Ideas de regalo (collapsible) */}
+            <div className="liquid-glass-panel rounded-2xl overflow-hidden">
+              <button onClick={() => setIdeasOpen(v => !v)} className="w-full flex items-center justify-between p-4 text-left">
+                <h3 className="font-semibold text-gray-800 dark:text-gray-200 flex items-center gap-2">
+                  <Gift className="w-4 h-4 text-pink-500" />
+                  Ideas de regalo
+                  {eventIdeas.length > 0 && <span className="text-xs text-gray-400 dark:text-gray-500 font-normal">{eventIdeas.length}</span>}
+                </h3>
+                {ideasOpen ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+              </button>
+              {ideasOpen && (
+                <div className="px-4 pb-4 space-y-3">
+                  <div className="flex justify-end">
+                    <button onClick={() => { setEditingIdea(null); setShowIdeaModal(true); }} className="btn-primary flex items-center gap-1.5 py-1.5 px-3 text-sm">
+                      <Plus className="w-4 h-4" /> Añadir idea
+                    </button>
+                  </div>
+                  {eventIdeas.length === 0 ? <EmptyState message="Sin ideas de regalo aún" /> : (
+                    <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleIdeasDragEnd}>
+                      <SortableContext items={eventIdeas.map((i) => i.id)} strategy={verticalListSortingStrategy}>
+                        <div className="space-y-3">
+                          {eventIdeas.map((item) => (
+                            <SortableItemCard key={item.id} item={item}
+                              onEdit={() => { setEditingIdea(item); setShowIdeaModal(true); }}
+                              onDelete={() => setDeleteItemConfirm({ isOpen: true, item, col: 'ideas' })}
+                            />
+                          ))}
+                        </div>
+                      </SortableContext>
+                    </DndContext>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
 
       {/* Sub-modals - stop propagation so backdrop click doesn't close EventDetailModal */}
       <div onClick={(e) => e.stopPropagation()}>
+        {showAddReminder && (
+          <div className="fixed z-[60] liquid-glass-overlay" style={{ top: 0, left: 0, right: 0, bottom: 0, margin: 0 }} onClick={() => { setShowAddReminder(false); setReminderText(''); setReminderDate(''); }}>
+            <div className="flex items-center justify-center h-full px-4 pb-20">
+              <div className="liquid-glass-panel rounded-2xl w-full max-w-xs p-5" onClick={e => e.stopPropagation()}>
+                <div className="flex justify-between items-center mb-2">
+                  <h3 className="font-bold text-lg text-gray-900 dark:text-gray-100">Nuevo recordatorio</h3>
+                  <button onClick={() => { setShowAddReminder(false); setReminderText(''); setReminderDate(''); }}><X className="w-5 h-5 text-gray-400" /></button>
+                </div>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">Una tarea o cosa que no quieres olvidar</p>
+                <input autoFocus type="text" className="input-field mb-3" placeholder="Ej. Comprar regalo..." value={reminderText} onChange={e => setReminderText(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddReminder()} />
+                <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide block mb-1.5">Fecha límite (opcional)</label>
+                <input type="date" className="input-field mb-4" value={reminderDate} onChange={e => setReminderDate(e.target.value)} />
+                <div className="flex gap-2">
+                  <button onClick={() => { setShowAddReminder(false); setReminderText(''); setReminderDate(''); }} className="btn-secondary flex-1">Cancelar</button>
+                  <button onClick={handleAddReminder} disabled={!reminderText.trim()} className="btn-primary flex-1 disabled:opacity-50">Añadir</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
         <ItemFormModal
           isOpen={showIdeaModal}
           onClose={() => { setShowIdeaModal(false); setEditingIdea(null); }}
@@ -937,6 +936,7 @@ const EventDetailModal = ({ isOpen, onClose, event, coupleId, onEventDeleted }) 
           onSave={handleSavePlan}
           editingItem={editingPlan}
           type="global-idea"
+          hideDate
         />
         <EventFormModal
           isOpen={showEventModal}
@@ -1087,7 +1087,7 @@ const CoupleSection = () => {
                         ? `${anniversary.years} año${anniversary.years !== 1 ? 's' : ''} juntos`
                         : `${anniversary.totalDays} días juntos`}
                     </p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
                       {anniversary.daysUntilNext === 0
                         ? '🎉 ¡Hoy es su aniversario!'
                         : `${anniversary.daysUntilNext} días para el próximo aniversario`}
@@ -1104,7 +1104,7 @@ const CoupleSection = () => {
                 <div className="flex items-center gap-2">
                   <MapPin className="w-4 h-4 text-blue-500" />
                   <span className="font-medium text-gray-900 dark:text-gray-100 text-sm">Planes</span>
-                  {ideas.length > 0 && <span className="text-xs text-gray-400 dark:text-gray-500">{ideas.length}</span>}
+                  {ideas.length > 0 && <span className="text-sm text-gray-400 dark:text-gray-500">{ideas.length}</span>}
                 </div>
                 <ChevronRight className="w-4 h-4 text-gray-400" />
               </button>

@@ -170,7 +170,7 @@ const Food = () => {
   // Meal Plan
   const [mealPlan, setMealPlan] = useState(null);
   const [showPlanSetupModal, setShowPlanSetupModal] = useState(false);
-  const [planSetupForm, setPlanSetupForm] = useState({ goal: '', lifestyle: '', restrictions: '' });
+  const [planSetupForm, setPlanSetupForm] = useState({ goal: '', lifestyle: '', restrictions: '', currentDiet: '' });
   const [mealLoading, setMealLoading] = useState(false);
   const [showEvalModal, setShowEvalModal] = useState(false);
   const [evalResult, setEvalResult] = useState('');
@@ -371,8 +371,10 @@ Perfil:
 - Objetivo: ${goalLabel}
 - Estilo de vida: ${lifestyleLabel}
 ${planSetupForm.restrictions ? `- Restricciones: ${planSetupForm.restrictions}` : ''}
+${planSetupForm.currentDiet ? `- Lo que normalmente come: ${planSetupForm.currentDiet}` : ''}
 
 Reglas:
+- Si el usuario indicó lo que come normalmente, adapta el plan de forma gradual: mantén ingredientes que ya usa y sugiere mejoras concretas (ej. sustituye jamón por espinaca, agrega aguacate al desayuno habitual, etc.)
 - Aplica principios de longevidad (mediterráneo, antiinflamatorio, alta fibra, proteína de calidad)
 - Usa ingredientes accesibles en México; menciona marcas mexicanas si es útil (Lala, Alpura, Costco, etc.)
 - Cada opción: nombre corto (3-7 palabras) + descripción práctica con cantidades y contexto (máx 25 palabras)
@@ -380,6 +382,7 @@ Reglas:
 
 Responde SOLO con este JSON:
 {
+  "considerations": "<1-2 oraciones sobre qué se consideró y qué se adaptó respecto a sus hábitos actuales, en español>",
   "slots": [
     {"name": "Desayuno", "options": [{"name": "...", "description": "..."}, ...]},
     {"name": "Snack AM", "options": [{"name": "...", "description": "..."}, ...]},
@@ -389,10 +392,11 @@ Responde SOLO con este JSON:
   ]
 }`;
 
-      const text = await callClaude(prompt, 1400);
+      const text = await callClaude(prompt, 1600);
       const parsed = JSON.parse(text);
       const plan = {
         slots: parsed.slots,
+        considerations: parsed.considerations || '',
         setup: planSetupForm,
         generatedAt: new Date().toISOString(),
       };
@@ -797,6 +801,12 @@ SUGERENCIA: [nombre corto]: [descripción breve de ingredientes, máx 20 palabra
             </div>
           ) : (
             <div className="space-y-3">
+              {mealPlan.considerations && (
+                <div className="px-4 py-3 rounded-2xl bg-blue-50/60 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-800/40">
+                  <p className="text-xs font-semibold text-blue-500 dark:text-blue-400 uppercase tracking-wide mb-1">Lo que se consideró</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">{mealPlan.considerations}</p>
+                </div>
+              )}
               {mealPlan.slots.map((slot) => (
                 <div key={slot.name} className="liquid-glass-panel rounded-2xl overflow-hidden">
                   <div className="px-4 pt-4 pb-2">
@@ -808,9 +818,12 @@ SUGERENCIA: [nombre corto]: [descripción breve de ingredientes, máx 20 palabra
                       const isOpen = expandedMealOption === optKey;
                       return (
                         <div key={idx} className="rounded-xl overflow-hidden mb-0.5">
-                          <button
+                          <div
+                            role="button"
+                            tabIndex={0}
                             onClick={() => setExpandedMealOption(isOpen ? null : optKey)}
-                            className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/50 dark:hover:bg-gray-700/50 transition-colors text-left"
+                            onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && setExpandedMealOption(isOpen ? null : optKey)}
+                            className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-white/50 dark:hover:bg-gray-700/50 transition-colors text-left cursor-pointer"
                           >
                             <div className="w-9 h-9 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center flex-shrink-0 overflow-hidden border border-gray-200/60 dark:border-gray-600/60">
                               {option.imageUrl ? (
@@ -826,7 +839,7 @@ SUGERENCIA: [nombre corto]: [descripción breve de ingredientes, máx 20 palabra
                             >
                               <Edit className="w-3.5 h-3.5" />
                             </button>
-                          </button>
+                          </div>
                           {isOpen && (
                             <div className="px-4 pb-3 pt-0.5">
                               <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed whitespace-pre-line">
@@ -1024,7 +1037,7 @@ SUGERENCIA: [nombre corto]: [descripción breve de ingredientes, máx 20 palabra
                 {/* Action buttons */}
                 <div className="flex gap-2">
                   <button
-                    onClick={() => { setShoppingForm({ title: '' }); setSelectedLabels([]); setShoppingItemModal('add'); }}
+                    onClick={() => { setShoppingForm({ title: '', note: '' }); setSelectedLabels([]); setShoppingItemModal('add'); }}
                     className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl btn-primary text-sm font-medium"
                   >
                     <Plus className="w-4 h-4" />
@@ -1144,6 +1157,22 @@ SUGERENCIA: [nombre corto]: [descripción breve de ingredientes, máx 20 palabra
                       </div>
                     </div>
 
+                    {/* Current diet */}
+                    <div>
+                      <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                        ¿Qué comes normalmente?{' '}
+                        <span className="text-gray-400 font-normal">(opcional)</span>
+                      </p>
+                      <p className="text-sm text-gray-400 mb-2">El plan se adaptará gradualmente a tus hábitos actuales</p>
+                      <textarea
+                        className="input-field resize-none"
+                        rows={3}
+                        placeholder="ej. Desayuno huevos con jamón, como tortas o comida corrida, ceno quesadillas..."
+                        value={planSetupForm.currentDiet}
+                        onChange={e => setPlanSetupForm(f => ({ ...f, currentDiet: e.target.value }))}
+                      />
+                    </div>
+
                     {/* Restrictions */}
                     <div>
                       <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">
@@ -1152,7 +1181,7 @@ SUGERENCIA: [nombre corto]: [descripción breve de ingredientes, máx 20 palabra
                       </p>
                       <textarea
                         className="input-field resize-none"
-                        rows={3}
+                        rows={2}
                         placeholder="ej. Soy vegetariano, no me gusta el pescado, sin gluten..."
                         value={planSetupForm.restrictions}
                         onChange={e => setPlanSetupForm(f => ({ ...f, restrictions: e.target.value }))}

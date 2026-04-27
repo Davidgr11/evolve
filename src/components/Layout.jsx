@@ -6,7 +6,7 @@ const Layout = () => {
     { path: '/home',     icon: Home,      label: 'Inicio' },
     { path: '/food',     icon: Salad,     label: 'Nutre' },
     { path: '/move',     icon: Zap,       label: 'Activa' },
-    { path: '/books',    icon: Lightbulb, label: 'Aprende' },
+    { path: '/books',    icon: Lightbulb, label: 'Crece' },
     { path: '/meditate', icon: Wind,      label: 'Medita' },
   ];
 

@@ -232,6 +232,14 @@ Responde solo en texto plano — sin markdown, sin asteriscos, sin encabezados. 
               </p>
               <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide font-medium">km</p>
             </div>
+            <div className="w-px bg-gray-100 dark:bg-gray-700 mx-4" />
+            <div className="flex-1 flex flex-col items-center gap-1">
+              <Dumbbell className="w-5 h-5 text-purple-400 mb-0.5" />
+              <p className="text-3xl font-bold text-gray-900 dark:text-gray-100 leading-none">
+                {(stats.year.stretch || 0) + (stats.year.workout || 0) + (stats.year.running || 0) + (stats.year.sports || 0)}
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide font-medium">rutinas</p>
+            </div>
           </div>
         </div>
       </div>
@@ -308,7 +316,7 @@ Responde solo en texto plano — sin markdown, sin asteriscos, sin encabezados. 
 
                     {/* Meta */}
                     <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">
-                      {routine.exercises?.length || 0} ejercicios · {routine.series} ronda{routine.series !== 1 ? 's' : ''}
+                      {routine.youtubeUrl ? 'YouTube' : `${routine.exercises?.length || 0} ejercicio${(routine.exercises?.length || 0) !== 1 ? 's' : ''}`}
                     </p>
 
                     {/* Weekly goal progress */}

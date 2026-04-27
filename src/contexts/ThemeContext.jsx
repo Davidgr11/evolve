@@ -21,7 +21,10 @@ export const useTheme = () => {
 export const ThemeProvider = ({ children }) => {
   const { user } = useAuth();
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'light');
-  const [colorTheme, setColorThemeState] = useState(() => localStorage.getItem('colorTheme') || 'blue');
+  const [colorTheme, setColorThemeState] = useState(() => {
+    const stored = localStorage.getItem('colorTheme') || 'blue';
+    return stored === 'rosa' ? 'orange' : stored;
+  });
 
   // Apply dark/light class
   useEffect(() => {
@@ -54,7 +57,10 @@ export const ThemeProvider = ({ children }) => {
       if (snap.exists()) {
         const data = snap.data();
         if (data.theme && data.theme !== theme) setTheme(data.theme);
-        if (data.colorTheme && data.colorTheme !== colorTheme) setColorThemeState(data.colorTheme);
+        if (data.colorTheme && data.colorTheme !== colorTheme) {
+          const normalizedTheme = data.colorTheme === 'rosa' ? 'orange' : data.colorTheme;
+          setColorThemeState(normalizedTheme);
+        }
       }
     } catch (err) {
       console.error('Failed to load theme:', err);

@@ -15,16 +15,7 @@ import ConfirmModal from '../components/ConfirmModal';
 import { callClaude, searchGoogleBooks } from '../utils/cloudApi';
 import confetti from 'canvas-confetti';
 
-const LEARNING_EMOJIS = ['💡', '🎯', '📖', '🔬', '🎨', '💻', '🌍', '⚡', '🔑', '🧠', '🚀', '🎵'];
-const getItemEmoji = (id) => LEARNING_EMOJIS[Number(id.slice(-3)) % LEARNING_EMOJIS.length];
-
 const THEME_HEX = { blue: '#3b82f6', purple: '#8b5cf6', orange: '#f97316', teal: '#0d9488' };
-const THEME_BG  = {
-  blue:   'bg-blue-500   border-blue-500',
-  purple: 'bg-purple-500 border-purple-500',
-  orange: 'bg-orange-500 border-orange-500',
-  teal:   'bg-teal-600   border-teal-600',
-};
 
 const STATUS_LABEL_ES = {
   reading:    'Leyendo',
@@ -136,11 +127,6 @@ const Books = () => {
   const [goalInput, setGoalInput]           = useState('12');
   const [prevSuggestions, setPrevSuggestions] = useState([]);
 
-  const [learningItems, setLearningItems]         = useState([]);
-  const [learningInput, setLearningInput]         = useState('');
-  const [learningEmoji, setLearningEmoji]         = useState(LEARNING_EMOJIS[0]);
-  const [showAddLearningModal, setShowAddLearningModal] = useState(false);
-
   // Single modal for all AI results
   const [aiModal, setAiModal] = useState(null);
 
@@ -149,10 +135,9 @@ const Books = () => {
 
   const loadData = async () => {
     try {
-      const [snap, goalSnap, menteSnap] = await Promise.all([
+      const [snap, goalSnap] = await Promise.all([
         getDocs(collection(db, `users/${user.uid}/books`)),
         getDoc(doc(db, `users/${user.uid}/data`, 'books')),
-        getDoc(doc(db, `users/${user.uid}/mente`, 'data')),
       ]);
       const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       setBooks(data);
@@ -162,41 +147,8 @@ const Books = () => {
         setAnnualGoal(g);
         setGoalInput(String(g));
       }
-      if (menteSnap.exists()) {
-        setLearningItems(menteSnap.data().learningItems || []);
-      }
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
-  };
-
-  const saveLearningItemsToDb = async (items) => {
-    try {
-      await setDoc(doc(db, `users/${user.uid}/mente`, 'data'), { learningItems: items }, { merge: true });
-    } catch { toast.error('Error al guardar'); }
-  };
-
-  const handleAddLearningItem = async () => {
-    const name = learningInput.trim();
-    if (!name) return;
-    const newItem = { id: Date.now().toString(), name, emoji: learningEmoji, completed: false, createdAt: new Date().toISOString() };
-    const updated = [...learningItems, newItem];
-    setLearningItems(updated);
-    setLearningInput('');
-    setLearningEmoji(LEARNING_EMOJIS[0]);
-    setShowAddLearningModal(false);
-    await saveLearningItemsToDb(updated);
-  };
-
-  const handleToggleLearningItem = async (id) => {
-    const updated = learningItems.map(i => i.id === id ? { ...i, completed: !i.completed } : i);
-    setLearningItems(updated);
-    await saveLearningItemsToDb(updated);
-  };
-
-  const handleDeleteLearningItem = async (id) => {
-    const updated = learningItems.filter(i => i.id !== id);
-    setLearningItems(updated);
-    await saveLearningItemsToDb(updated);
   };
 
   const saveAnnualGoal = async (value) => {
@@ -363,29 +315,6 @@ const Books = () => {
     } catch { toast.error('Error al obtener sugerencias'); setAiModal(null); }
   };
 
-  const handleGrowthAnalysis = async () => {
-    setAiModal({ type: 'growth-analysis', content: '', loading: true });
-    try {
-      const completedItems = learningItems.filter(i => i.completed).map(i => i.name);
-      const pendingItems   = learningItems.filter(i => !i.completed).map(i => i.name);
-      const prompt = `Eres un coach de crecimiento personal positivo y motivador. Datos del usuario:
-
-LIBROS: ${readBooks.length} leídos en total, ${booksThisYear} este año (meta: ${annualGoal}).
-APRENDIZAJES: ${completedItems.length} de ${learningItems.length} temas completados.
-Completados: ${completedItems.length > 0 ? completedItems.join(', ') : 'ninguno aún'}
-Por alcanzar: ${pendingItems.length > 0 ? pendingItems.join(', ') : 'ninguno'}
-
-Responde directamente en español, sin títulos ni encabezados. Exactamente 3 oraciones:
-1) Qué va muy bien en tu crecimiento (sé genuino y específico con los datos).
-2) De los temas pendientes, cuál es más valioso o interesante y por qué vale la pena perseguirlo.
-3) Una acción concreta y motivadora para esta semana que te acerque a tus metas de aprendizaje.
-
-Tono: alentador y enfocado en el potencial. Los temas pendientes son metas emocionantes, no deudas. Plain text, sin markdown. Dirígete en segunda persona.`;
-      const text = await callClaude(prompt, 250);
-      setAiModal({ type: 'growth-analysis', content: text, loading: false });
-    } catch { toast.error('Error al analizar'); setAiModal(null); }
-  };
-
   const handleAiSummary = async (book) => {
     setAiModal({ type: 'summary', book, content: '', loading: true });
     try {
@@ -435,14 +364,7 @@ Tono: alentador y enfocado en el potencial. Los temas pendientes son metas emoci
 
         {/* Header */}
         <div className="flex justify-between items-center">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 leading-tight">Mente</h1>
-          <button
-            onClick={handleGrowthAnalysis}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/70 dark:bg-gray-800/70 border border-blue-100 dark:border-blue-800 text-blue-600 dark:text-blue-400 hover:bg-white dark:hover:bg-gray-800 transition-colors text-sm font-medium shadow-sm"
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            Analizar crecimiento
-          </button>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 leading-tight">Crecimiento</h1>
         </div>
 
         {/* Migration banner */}
@@ -469,83 +391,6 @@ Tono: alentador y enfocado en el potencial. Los temas pendientes son metas emoci
             </div>
           </div>
         )}
-
-        {/* ── Aprendizajes ── */}
-        <p className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Aprendizajes</p>
-
-        <div className="liquid-glass-panel rounded-2xl p-4">
-          {/* Header: stat + add button */}
-          {(() => {
-            const completedCount = learningItems.filter(i => i.completed).length;
-            const total = learningItems.length;
-            const allDone = total > 0 && completedCount >= total;
-            const themeHex = THEME_HEX[colorTheme] ?? '#3b82f6';
-            return (
-              <>
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-end gap-2">
-                    <span className="text-4xl font-bold leading-none" style={{ color: themeHex }}>
-                      {completedCount}
-                    </span>
-                    <span className="text-lg text-gray-400 dark:text-gray-500 mb-0.5">
-                      / {total} completados
-                    </span>
-                    {allDone && total > 0 && <span className="text-sm mb-0.5">🎉</span>}
-                  </div>
-                  <button
-                    onClick={() => setShowAddLearningModal(true)}
-                    className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white/70 dark:bg-gray-800/70 border border-blue-100 dark:border-blue-800 text-blue-600 dark:text-blue-400 hover:bg-white dark:hover:bg-gray-800 transition-colors text-sm font-medium shadow-sm flex-shrink-0"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Añadir
-                  </button>
-                </div>
-                {total > 0 && (
-                  <div className="h-2.5 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden mb-3">
-                    <div
-                      className="h-full rounded-full transition-all duration-500"
-                      style={{ width: `${Math.min(100, completedCount / total * 100)}%`, backgroundColor: themeHex }}
-                    />
-                  </div>
-                )}
-              </>
-            );
-          })()}
-
-          {/* Items list — max 2 visible, scroll for rest */}
-          {learningItems.length === 0 ? (
-            <p className="text-sm text-gray-400 dark:text-gray-500 py-1">
-              Añade los temas que quieres aprender este año
-            </p>
-          ) : (
-            <div className="max-h-[92px] overflow-y-auto space-y-1 pr-0.5">
-              {learningItems.map(item => (
-                <div key={item.id} className="flex items-center gap-3 py-2 border-b border-gray-100 dark:border-gray-700/50 last:border-0">
-                  <span className="text-base leading-none flex-shrink-0">{item.emoji || getItemEmoji(item.id)}</span>
-                  <button
-                    onClick={() => handleToggleLearningItem(item.id)}
-                    className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
-                      item.completed
-                        ? `${THEME_BG[colorTheme] || 'bg-blue-500 border-blue-500'}`
-                        : 'border-gray-300 dark:border-gray-600'
-                    }`}
-                  >
-                    {item.completed && <span className="text-white text-xs leading-none">✓</span>}
-                  </button>
-                  <span className={`flex-1 text-sm min-w-0 truncate ${item.completed ? 'line-through text-gray-400 dark:text-gray-500' : 'text-gray-800 dark:text-gray-200'}`}>
-                    {item.name}
-                  </span>
-                  <button
-                    onClick={() => handleDeleteLearningItem(item.id)}
-                    className="text-gray-300 dark:text-gray-600 hover:text-red-400 transition-colors flex-shrink-0 p-1"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
 
         {/* ── Libros ── */}
         <p className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Libros</p>
@@ -779,54 +624,6 @@ Tono: alentador y enfocado en el potencial. Los temas pendientes son metas emoci
         </div>
       )}
 
-      {/* ── Add learning item modal ── */}
-      {showAddLearningModal && (
-        <div className="fixed z-50 liquid-glass-overlay" style={{ top: 0, left: 0, right: 0, bottom: 0, margin: 0 }} onClick={() => { setShowAddLearningModal(false); setLearningInput(''); setLearningEmoji(LEARNING_EMOJIS[0]); }}>
-          <div className="flex items-center justify-center h-full px-4 pb-20">
-            <div className="liquid-glass-panel rounded-2xl w-full max-w-xs p-5" onClick={e => e.stopPropagation()}>
-              <div className="flex justify-between items-center mb-2">
-                <h3 className="font-bold text-lg text-gray-900 dark:text-gray-100">Nuevo aprendizaje</h3>
-                <button onClick={() => { setShowAddLearningModal(false); setLearningInput(''); setLearningEmoji(LEARNING_EMOJIS[0]); }}><X className="w-5 h-5 text-gray-400" /></button>
-              </div>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                Un tema, habilidad o área que quieres dominar este año
-              </p>
-
-              {/* Emoji picker */}
-              <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">Ícono</p>
-              <div className="grid grid-cols-6 gap-1.5 mb-4">
-                {LEARNING_EMOJIS.map(e => (
-                  <button
-                    key={e}
-                    onClick={() => setLearningEmoji(e)}
-                    className={`text-xl py-1.5 rounded-xl transition-all ${learningEmoji === e ? 'bg-blue-100 dark:bg-blue-900/40 ring-2 ring-blue-400 scale-110' : 'bg-gray-50 dark:bg-gray-800/60 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
-                  >
-                    {e}
-                  </button>
-                ))}
-              </div>
-
-              <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">Tema</p>
-              <input
-                type="text"
-                autoFocus
-                className="input-field mb-4"
-                value={learningInput}
-                onChange={e => setLearningInput(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === 'Enter') handleAddLearningItem();
-                  if (e.key === 'Escape') { setShowAddLearningModal(false); setLearningInput(''); setLearningEmoji(LEARNING_EMOJIS[0]); }
-                }}
-              />
-              <div className="flex gap-2">
-                <button onClick={() => { setShowAddLearningModal(false); setLearningInput(''); setLearningEmoji(LEARNING_EMOJIS[0]); }} className="btn-secondary flex-1">Cancelar</button>
-                <button onClick={handleAddLearningItem} disabled={!learningInput.trim()} className="btn-primary flex-1 disabled:opacity-50">Añadir</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* ── AI Modal ── */}
       {aiModal && (
         <div className="fixed z-50 liquid-glass-overlay" style={{ top: 0, left: 0, right: 0, bottom: 0, margin: 0 }} onClick={() => !aiModal.loading && setAiModal(null)}>
@@ -848,19 +645,6 @@ Tono: alentador y enfocado en el potencial. Los temas pendientes son metas emoci
                       : 'Analizando...'}
                   </p>
                 </div>
-              )}
-
-              {/* Growth analysis */}
-              {!aiModal.loading && aiModal.type === 'growth-analysis' && (
-                <>
-                  <div className="flex justify-between items-center px-5 pt-5 pb-3 flex-shrink-0 border-b border-gray-100 dark:border-gray-700/50">
-                    <h3 className="font-bold text-lg text-gray-900 dark:text-gray-100">Análisis de crecimiento</h3>
-                    <button onClick={() => setAiModal(null)}><X className="w-5 h-5 text-gray-400" /></button>
-                  </div>
-                  <div className="px-5 py-4 overflow-y-auto">
-                    <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed text-justify">{aiModal.content}</p>
-                  </div>
-                </>
               )}
 
               {/* Suggestions */}

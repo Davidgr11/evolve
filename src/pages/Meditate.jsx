@@ -1,11 +1,19 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../utils/firebase';
-import { doc, getDoc, setDoc, arrayUnion } from 'firebase/firestore';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import {
   ChevronLeft, Loader2, Play, Square,
-  CloudRain, Waves, TreePine, Flame, Sparkles, VolumeX, Wind, Droplets,
+  CloudRain, Waves, TreePine, Flame, Music2, VolumeX, Wind, Droplets,
+  GripVertical, X, Sparkles,
 } from 'lucide-react';
+import {
+  DndContext, closestCenter, PointerSensor, TouchSensor, useSensor, useSensors,
+} from '@dnd-kit/core';
+import {
+  SortableContext, verticalListSortingStrategy, useSortable, arrayMove,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { callClaude, ttsSpeak } from '../utils/cloudApi';
 import { THEME_GROUPS, COMPLETION_QUOTES } from '../constants/phrases';
 import toast from '../utils/toast';
@@ -22,14 +30,14 @@ const toLocalDateStr = (d) => {
 // ── Constants ──────────────────────────────────────────────────────────────────
 
 const SOUNDS = [
-  { id: 'rain',   label: 'Lluvia',  Icon: CloudRain, from: '#5a7fa0', to: '#8ab0c8' },
-  { id: 'ocean',  label: 'Océano',  Icon: Waves,     from: '#1a6080', to: '#3a9aba' },
-  { id: 'forest', label: 'Bosque',  Icon: TreePine,  from: '#2a6040', to: '#4a9a68' },
-  { id: 'river',  label: 'Río',     Icon: Droplets,  from: '#2e7090', to: '#5aa8c8' },
-  { id: 'wind',   label: 'Viento',  Icon: Wind,      from: '#607890', to: '#90aac0' },
-  { id: 'fire',   label: 'Fogata',  Icon: Flame,     from: '#a03010', to: '#d86030' },
-  { id: 'space',  label: 'Espacio', Icon: Sparkles,  from: '#1a1060', to: '#3a2890' },
-  { id: 'none',   label: 'Silencio',Icon: VolumeX,   from: '#4a5060', to: '#7a8090' },
+  { id: 'rain',    label: 'Lluvia',   Icon: CloudRain, from: '#5a7fa0', to: '#8ab0c8' },
+  { id: 'ocean',   label: 'Océano',   Icon: Waves,     from: '#1a6080', to: '#3a9aba' },
+  { id: 'forest',  label: 'Bosque',   Icon: TreePine,  from: '#2a6040', to: '#4a9a68' },
+  { id: 'river',   label: 'Río',      Icon: Droplets,  from: '#2e7090', to: '#5aa8c8' },
+  { id: 'wind',    label: 'Viento',   Icon: Wind,      from: '#607890', to: '#90aac0' },
+  { id: 'fire',    label: 'Fogata',   Icon: Flame,     from: '#a03010', to: '#d86030' },
+  { id: 'cuencos', label: 'Cuencos',  Icon: Music2,    from: '#6b4c20', to: '#c49a50' },
+  { id: 'none',    label: 'Silencio', Icon: VolumeX,   from: '#4a5060', to: '#7a8090' },
 ];
 
 const DURATIONS = [
@@ -38,6 +46,24 @@ const DURATIONS = [
   { mins: 10, label: '10 min', secs: 600 },
 ];
 
+const GROUP_COLORS = {
+  'trabajo':     { from: '#1d4ed8', to: '#3b82f6' },
+  'relaciones':  { from: '#9d174d', to: '#db2777' },
+  'situaciones': { from: '#4b5563', to: '#6b7280' },
+  'emociones':   { from: '#5b21b6', to: '#8b5cf6' },
+  'descanso':    { from: '#065f46', to: '#10b981' },
+  'cuerpo':      { from: '#0f766e', to: '#2dd4bf' },
+};
+
+const getTimeSuggestedTheme = () => {
+  const h = new Date().getHours();
+  if (h >= 5  && h < 10) return { id: 'morning',      label: 'Inicio del día'          };
+  if (h >= 10 && h < 14) return { id: 'focus-work',   label: 'Enfoque y productividad' };
+  if (h >= 17 && h < 21) return { id: 'arriving-home',label: 'Llegada a casa'          };
+  if (h >= 21)           return { id: 'evening',      label: 'Cierre del día'          };
+  return null;
+};
+
 // ── Phrase selection ───────────────────────────────────────────────────────────
 
 const selectPhraseIndices = (phrases, durationMins) => {
@@ -45,10 +71,6 @@ const selectPhraseIndices = (phrases, durationMins) => {
   if (phrases.length <= count) return phrases.map((_, i) => i);
   const step = (phrases.length - 1) / (count - 1);
   return Array.from({ length: count }, (_, i) => Math.round(i * step));
-};
-
-const selectPhrases = (phrases, durationMins) => {
-  return selectPhraseIndices(phrases, durationMins).map(i => phrases[i]);
 };
 
 const phraseTimes = (totalSecs, count) => {
@@ -170,14 +192,19 @@ const startAmbient = (type, ctx) => {
       src.connect(lp); lp.connect(master); src.start(); nodes.push(src, lp, lfo, lg);
       break;
     }
-    case 'space': {
-      const src = makeSource(ctx, true);
-      const lp = ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=100;
-      const osc = ctx.createOscillator(); const og = ctx.createGain();
-      osc.type='sine'; osc.frequency.value=50; og.gain.value=0.06;
-      osc.connect(og); og.connect(master); osc.start();
-      master.gain.setTargetAtTime(0.18, ctx.currentTime, 2);
-      src.connect(lp); lp.connect(master); src.start(); nodes.push(src, lp, osc, og);
+    case 'cuencos': {
+      const freqs = [432, 528, 720];
+      freqs.forEach((freq, i) => {
+        const osc = ctx.createOscillator(); const og = ctx.createGain();
+        const lfo = ctx.createOscillator(); const lg = ctx.createGain();
+        osc.type = 'sine'; osc.frequency.value = freq;
+        og.gain.value = 0.10;
+        lfo.type = 'sine'; lfo.frequency.value = 0.25 + i * 0.08; lg.gain.value = 0.05;
+        lfo.connect(lg); lg.connect(og.gain);
+        osc.connect(og); og.connect(master);
+        osc.start(); lfo.start(); nodes.push(osc, og, lfo, lg);
+      });
+      master.gain.setTargetAtTime(0.28, ctx.currentTime, 3);
       break;
     }
     default: break;
@@ -245,36 +272,108 @@ const getBreathStep = (elapsed) => {
   return BREATH[0];
 };
 
-// ── Component ──────────────────────────────────────────────────────────────────
+// ── Ring constants ─────────────────────────────────────────────────────────────
 
 const RING_R    = 16;
 const RING_CIRC = 2 * Math.PI * RING_R;
+
+// ── SortableGroup ──────────────────────────────────────────────────────────────
+
+const SortableGroup = ({ group, onPlay, suggestedThemeId }) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: group.id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+  const { from, to } = GROUP_COLORS[group.id] || { from: '#374151', to: '#6b7280' };
+
+  return (
+    <div ref={setNodeRef} style={style} className="space-y-2">
+      <div className="flex items-center gap-2">
+        <div
+          className="cursor-grab active:cursor-grabbing touch-none p-1 -ml-1 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
+          {...attributes} {...listeners}
+        >
+          <GripVertical className="w-4 h-4" />
+        </div>
+        <span className="text-base">{group.emoji}</span>
+        <span className="text-sm font-bold text-gray-700 dark:text-gray-300">{group.label}</span>
+      </div>
+
+      <div className="flex gap-2.5 overflow-x-auto pb-1 scrollbar-hide">
+        {group.themes.map(t => (
+          <div
+            key={t.id}
+            className="flex-shrink-0 w-36 rounded-2xl relative select-none"
+            style={{ background: `linear-gradient(140deg, ${from}, ${to})`, minHeight: 88 }}
+          >
+            {suggestedThemeId === t.id && (
+              <span className="absolute top-2 left-2.5 text-[10px] font-bold text-white/95 bg-white/25 rounded-full px-1.5 py-0.5 leading-tight">
+                ⭐ Ahora
+              </span>
+            )}
+            <div className="p-3 pt-3 pr-10">
+              <p className="text-[13px] font-semibold text-white leading-snug">{t.label}</p>
+            </div>
+            <button
+              onClick={() => onPlay(t.id, t.label)}
+              className="absolute bottom-2.5 right-2.5 w-8 h-8 rounded-full bg-white/20 hover:bg-white/35 active:bg-white/45 flex items-center justify-center transition-colors"
+            >
+              <Play className="w-3.5 h-3.5 text-white fill-white" />
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// ── Component ──────────────────────────────────────────────────────────────────
 
 const Meditate = () => {
   const { user } = useAuth();
 
   // step: 'setup' | 'session' | 'complete'
-  const [step, setStep]               = useState('setup');
-  const [showThemes, setShowThemes]    = useState(false);
-  const [themeMode, setThemeMode]      = useState('preset'); // 'preset' | 'custom'
-  const [selectedGroup, setSelectedGroup] = useState(null);
-  const [sound, setSound]             = useState('rain');
-  const [duration, setDuration]       = useState(DURATIONS[1]);
-  const [themeId, setThemeId]         = useState(null);
-  const [customText, setCustomText]   = useState('');
-  const [isLoading, setIsLoading]     = useState(false);
-  const [previewId, setPreviewId]     = useState(null);
-  const [previewProgress, setPreviewProgress] = useState(0);
+  const [step, setStep] = useState('setup');
 
-  const [todayCount, setTodayCount]   = useState(0);
+  // Persistent preferences (localStorage)
+  const [sound, setSound] = useState(() => localStorage.getItem('meditationSound') || 'rain');
+  const [groupOrder, setGroupOrder] = useState(() => {
+    try {
+      const s = localStorage.getItem('meditationGroupOrder');
+      const stored = s ? JSON.parse(s) : null;
+      const current = THEME_GROUPS.map(g => g.id);
+      const valid = stored?.length === current.length && stored.every(id => current.includes(id));
+      return valid ? stored : current;
+    } catch { return THEME_GROUPS.map(g => g.id); }
+  });
 
-  const [elapsed, setElapsed]         = useState(0);
-  const [totalSecs, setTotalSecs]     = useState(0);
-  const [phrase, setPhrase]           = useState('');
-  const [phraseOn, setPhraseOn]       = useState(false);
+  // Modals
+  const [soundModal, setSoundModal]       = useState(false);
+  const [customModal, setCustomModal]     = useState(false);
+  const [durationModal, setDurationModal] = useState(null); // { themeId, themeLabel }
+  const [selectedDuration, setSelectedDuration] = useState(DURATIONS[1]);
+
+  // Custom meditation
+  const [customText, setCustomText] = useState('');
+
+  // Session state
+  const [isLoading, setIsLoading]   = useState(false);
+  const [todayCount, setTodayCount] = useState(0);
+  const [elapsed, setElapsed]       = useState(0);
+  const [totalSecs, setTotalSecs]   = useState(0);
+  const [phrase, setPhrase]         = useState('');
+  const [phraseOn, setPhraseOn]     = useState(false);
   const [completionQuote, setCompletionQuote] = useState('');
   const [completedMeta, setCompletedMeta]     = useState(null);
 
+  // Sound preview
+  const [previewId, setPreviewId]           = useState(null);
+  const [previewProgress, setPreviewProgress] = useState(0);
+
+  // Refs
   const audioCtxRef     = useRef(null);
   const ambientRef      = useRef(null);
   const previewCtxRef   = useRef(null);
@@ -289,6 +388,33 @@ const Meditate = () => {
   const ttsSrcRef       = useRef(null);
 
   const breathStep = step === 'session' ? getBreathStep(elapsed) : BREATH[0];
+  const timeSuggestion = getTimeSuggestedTheme();
+  const orderedGroups = groupOrder
+    .map(id => THEME_GROUPS.find(g => g.id === id))
+    .filter(Boolean);
+
+  // DnD
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor,   { activationConstraint: { delay: 200, tolerance: 5 } }),
+  );
+
+  const handleDragEnd = useCallback((event) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    setGroupOrder(prev => {
+      const oldIdx = prev.indexOf(active.id);
+      const newIdx = prev.indexOf(over.id);
+      const next = arrayMove(prev, oldIdx, newIdx);
+      localStorage.setItem('meditationGroupOrder', JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
+  const handleSoundSelect = useCallback((id) => {
+    setSound(id);
+    localStorage.setItem('meditationSound', id);
+  }, []);
 
   useEffect(() => {
     if (!user) return;
@@ -308,7 +434,7 @@ const Meditate = () => {
     if (id === 'none') { setPreviewId(null); setPreviewProgress(0); return; }
 
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    ctx.resume(); // required on iOS Safari — context starts suspended
+    ctx.resume();
     previewCtxRef.current = ctx;
     previewRef.current = startAmbient(id, ctx);
     setPreviewId(id);
@@ -366,12 +492,12 @@ const Meditate = () => {
     }
     if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
     if (!completed) {
-      setStep('setup'); setShowThemes(false); setElapsed(0); setPhrase(''); setPhraseOn(false);
+      setStep('setup'); setElapsed(0); setPhrase(''); setPhraseOn(false);
       spokenRef.current = new Set(); audioBuffsRef.current = [];
     }
   }, []);
 
-  // ── Save meditation (only on natural completion) ──
+  // ── Save meditation ──
   const saveMeditation = useCallback(async (themeLabel, durationMins, tid) => {
     if (!user) return;
     const todayStr = toLocalDateStr(new Date());
@@ -398,7 +524,6 @@ const Meditate = () => {
     spokenRef.current     = new Set();
     audioBuffsRef.current = buffers || [];
 
-    // ctx already created + resumed synchronously in the user gesture handler
     audioCtxRef.current = ctx;
     ambientRef.current  = startAmbient(sound, ctx);
 
@@ -433,18 +558,15 @@ const Meditate = () => {
   }, [sound, showPhrase, stopSession]);
 
   // ── Handle start ──
-  const handleStart = async () => {
-    const isCustom = themeMode === 'custom';
-    if (!isCustom && !themeId) { toast.error('Selecciona una temática'); return; }
+  // Called directly from "Comenzar" button onClick — AudioContext must be created
+  // synchronously here before any await (iOS Safari requirement).
+  const handleStart = async (startThemeId, startDuration) => {
+    const isCustom = startThemeId === 'custom';
     if (isCustom && !customText.trim()) { toast.error('Escribe sobre qué quieres meditar'); return; }
 
-    // Create and unlock AudioContext synchronously HERE, inside the user gesture,
-    // before any await. iOS Safari suspends any context created after an await.
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
     ctx.resume();
 
-    // Declare as media playback so iOS uses media volume (not ringer switch)
-    // and interrupts other audio (music/podcasts) correctly.
     if ('mediaSession' in navigator) {
       navigator.mediaSession.metadata = new MediaMetadata({
         title: 'Meditación guiada',
@@ -456,20 +578,19 @@ const Meditate = () => {
     setIsLoading(true);
     let rawPhrases = [];
     let themeLabel = 'Personalizado';
-    const tid = isCustom ? 'custom' : themeId;
+    const tid = isCustom ? 'custom' : startThemeId;
 
     try {
       let buffers;
 
       if (isCustom) {
-        const count = duration.mins <= 3 ? 4 : duration.mins <= 5 ? 7 : 12;
+        const count = startDuration.mins <= 3 ? 4 : startDuration.mins <= 5 ? 7 : 12;
         const txt = await callClaude(
-          `You are an expert and compassionate meditation guide. Generate exactly ${count} short phrases for a ${duration.mins}-minute guided meditation session on: "${customText.trim()}". Each phrase is 1-2 sentences max. In English, second person singular, calming and progressive (opening → depth → closing). Reply ONLY with the phrases, one per line, no numbering or bullets.`,
+          `You are an expert and compassionate meditation guide. Generate exactly ${count} short phrases for a ${startDuration.mins}-minute guided meditation session on: "${customText.trim()}". Each phrase is 1-2 sentences max. In English, second person singular, calming and progressive (opening → depth → closing). Reply ONLY with the phrases, one per line, no numbering or bullets.`,
           520,
         );
         rawPhrases = txt.split('\n').map(l => l.trim()).filter(Boolean).slice(0, count);
 
-        // Custom: generate TTS via API (phrases are unique each time)
         buffers = await Promise.all(rawPhrases.map(async (text) => {
           try {
             const b64 = await ttsSpeak(text);
@@ -477,16 +598,15 @@ const Meditate = () => {
           } catch { return null; }
         }));
       } else {
-        const theme = findTheme(themeId);
+        const theme = findTheme(startThemeId);
         if (!theme) { toast.error('Selecciona una temática'); ctx.close(); setIsLoading(false); return; }
-        const indices = selectPhraseIndices(theme.phrases, duration.mins);
+        const indices = selectPhraseIndices(theme.phrases, startDuration.mins);
         rawPhrases = indices.map(i => theme.phrases[i]);
         themeLabel = theme.label;
 
-        // Predefined: fetch pre-generated static MP3s — no API cost
         buffers = await Promise.all(indices.map(async (origIndex) => {
           try {
-            const res = await fetch(`/audio/${themeId}_${origIndex}.mp3`);
+            const res = await fetch(`/audio/${startThemeId}_${origIndex}.mp3`);
             if (!res.ok) throw new Error('not found');
             return await ctx.decodeAudioData(await res.arrayBuffer());
           } catch { return null; }
@@ -494,8 +614,8 @@ const Meditate = () => {
       }
 
       setIsLoading(false);
-      setCompletedMeta({ mins: duration.mins, themeLabel });
-      beginSession(rawPhrases, duration.secs, buffers, ctx, () => saveMeditation(themeLabel, duration.mins, tid));
+      setCompletedMeta({ mins: startDuration.mins, themeLabel });
+      beginSession(rawPhrases, startDuration.secs, buffers, ctx, () => saveMeditation(themeLabel, startDuration.mins, tid));
     } catch {
       ctx.close();
       if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
@@ -514,7 +634,7 @@ const Meditate = () => {
   }, []);
 
   const progress  = totalSecs ? elapsed / totalSecs : 0;
-  const remaining = step === 'session' ? totalSecs - elapsed : duration.secs;
+  const remaining = step === 'session' ? totalSecs - elapsed : selectedDuration.secs;
   const mm = String(Math.floor(remaining / 60)).padStart(2, '0');
   const ss = String(remaining % 60).padStart(2, '0');
 
@@ -589,7 +709,7 @@ const Meditate = () => {
           </div>
           <button
             onClick={() => {
-              setStep('setup'); setShowThemes(false); setElapsed(0);
+              setStep('setup'); setElapsed(0);
               setPhrase(''); setPhraseOn(false);
               spokenRef.current = new Set(); audioBuffsRef.current = [];
             }}
@@ -604,213 +724,286 @@ const Meditate = () => {
 
   // ── Setup ───────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-6 pb-10">
-      <div>
+    <div className="space-y-5 pb-24">
+      {/* Header */}
+      <div className="flex items-center justify-between">
         <h1 className="font-bold text-gray-900 dark:text-gray-100" style={{ fontSize: 30 }}>Meditación</h1>
-        {todayCount > 0 && (
-          <div className="flex items-center gap-3 mt-3 px-4 py-3 rounded-2xl bg-violet-50/80 dark:bg-violet-900/20 border border-violet-200/70 dark:border-violet-800/50">
-            <div className="w-9 h-9 rounded-full bg-violet-100 dark:bg-violet-900/50 flex items-center justify-center flex-shrink-0 text-lg">🧘</div>
-            <div>
-              <p className="text-sm font-bold text-violet-700 dark:text-violet-300">
-                {todayCount === 1 ? '1 sesión completada hoy' : `${todayCount} sesiones hoy`}
-              </p>
-              <p className="text-xs text-violet-500 dark:text-violet-400 mt-0.5">
-                {todayCount >= 2 ? '¡Excelente práctica!' : 'Sigue construyendo el hábito'}
-              </p>
-            </div>
-          </div>
-        )}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setCustomModal(true)}
+            className="p-2 rounded-xl bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 active:bg-gray-300 dark:active:bg-gray-600 transition-colors"
+            title="Meditación personalizada"
+          >
+            <Sparkles className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+          </button>
+          <button
+            onClick={() => setSoundModal(true)}
+            className="flex items-center gap-2 px-3 py-2 rounded-xl bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 active:bg-gray-300 dark:active:bg-gray-600 transition-colors"
+          >
+            <Music2 className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+            <span className="text-sm text-gray-600 dark:text-gray-400">
+              {SOUNDS.find(s => s.id === sound)?.label ?? 'Sonido'}
+            </span>
+          </button>
+        </div>
       </div>
 
-      {/* ── AV section (hidden when showThemes) ── */}
-      <div style={{ display: showThemes ? 'none' : 'block' }} className="space-y-6">
-        {/* Duration */}
-        <div className="space-y-3">
-          <p className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Duración</p>
-          <div className="flex gap-2">
-            {DURATIONS.map(d => (
-              <button key={d.mins} onClick={() => setDuration(d)}
-                className={`flex-1 py-3 rounded-xl text-sm font-semibold transition-all border-2 ${
-                  duration.mins === d.mins
-                    ? 'border-emerald-400 bg-emerald-50/70 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300'
-                    : 'border-gray-200 dark:border-gray-700 bg-white/50 dark:bg-gray-800/50 text-gray-600 dark:text-gray-400'
-                }`}>
-                {d.label}
-              </button>
+      {/* Today count */}
+      <div className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-primary-50 dark:bg-gray-800/60 border border-primary-200 dark:border-gray-700">
+          <div className="w-9 h-9 rounded-full bg-primary-100 dark:bg-gray-700 flex items-center justify-center flex-shrink-0 text-lg">🧘</div>
+          <div>
+            <p className="text-sm font-bold text-primary-600 dark:text-primary-400">
+              {todayCount === 0
+                ? 'Sin sesiones hoy'
+                : todayCount === 1
+                ? '1 sesión completada hoy'
+                : `${todayCount} sesiones hoy`}
+            </p>
+            <p className="text-xs text-primary-600/70 dark:text-primary-400/70 mt-0.5">
+              {todayCount === 0
+                ? 'Empieza tu primera sesión del día'
+                : todayCount >= 2
+                ? '¡Excelente práctica!'
+                : 'Sigue construyendo el hábito'}
+            </p>
+          </div>
+        </div>
+
+      {/* Time-based suggestion */}
+      {timeSuggestion && (
+        <div className="flex items-center justify-between px-4 py-3 rounded-2xl bg-primary-50 dark:bg-gray-800/60 border border-primary-200 dark:border-gray-700">
+          <div className="flex items-center gap-2.5">
+            <span className="text-xl">⭐</span>
+            <div>
+              <p className="text-[11px] font-bold text-primary-600 dark:text-primary-400 uppercase tracking-wider">Sugerida para ahora</p>
+              <p className="text-sm font-semibold text-primary-600 dark:text-primary-400">{timeSuggestion.label}</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setDurationModal({ themeId: timeSuggestion.id, themeLabel: timeSuggestion.label })}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary-500 hover:bg-primary-600 active:bg-primary-600 text-white text-sm font-semibold transition-colors flex-shrink-0"
+          >
+            <Play className="w-3.5 h-3.5 fill-white" />
+            Iniciar
+          </button>
+        </div>
+      )}
+
+      {/* Groups with DnD */}
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <SortableContext items={groupOrder} strategy={verticalListSortingStrategy}>
+          <div className="space-y-5">
+            {orderedGroups.map(group => (
+              <SortableGroup
+                key={group.id}
+                group={group}
+                onPlay={(themeId, themeLabel) => setDurationModal({ themeId, themeLabel })}
+                suggestedThemeId={timeSuggestion?.id}
+              />
             ))}
           </div>
-        </div>
+        </SortableContext>
+      </DndContext>
 
-        {/* Sound */}
-        <div className="space-y-3">
-          <p className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Sonido ambiente</p>
-          <div className="grid grid-cols-2 gap-2">
-            {SOUNDS.map(s => {
-              const isPreviewing  = previewId === s.id;
-              const isSelected    = sound === s.id;
-              const anyPreviewing = !!previewId;
-              return (
-                <div key={s.id} onClick={() => setSound(s.id)} role="button" tabIndex={0}
-                  onKeyDown={e => e.key === 'Enter' && setSound(s.id)}
-                  className={`relative rounded-2xl overflow-hidden transition-all border-2 cursor-pointer ${
-                    isSelected ? 'border-emerald-400 ring-2 ring-emerald-300/50' : 'border-transparent'
-                  }`}
-                  style={{ height: 80 }}>
-                  <div className="absolute inset-0" style={{ background: `linear-gradient(135deg, ${s.from}, ${s.to})` }} />
-                  <div className="absolute inset-0 flex items-center justify-between px-4">
-                    <div className="flex items-center gap-2.5">
-                      <s.Icon className="w-5 h-5 text-white/90" />
-                      <span className="text-sm font-semibold text-white">{s.label}</span>
-                    </div>
-                    {s.id !== 'none' && (
-                      <div className="relative w-9 h-9 flex-shrink-0">
-                        {isPreviewing && (
-                          <svg
-                            className="absolute inset-0 w-full h-full -rotate-90 pointer-events-none"
-                            viewBox="0 0 36 36"
-                          >
-                            <circle cx="18" cy="18" r={RING_R} fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="2.5" />
-                            <circle
-                              cx="18" cy="18" r={RING_R} fill="none"
-                              stroke="white" strokeWidth="2.5" strokeLinecap="round"
-                              strokeDasharray={RING_CIRC}
-                              strokeDashoffset={RING_CIRC - (previewProgress / 100) * RING_CIRC}
-                            />
-                          </svg>
-                        )}
-                        <button
-                          onClick={e => { e.stopPropagation(); isPreviewing ? stopPreview() : startPreview(s.id); }}
-                          disabled={anyPreviewing && !isPreviewing}
-                          className="absolute inset-0 rounded-full bg-white/20 hover:bg-white/35 flex items-center justify-center transition-colors disabled:opacity-40"
-                        >
-                          {isPreviewing
-                            ? <Square className="w-3 h-3 text-white fill-white" />
-                            : <Play  className="w-3 h-3 text-white fill-white" />
-                          }
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                  {isSelected && (
-                    <div className="absolute top-2 right-2 w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-white/50" />
-                  )}
+      {/* ── Custom meditation modal ── */}
+      {customModal && (
+        <>
+          <div
+            className="fixed inset-0 z-40 liquid-glass-overlay"
+            onClick={() => { if (!isLoading) { setCustomModal(false); } }}
+          />
+          <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+            <div className="liquid-glass-panel rounded-3xl p-6 space-y-4 w-full max-w-sm">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="font-bold text-gray-900 dark:text-gray-100">Meditación personalizada</h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">¿Sobre qué quieres meditar?</p>
                 </div>
-              );
-            })}
-          </div>
-        </div>
-
-        <button
-          onClick={() => { setShowThemes(true); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-          className="btn-primary w-full py-4 text-base font-semibold flex items-center justify-center gap-2"
-        >
-          Continuar →
-        </button>
-      </div>
-
-      {/* ── Theme section (hidden when !showThemes) ── */}
-      <div style={{ display: showThemes ? 'block' : 'none' }} className="space-y-4">
-        <div className="flex items-center gap-3">
-          <button onClick={() => setShowThemes(false)} className="p-1 text-gray-400 hover:text-gray-600">
-            <ChevronLeft className="w-5 h-5" />
-          </button>
-          <p className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Escoge la temática</p>
-        </div>
-
-        {/* Toggle */}
-        <div className="flex rounded-xl bg-gray-100 dark:bg-gray-800 p-1">
-          <button
-            onClick={() => { setThemeMode('preset'); setThemeId(null); }}
-            className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${
-              themeMode === 'preset'
-                ? 'bg-white dark:bg-gray-700 shadow text-gray-900 dark:text-gray-100'
-                : 'text-gray-500 dark:text-gray-400'
-            }`}
-          >
-            Prediseñadas
-          </button>
-          <button
-            onClick={() => { setThemeMode('custom'); setThemeId(null); }}
-            className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all ${
-              themeMode === 'custom'
-                ? 'bg-white dark:bg-gray-700 shadow text-gray-900 dark:text-gray-100'
-                : 'text-gray-500 dark:text-gray-400'
-            }`}
-          >
-            Personalizada
-          </button>
-        </div>
-
-        {themeMode === 'preset' && (
-          <div className="space-y-3">
-            {/* Group grid */}
-            <div className="grid grid-cols-2 gap-2">
-              {THEME_GROUPS.map(group => (
                 <button
-                  key={group.id}
-                  onClick={() => { setSelectedGroup(g => g === group.id ? null : group.id); setThemeId(null); }}
-                  className={`p-3 rounded-xl border-2 text-left transition-all ${
-                    selectedGroup === group.id
-                      ? 'border-violet-400 bg-violet-50/70 dark:bg-violet-900/20 opacity-100'
-                      : selectedGroup
-                        ? 'border-gray-200 dark:border-gray-700 bg-white/50 dark:bg-gray-800/50 opacity-40'
-                        : 'border-gray-200 dark:border-gray-700 bg-white/50 dark:bg-gray-800/50'
-                  }`}
+                  onClick={() => { if (!isLoading) setCustomModal(false); }}
+                  className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 flex-shrink-0"
                 >
-                  <span className="text-2xl block mb-1">{group.emoji}</span>
-                  <span className="text-sm font-semibold text-gray-700 dark:text-gray-300 leading-snug">{group.label}</span>
+                  <X className="w-5 h-5" />
                 </button>
-              ))}
-            </div>
+              </div>
 
-            {/* Sub-themes */}
-            {selectedGroup && (
-              <div className="space-y-2">
-                <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Elige un tema</p>
-                {THEME_GROUPS.find(g => g.id === selectedGroup)?.themes.map(t => (
-                  <button key={t.id} onClick={() => setThemeId(t.id)}
-                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-all text-left ${
-                      themeId === t.id
-                        ? 'border-violet-400 bg-violet-50/60 dark:bg-violet-900/20'
-                        : 'border-gray-200 dark:border-gray-700 bg-white/50 dark:bg-gray-800/50'
-                    }`}>
-                    <span className={`text-sm font-medium flex-1 ${themeId === t.id ? 'text-violet-800 dark:text-violet-300' : 'text-gray-700 dark:text-gray-300'}`}>{t.label}</span>
-                    {themeId === t.id && <div className="w-2 h-2 rounded-full bg-violet-400 flex-shrink-0" />}
+              <textarea
+                className="input-field resize-none w-full text-sm"
+                rows={4}
+                placeholder="Ej. Tuve una discusión con mi pareja y quiero calmarme..."
+                value={customText}
+                onChange={e => setCustomText(e.target.value)}
+                autoFocus
+              />
+
+              <div>
+                <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Duración</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {DURATIONS.map(d => (
+                    <button
+                      key={d.mins}
+                      onClick={() => setSelectedDuration(d)}
+                      className={`py-3 rounded-xl text-sm font-semibold transition-all border-2 ${
+                        selectedDuration.mins === d.mins
+                          ? 'border-emerald-400 bg-emerald-50/70 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300'
+                          : 'border-gray-200 dark:border-gray-700 bg-white/50 dark:bg-gray-800/50 text-gray-600 dark:text-gray-400'
+                      }`}
+                    >
+                      {d.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <button
+                onClick={() => handleStart('custom', selectedDuration)}
+                disabled={isLoading || !customText.trim()}
+                className="btn-primary w-full py-4 text-base font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {isLoading
+                  ? <><Loader2 className="w-5 h-5 animate-spin" /> Preparando sesión...</>
+                  : <><Wind className="w-5 h-5" /> Comenzar</>
+                }
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── Duration picker modal ── */}
+      {durationModal && (
+        <>
+          <div
+            className="fixed inset-0 z-40 liquid-glass-overlay"
+            onClick={() => { if (!isLoading) setDurationModal(null); }}
+          />
+          <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+            <div className="liquid-glass-panel rounded-3xl p-6 space-y-5 w-full max-w-sm">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="font-bold text-gray-900 dark:text-gray-100">Duración</h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{durationModal.themeLabel}</p>
+                </div>
+                <button
+                  onClick={() => { if (!isLoading) setDurationModal(null); }}
+                  className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 flex-shrink-0 mt-0.5"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                {DURATIONS.map(d => (
+                  <button
+                    key={d.mins}
+                    onClick={() => setSelectedDuration(d)}
+                    className={`py-4 rounded-xl text-sm font-semibold transition-all border-2 ${
+                      selectedDuration.mins === d.mins
+                        ? 'border-emerald-400 bg-emerald-50/70 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300'
+                        : 'border-gray-200 dark:border-gray-700 bg-white/50 dark:bg-gray-800/50 text-gray-600 dark:text-gray-400'
+                    }`}
+                  >
+                    {d.label}
                   </button>
                 ))}
               </div>
-            )}
+
+              <button
+                onClick={() => handleStart(durationModal.themeId, selectedDuration)}
+                disabled={isLoading}
+                className="btn-primary w-full py-4 text-base font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {isLoading
+                  ? <><Loader2 className="w-5 h-5 animate-spin" /> Preparando sesión...</>
+                  : <><Wind className="w-5 h-5" /> Comenzar</>
+                }
+              </button>
+            </div>
           </div>
-        )}
+        </>
+      )}
 
-        {themeMode === 'custom' && (
-          <textarea
-            className="input-field resize-none w-full"
-            rows={4}
-            placeholder="Ej. Quiero meditar sobre una discusión que tuve con mi pareja acerca de..."
-            value={customText}
-            onChange={e => setCustomText(e.target.value)}
-            autoFocus
+      {/* ── Sound preference modal ── */}
+      {soundModal && (
+        <>
+          <div
+            className="fixed inset-0 z-40 liquid-glass-overlay"
+            onClick={() => { stopPreview(); setSoundModal(false); }}
           />
-        )}
+          <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+            <div className="liquid-glass-panel rounded-3xl p-6 space-y-4 w-full max-w-sm">
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-gray-900 dark:text-gray-100">Sonido ambiente</h3>
+                <button
+                  onClick={() => { stopPreview(); setSoundModal(false); }}
+                  className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
 
-        <div className="px-4 py-4 rounded-2xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/50 text-center space-y-1">
-          <p className="text-2xl">🎧</p>
-          <p className="text-[14px] font-semibold text-amber-800 dark:text-amber-200">La voz guía está en inglés</p>
-          <p className="text-[13px] text-amber-600 dark:text-amber-400 italic">"Para una experiencia de audio más natural y relajante"</p>
-        </div>
-
-        <button
-          onClick={handleStart}
-          disabled={isLoading || (themeMode === 'preset' && !themeId) || (themeMode === 'custom' && !customText.trim())}
-          className="btn-primary w-full py-4 text-base font-semibold flex items-center justify-center gap-2 disabled:opacity-50 sticky bottom-4"
-        >
-          {isLoading
-            ? <><Loader2 className="w-5 h-5 animate-spin" /> Preparando sesión...</>
-            : <><Wind className="w-5 h-5" /> Comenzar meditación</>
-          }
-        </button>
-      </div>
+              <div className="grid grid-cols-2 gap-2">
+                {SOUNDS.map(s => {
+                  const isPreviewing  = previewId === s.id;
+                  const isSelected    = sound === s.id;
+                  const anyPreviewing = !!previewId;
+                  return (
+                    <div
+                      key={s.id}
+                      onClick={() => handleSoundSelect(s.id)}
+                      role="button" tabIndex={0}
+                      onKeyDown={e => e.key === 'Enter' && handleSoundSelect(s.id)}
+                      className={`relative rounded-2xl overflow-hidden transition-all border-2 cursor-pointer ${
+                        isSelected ? 'border-emerald-400 ring-2 ring-emerald-300/50' : 'border-transparent'
+                      }`}
+                      style={{ height: 80 }}
+                    >
+                      <div className="absolute inset-0" style={{ background: `linear-gradient(135deg, ${s.from}, ${s.to})` }} />
+                      <div className="absolute inset-0 flex items-center justify-between px-4">
+                        <div className="flex items-center gap-2.5">
+                          <s.Icon className="w-5 h-5 text-white/90" />
+                          <span className="text-sm font-semibold text-white">{s.label}</span>
+                        </div>
+                        {s.id !== 'none' && (
+                          <div className="relative w-9 h-9 flex-shrink-0">
+                            {isPreviewing && (
+                              <svg
+                                className="absolute inset-0 w-full h-full -rotate-90 pointer-events-none"
+                                viewBox="0 0 36 36"
+                              >
+                                <circle cx="18" cy="18" r={RING_R} fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="2.5" />
+                                <circle
+                                  cx="18" cy="18" r={RING_R} fill="none"
+                                  stroke="white" strokeWidth="2.5" strokeLinecap="round"
+                                  strokeDasharray={RING_CIRC}
+                                  strokeDashoffset={RING_CIRC - (previewProgress / 100) * RING_CIRC}
+                                />
+                              </svg>
+                            )}
+                            <button
+                              onClick={e => { e.stopPropagation(); isPreviewing ? stopPreview() : startPreview(s.id); }}
+                              disabled={anyPreviewing && !isPreviewing}
+                              className="absolute inset-0 rounded-full bg-white/20 hover:bg-white/35 flex items-center justify-center transition-colors disabled:opacity-40"
+                            >
+                              {isPreviewing
+                                ? <Square className="w-3 h-3 text-white fill-white" />
+                                : <Play   className="w-3 h-3 text-white fill-white" />
+                              }
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                      {isSelected && (
+                        <div className="absolute top-2 right-2 w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-white/50" />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 };

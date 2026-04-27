@@ -1,4 +1,5 @@
 export const THEME_GROUPS = [
+  // ── 1. Trabajo ───────────────────────────────────────────────────────────────
   {
     id: 'trabajo', label: 'Trabajo', emoji: '💼',
     themes: [
@@ -53,10 +54,46 @@ export const THEME_GROUPS = [
           'When you open your eyes, you will carry this calm and this confidence into every moment of the meeting. You can return to this state with a single conscious breath if you need it. You already know how.',
         ],
       },
+      {
+        id: 'impostor-syndrome', label: 'Síndrome del impostor',
+        phrases: [
+          'The feeling of not deserving your place is one of the most common experiences among highly capable people. You are not alone in this, and its presence does not make it true.',
+          'Breathe deeply and let the armor of that impostor feeling soften a little. Beneath it is a real and capable person — the one who actually achieved what you fear you did not.',
+          'The accomplishments you have made are real. They did not happen to you by accident or mistake. They happened because of choices, effort, and ability you genuinely have.',
+          'The people around you see something real in you that you have difficulty seeing yourself. Their trust is not naive. Consider, carefully, that they might be right about you.',
+          'Competence and confidence do not always travel together at the same speed. You can be highly capable and still feel like you are not. That gap is normal — not evidence of fraud.',
+          'Let go for a moment of the constant internal comparison with an ideal version of yourself that does not exist. You are measuring yourself against a fiction. Come back to what is real.',
+          'Every expert, every leader, every person you admire has felt this same doubt at some point. It is a companion of growth, not a sign that you do not belong. It means you care deeply.',
+          'Your voice and perspective have genuine value precisely because they come from you — from your unique experience and way of seeing. No one else can contribute exactly what you can.',
+          'Instead of asking whether you deserve to be here, ask what you can contribute from here. That shift from scarcity to purpose changes everything. You have something real to offer.',
+          'The fear of being discovered does not reflect reality — it reflects how much you have invested in what you do. That investment is not weakness. It is the mark of someone who takes their work seriously.',
+          'You are allowed to grow into new roles and challenges without having all the answers from the start. That is what growth actually looks like from the inside. Trust that process.',
+          'When you leave here, carry one concrete truth: you have earned your place. Not because you are perfect, but because you have done real work and brought real value. That is enough — and it is real.',
+        ],
+      },
+      {
+        id: 'burnout', label: 'Agotamiento laboral',
+        phrases: [
+          'You have been running for a long time and your body and mind are asking — clearly and urgently — for a real stop. This is not weakness. This is the cost of a long and sustained effort.',
+          'Burnout is not a character flaw or a sign that you are not strong enough. It is what happens when extraordinary demands go unmet for too long. It is a signal, not a verdict.',
+          'Allow yourself to do nothing in this moment. Not rest as preparation for producing more — just rest because you need it and you deserve it. Full stop, with no other purpose.',
+          'The things that feel urgent right now will not disappear if you rest for a while. But you might disappear — gradually and silently — if you do not. Rest is not optional when you are here.',
+          'Your worth as a person is not measured by how much you produce or how available you are. You were valuable before you were busy. That original value is still fully there.',
+          'With each deep breath, give your exhausted nervous system the signal it has been waiting for — that it can finally stop bracing for impact. Safety. Recovery. Rest. You are here.',
+          'Think about what you used to enjoy before everything became work and obligation. That capacity for joy has not vanished. It is waiting quietly beneath the exhaustion. It will return.',
+          'Sustainable performance always requires genuine recovery. The best athletes and thinkers build real rest into their lives not because they are weak, but because they are serious about their work.',
+          'Something important needs to change beyond this session — a habit, a boundary, an expectation. This breath gives you a first moment of clarity about what that might be.',
+          'Letting go of some things is not failure. It is the kind of wisdom that only comes from having pushed too far and learned what that cost. You are learning something real and valuable here.',
+          'You are allowed to say that it has been too much. To yourself first, and perhaps then to others. That honesty is not complaint — it is self-knowledge. And it is the beginning of recovery.',
+          'When you leave here, carry this: you are a whole person, not a function. Recovery is now part of your most important work. Begin it here, in this breath, and continue it beyond.',
+        ],
+      },
     ],
   },
+
+  // ── 2. Relaciones ────────────────────────────────────────────────────────────
   {
-    id: 'vida-social', label: 'Vida social', emoji: '👥',
+    id: 'relaciones', label: 'Relaciones', emoji: '❤️',
     themes: [
       {
         id: 'conflict', label: 'Conflicto con alguien',
@@ -104,16 +141,11 @@ export const THEME_GROUPS = [
           'Use this stillness as a valuable gift that few allow themselves. There is something in you that only blooms in silence and solitude. Discover it with curiosity and without fear.',
           'Solitude can be a profound invitation to know yourself more genuinely. What do you discover when the external noise fades? Listen to what emerges in this inner space.',
           'Remember specific moments of genuine connection you have lived with people who matter to you. Those moments shaped you and still inhabit you. You carry that richness with you always.',
-          'Your presence in the world makes a real difference, even if you do not always perceive it or see it reflected. The people who know you are better for having found you. That is true.',
+          'Your presence in the world makes a real difference, even if you do not always perceive it. The people who know you are better for having found you. That is true.',
           'Every time you care for yourself with love and attention, you build the best possible company. You become someone who enjoys your own presence. That changes everything.',
           'You deserve deep connection and you will find it when the moment is right. For now, this inner calm is also a valid and real home. Inhabit it with peace.',
         ],
       },
-    ],
-  },
-  {
-    id: 'pareja-familia', label: 'Pareja y familia', emoji: '❤️',
-    themes: [
       {
         id: 'couple-conflict', label: 'Discusión de pareja',
         phrases: [
@@ -148,27 +180,12 @@ export const THEME_GROUPS = [
           'You carry love within you that is greater than any tension you are living through right now. That love survives the difficult moments. Trust it as the foundation of everything that comes.',
         ],
       },
-      {
-        id: 'disconnection', label: 'Desconexión emocional',
-        phrases: [
-          'Sometimes we lose ourselves in the noise and demands of daily life. It is not your fault — it is the consequence of living very fast and very outward. This session is your return.',
-          'This session is a gentle invitation to reconnect with yourself, without rush or expectations. You do not need to arrive anywhere in particular. Just be here with yourself.',
-          'Feel your breath moving gently through your body. That constant movement is you, alive and present. You have never completely gone — you have only drifted a little.',
-          'When was the last time you asked yourself how you are truly doing, with honesty and genuine care? Not what you produce or accomplish — how are you, right now. Take that time now.',
-          'Beneath the fatigue, distraction, and noise, there is something of yours waiting to be heard with patience. That something has important messages for you. This stillness is the language it speaks.',
-          'With each inhale you move closer to yourself. With each exhale you release the accumulated distance. It is a journey of return that you can take whenever you choose.',
-          'You do not need to understand or categorize everything you feel to validate it. You just need to feel it without judging or rejecting it. That alone is reconnection.',
-          'Your body holds a deep wisdom that the rational mind does not always grasp. This stillness is the language in which that wisdom speaks. Listen with curiosity.',
-          'Genuine reconnection begins with this precise moment, with this breath you are taking right now. Nothing more is needed to begin. You are on your way.',
-          'You are much more than your responsibilities, social roles, and daily obligations. There is a whole being beneath all of that. This pause lets you remember it.',
-          'Give yourself real permission to exist here without agenda, without producing anything, just being. Do not justify this time — simply take it as yours. You deserve it.',
-          'When you finish, you will carry a spark of reconnection with you into the world. Small but real and valuable. That spark can kindle more if you tend to it.',
-        ],
-      },
     ],
   },
+
+  // ── 3. Situaciones ───────────────────────────────────────────────────────────
   {
-    id: 'trafico', label: 'Tráfico y traslados', emoji: '🚗',
+    id: 'situaciones', label: 'Situaciones', emoji: '🌆',
     themes: [
       {
         id: 'traffic', label: 'Estrés en el tráfico',
@@ -221,10 +238,46 @@ export const THEME_GROUPS = [
           'Welcome back to yourself and to what matters most. The true home always begins within. You are already there.',
         ],
       },
+      {
+        id: 'big-decision', label: 'Antes de una decisión',
+        phrases: [
+          'You are facing a decision that matters to you, and that weight is real and legitimate. This session gives you a moment to step back before you step forward. That pause is wisdom.',
+          'Begin by breathing slowly and creating space between you and the urgency. Most important decisions can wait the few minutes it takes to become clear. This is that time.',
+          'Notice the noise of other people\'s opinions, fears about getting it wrong, and pressure to decide quickly. Now, gently set all of that aside. This moment belongs to your own inner knowing.',
+          'Ask yourself what you truly want from this — underneath the fear of regret and the pressure to be right. That authentic preference is important data. Listen to it with respect.',
+          'Your body often knows before your mind does. Where do you feel tension when you imagine one option versus the other? That physical response is intelligent feedback, not noise.',
+          'Consider what you will think of this decision ten years from now. Not which option turns out perfectly, but which one aligns with who you are and what you value. That question clarifies.',
+          'There is rarely a perfect decision waiting to be found. There is only the best decision you can make with the information and clarity you have right now. That is genuinely enough.',
+          'Release the need to control how this turns out completely. Every decision opens some doors and closes others. That is not failure — it is the nature of choosing at all.',
+          'Think of past moments when you made a difficult decision and moved forward. You survived that uncertainty and you learned from it. That same capacity is fully intact today.',
+          'Trust yourself more than you trust your fear. Fear generates worst-case scenarios and calls them predictions. Your judgment, based on real values and real experience, is more reliable.',
+          'Whatever you decide, you will handle what comes from it. You always have. The future version of you is capable of adapting to whatever this choice brings. Trust that version.',
+          'When you leave here, you will carry more clarity, more calm, and more trust in yourself. The decision does not have to be made this instant. But now you are better prepared to make it well.',
+        ],
+      },
+      {
+        id: 'sunday-anxiety', label: 'Ansiedad del domingo',
+        phrases: [
+          'Sunday has a particular weight for many people — that mix of quiet and anticipation before a new week. If you feel it, you are not alone, and it has a name and it makes complete sense.',
+          'Breathe and come back to this moment, this afternoon, this precise hour. The week has not started yet. You are still here, in this day, in this breath. Be here.',
+          'That low-level anxiety about Monday is your mind rehearsing scenarios it cannot yet know. Thank it for trying to prepare you, and gently bring it back to now. The future is not yet real.',
+          'What is actually good or comfortable about this moment right now, even if small? A warmth, a sound, a stillness, a person nearby. Locate something real and let it be enough for a moment.',
+          'The week that is coming will unfold one hour at a time, one situation at a time. You will not face it all at once. You will face it sequentially — and you can handle each piece as it arrives.',
+          'You have survived every Monday that has come before. Every difficult week has ended. The week ahead, whatever it holds, will also end. That is not hope — it is your confirmed history.',
+          'With each slow exhale, release a little of the anticipatory weight you are carrying about something that has not yet happened. The present is yours. The future is not yet asking anything of you.',
+          'Ask yourself honestly — is there something specific worrying you, or is it a general feeling of dread? If it is specific, it may be solvable. If it is general, it belongs to anxiety, not to reality.',
+          'Think about what you are looking forward to this week, even one small thing. A conversation, a meal, a moment of accomplishment. That also exists alongside whatever you fear.',
+          'Rest on Sundays is not a luxury or laziness. It is the legitimate infrastructure of a sustainable week. You are not failing by resting. You are doing exactly what a functioning human being needs.',
+          'The version of you that will face Monday morning is not the version feeling this anxiety right now. After sleep, after rest, things genuinely look and feel different. That is biology, not delusion.',
+          'When this session ends, come back to the rest of Sunday. Not to Monday yet. Enjoy, or at least inhabit, what remains of today. It is still yours and it is enough.',
+        ],
+      },
     ],
   },
+
+  // ── 4. Emociones ─────────────────────────────────────────────────────────────
   {
-    id: 'emociones', label: 'Emociones difíciles', emoji: '🌊',
+    id: 'emociones', label: 'Emociones', emoji: '🌊',
     themes: [
       {
         id: 'sadness', label: 'Tristeza',
@@ -277,10 +330,80 @@ export const THEME_GROUPS = [
           'When you leave here, you will carry more calm, more confidence, and more faith in your ability to move forward. Not certainty about the outcome, but trust in yourself. That is more valuable.',
         ],
       },
+      {
+        id: 'anxiety-worry', label: 'Ansiedad y preocupación',
+        phrases: [
+          'Anxiety is one of the most common human experiences and one of the least talked about. You are not broken, unusual, or weak. You are a person dealing with something very real.',
+          'Breathe slowly — slower than feels natural right now. Your nervous system responds to your breath rate. A slow exhale directly activates the calming branch of your nervous system. Use it.',
+          'Notice where anxiety lives in your body right now. Chest tightness, a racing heart, a tight stomach. Those sensations are real, but they are not dangerous. They are your body responding to perceived threat.',
+          'The anxious mind tends to see threats as certain and catastrophic. Gently ask: is this happening right now? Is it actually as certain and permanent as it feels? Often, the honest answer is no.',
+          'You do not have to eliminate anxiety to live well with it. You can breathe alongside it, move alongside it, and choose alongside it. It does not have to stop you.',
+          'Worry is the mind trying to feel in control by rehearsing scenarios. It feels like preparation but usually adds suffering without adding solutions. Breathe and notice that distinction.',
+          'With each exhale, you reduce the cortisol driving this state. With each slow inhale, you signal to your body that it is not under attack. This practice has measurable physical effects.',
+          'What is the most likely outcome of what you are worrying about — not the worst case, but the realistic one? Often it is manageable, even if uncomfortable. Return to the probable, not the catastrophic.',
+          'This moment is survivable. The anxiety is intense but it is not permanent or physically dangerous. You have felt this before and moved through it. That is your record. Trust it.',
+          'You are bigger than your anxiety. It is a part of your experience — it is not the whole of who you are. From this breath, look at it as the observer, not as the experience itself.',
+          'Self-compassion — treating yourself with the same gentleness you would offer a friend who is struggling — is one of the most effective responses to anxiety. Give that to yourself now.',
+          'When you leave here, carry one thing: anxiety passes. It always has. This state is temporary, even if it does not feel that way. You have moved through it before and you will again.',
+        ],
+      },
+      {
+        id: 'self-criticism', label: 'Autocrítica y autoestima',
+        phrases: [
+          'The inner critic is often the loudest voice in the room. It speaks with such confidence. But confidence does not equal truth, and harshness does not equal wisdom. You are allowed to question it.',
+          'Breathe and create a small space between you and that critical inner voice. You are not the voice — you are the one hearing it. That difference matters more than it might seem right now.',
+          'Ask yourself honestly: would you speak to a close friend the way you speak to yourself? If the answer is no, then something important is out of alignment. You deserve the same kindness you give others.',
+          'High standards and harsh self-criticism are not the same thing. One helps you grow. The other simply erodes the foundation you need to grow from. One serves you. The other does not.',
+          'Behind every persistent self-criticism there is usually a genuine need — to be accepted, to be good enough, to be loved. What are you actually longing for beneath the criticism? Listen to that.',
+          'You have done things right, genuinely and concretely. Name one specific thing. Let it be real and let it be enough for this moment. The mind that only notices failures is not being accurate.',
+          'Your mistakes do not define your worth. They are data — useful, sometimes painful, but nothing more permanent than data. You are allowed to learn and to remain whole at the same time.',
+          'With each breath, practice offering yourself the benefit of the doubt — the same benefit you would generously give to someone you care about. You are a work in progress. So is everyone.',
+          'Perfectionism often comes from a belief that being imperfect means being unlovable. That belief is not true, but it runs deep. Breathe toward the possibility that you are enough right now, as you are.',
+          'You are worthy of care and belonging, not because you perform perfectly, but because you exist. That is the foundation of self-worth that no achievement can give and no failure can take away.',
+          'Real self-improvement comes from self-understanding, not self-punishment. The kinder and more honest voice is also the more effective one. Try that voice with yourself today.',
+          'When you finish, carry a small, concrete commitment to speak to yourself a little more kindly today. Not perfectly — just slightly more gently. That shift, practiced daily, changes everything.',
+        ],
+      },
+      {
+        id: 'grief', label: 'Duelo o pérdida',
+        phrases: [
+          'Grief is love with nowhere to go. What you feel is a direct measure of how much something or someone mattered to you. That matters, and so does this pain.',
+          'There is no correct way to grieve and no timeline you are supposed to follow. What you feel is valid, even if it changes hour to hour or contradicts itself. All of it is allowed.',
+          'Breathe gently and allow yourself to feel without rushing toward any resolution. Grief is not a problem to be solved. It is a process to be moved through, at your own pace, in your own way.',
+          'Your loss is real. The absence left by something or someone who mattered is real. You do not have to minimize it or explain it or have it make sense right now.',
+          'Even in the deepest grief, the breath continues. Life insists on continuing through you, even when you are not sure you want it to. There is something quietly important in that persistence.',
+          'With each exhale, release a little of the tightness you carry around this loss. You do not have to let go of the love — only the grip of acute pain. They are different things.',
+          'You are allowed to have moments of peace without feeling that you are forgetting or betraying what you lost. Joy and grief can coexist. Relief is not disloyalty.',
+          'Think of one specific thing you are grateful to have had — the experience, the relationship, the time. Even brief or imperfect gifts leave something real behind. That something is still with you.',
+          'Grief comes in waves. When the wave is strong, breathe through it. When the water pulls back, rest in the space between. Both the wave and the calm are part of the same process.',
+          'Healing does not mean the pain disappears completely. It means you find a way to carry it that allows you to live alongside it. That is not giving up. That is adapting with love.',
+          'You do not have to have arrived anywhere by now. Grief does not follow a schedule and it does not respect expectations. The only measure that matters is how you are treating yourself in it.',
+          'When you leave here, carry a little more gentleness with yourself. Grief is one of the heaviest things a person can carry. You deserve real care as you carry it. You are doing the best you can.',
+        ],
+      },
+      {
+        id: 'guilt-shame', label: 'Culpa o vergüenza',
+        phrases: [
+          'Guilt and shame live in the body as well as the mind — in the chest, the stomach, the skin. Breathe toward where you feel it. Bringing awareness there is the first step through it.',
+          'Guilt says: I did something wrong. Shame says: I am something wrong. It helps to know which one you are carrying. One points to an action. The other points to your worth — and your worth is not negotiable.',
+          'The fact that you feel guilt or remorse is evidence of your conscience working — of the fact that you have values and care about them. That capacity for conscience is not a flaw. It is something real and good.',
+          'You are human. Humans make mistakes, say things they wish they had not, and hurt people they love. That is not a disqualifying fact. It is the basic condition of being alive and in relationship.',
+          'If there is something real to address — a repair to make, an honest conversation to have, an apology to offer — breathe toward the clarity to do that. Action can transform guilt. Rumination cannot.',
+          'With each deep exhale, see if you can release a fraction of the self-judgment you are carrying. Not the accountability — just the punishment. You are allowed to acknowledge wrongdoing without erasing your own worth.',
+          'You did not act from your best self in that moment. That is a fact. But it is not the only fact about you — not even close. People are more than their worst moments. So are you.',
+          'Shame thrives in silence and isolation. Simply naming what you feel here — even only to yourself — begins to reduce its power. Bringing it to the surface, into the light, already changes it.',
+          'Forgiveness — of yourself or others — is not saying that what happened was acceptable. It is freeing yourself from the ongoing damage of carrying it. It is a gift to yourself, not an excuse.',
+          'You can hold yourself accountable and also hold yourself with compassion at the same time. Those two things are not opposites. Together, they are how people actually grow.',
+          'You are more than this moment, this mistake, or this feeling. The story you are living is long and complex and has many chapters. This is not the whole book — it is one page in a much larger story.',
+          'When you finish, carry the intention to make what repairs you can — and then to allow yourself to move forward. Staying in guilt forever serves no one, including those you may have hurt. You deserve to live beyond it.',
+        ],
+      },
     ],
   },
+
+  // ── 5. Descanso ──────────────────────────────────────────────────────────────
   {
-    id: 'bienestar', label: 'Bienestar diario', emoji: '☀️',
+    id: 'descanso', label: 'Descanso', emoji: '🌙',
     themes: [
       {
         id: 'morning', label: 'Inicio del día',
@@ -333,10 +456,46 @@ export const THEME_GROUPS = [
           'You are enough. You have enough. In this precise moment, there is peace available for you. Everything you need is here.',
         ],
       },
+      {
+        id: 'sleep-prep', label: 'Preparación para dormir',
+        phrases: [
+          'The day is behind you and belongs completely to the past now. What comes next is rest — real, restorative, necessary rest. Your only task from this moment is to allow it.',
+          'Feel the support beneath your body — the mattress, the pillow, the warmth that surrounds you. You do not have to hold yourself up anymore. Surrender into that support fully.',
+          'Your mind may still be moving through the events of the day. That is natural and expected. Let those thoughts drift by like leaves on a slow stream — noticed, not followed. Just breath.',
+          'With each exhale, release the role, the obligations, and the identity of the active day. With each inhale, welcome stillness, darkness, and the quiet belonging of nighttime. You are transitioning now.',
+          'There is nothing left to resolve or decide tonight. Every question that still feels open can wait until tomorrow without losing anything. Tonight, you just need to breathe and soften.',
+          'Your body knows how to fall asleep — it has done it thousands of times without effort or instruction. You do not have to make it happen. You just have to stop preventing it by staying tense.',
+          'Let your muscles release one by one, beginning with your face — your jaw, your forehead, the space around your eyes. Then your shoulders, your hands. Let weight sink downward with each breath.',
+          'Imagine a place of complete safety and total rest. It might be real or entirely imagined. Let your mind move toward it slowly, with each breath, without forcing any detail.',
+          'The events of tomorrow are not yet real and do not require your attention tonight. If your mind goes there, gently bring it back here — to the quiet, the dark, the slow breath. Stay present.',
+          'You gave enough today. You were enough. There is no last thing you need to review or accomplish before sleep. That work is done. Let it stay done until morning.',
+          'Notice how your breath slows naturally as your body prepares for sleep. Your nervous system is settling on its own. You are already moving in the right direction. Follow that movement.',
+          'Sleep is one of the most profound forms of self-care that exists. By resting now, you are giving your body and mind exactly what they need to face tomorrow well. Let go. You are safe.',
+        ],
+      },
+      {
+        id: 'insomnia', label: 'Insomnio',
+        phrases: [
+          'You are awake when you did not want to be. That is frustrating, and your frustration about it is completely valid. Take a breath and begin here, in this exact moment, exactly as things are.',
+          'One important thing first: fighting wakefulness creates more wakefulness. This session is not about forcing sleep — it is about releasing the fight. Let go of the struggle and something else becomes possible.',
+          'Your body is resting even now, even while your mind is awake. Lying still in the dark is doing real work — recovering, regulating, restoring. It is not nothing. It is something.',
+          'Breathe in slowly for four counts, hold gently for two, and exhale slowly for six. Do this just a few times. The extended exhale specifically activates your calming nervous system. Let it work.',
+          'Instead of demanding sleep, invite rest. Not the same thing. Rest means allowing your body to be still, your thoughts to soften, your muscles to release. Sleep may follow. And if not, rest is still valuable.',
+          'If thoughts are circling, acknowledge them briefly without following them. I hear you. Not now. Then return to your breath, to the dark, to the physical sensations of lying down. Return, each time, without frustration.',
+          'Notice any tension in your body and consciously release it — your jaw, your hands, your belly. Tension signals danger to your nervous system. Releasing it signals safety, and safety precedes sleep.',
+          'You have survived nights of poor sleep before and functioned the following day. Tomorrow may not be your best day, and that is genuinely okay. This is one night in a long story. It is manageable.',
+          'The anxiety about not sleeping often keeps us more awake than the insomnia itself. If you can release the story about what not sleeping means, you release one of the main obstacles to sleep.',
+          'There is nothing required of you right now except to breathe and to be still. Not to sleep perfectly, not to fix anything, not to plan the morning. Just this breath, this dark, this body at rest.',
+          'Your nervous system responds to stillness and slow breathing even when the mind is active. Keep breathing slowly. Keep your body still. The system is working even if sleep feels far away.',
+          'Whatever happens tonight, morning will come and with it a new opportunity. For now, give your body and mind the kindest conditions you can — stillness, slow breath, and the release of demands. That is enough.',
+        ],
+      },
     ],
   },
+
+  // ── 6. Cuerpo ────────────────────────────────────────────────────────────────
   {
-    id: 'salud', label: 'Salud y cuerpo', emoji: '🌿',
+    id: 'cuerpo', label: 'Cuerpo', emoji: '🌿',
     themes: [
       {
         id: 'health-anxiety', label: 'Ansiedad por salud',
@@ -387,6 +546,57 @@ export const THEME_GROUPS = [
           'This conscious pause is already real medicine for your nervous system and for the perception of pain. You are not waiting — you are acting. This counts.',
           'There are healing resources within you that are specifically activated by calm and deep breathing. You are accessing them right now. Trust that process.',
           'When you finish, you will carry a more compassionate, more patient, and kinder relationship with your body. That relationship directly affects how you experience pain. It is worth cultivating.',
+        ],
+      },
+      {
+        id: 'exercise', label: 'Antes o después del ejercicio',
+        phrases: [
+          'You are here to acknowledge and care for your body — the vehicle that carries everything you are and do. This moment is a gift you are giving it, whether before or after movement.',
+          'If you are preparing to move — breathe and arrive fully in your body first. Feel it as an ally waiting to be used, not an obstacle to get through. This session sets the tone.',
+          'Your body is extraordinary in its capacity to move, to adapt, and to grow stronger with consistent care. That capacity deserves to be honored, not taken for granted.',
+          'Whether you are warming up or cooling down, your breath is the bridge between your mind and your physical self. Let it be the thread that connects them completely in this moment.',
+          'Release any judgment about performance, appearance, or how today will compare to other days. This is about being present in your body right now, with what it can do today. That is enough.',
+          'With each breath, bring awareness to the sensations in your body — not as problems to solve, but as information about a living system in motion. Curiosity, not judgment.',
+          'If you just finished moving, honor the effort you gave. Every workout, however it felt, created adaptation. Your body is responding even now, rebuilding and becoming more capable.',
+          'Rest is as important as effort in any physical practice. The growth happens during recovery, not only during exertion. This breath is part of the work, not separate from it.',
+          'Think about why you move — not the aesthetic goals, but the deeper ones. Energy, mental clarity, longevity, how movement makes you feel from the inside. Connect with that real reason.',
+          'Your body does not need to be perfect to deserve care and respect. Right now, in its current state, it deserves your attention, your gratitude, and your gentleness. Give it that.',
+          'Every time you choose to move your body with intention, you are making a vote for your long-term health and your quality of life. That vote matters more than how any single session feels.',
+          'When you leave here, carry that same presence into the movement or the recovery that follows. Breathe. Notice. Be in your body. That full presence makes everything more effective and more real.',
+        ],
+      },
+      {
+        id: 'body-scan', label: 'Escaneo corporal',
+        phrases: [
+          'This is a practice of coming home to your body — of bringing your full, unhurried attention to the physical self that carries you through every moment of your life. Begin here, with warmth and without judgment.',
+          'Bring your attention to the top of your head. Notice whatever is there — warmth, pressure, tightness, or simply the feeling of existing. No need to change anything. Just arrive and observe.',
+          'Now move your awareness slowly to your face. Your forehead, your jaw, the space behind your eyes. Allow these muscles to soften without effort. Just notice and breathe.',
+          'Bring your attention to your neck and shoulders — the places where so many of us carry the weight of the day without realizing it. Breathe toward them and notice what happens when attention arrives.',
+          'Move slowly to your chest and upper back. Feel your heart beating steadily. Feel your breath moving your ribs. Notice those automatic, faithful rhythms that support you without being asked.',
+          'Bring awareness to your abdomen. Notice any tension, any holding, any sensation that has been waiting to be acknowledged. Breathe toward it gently and let it soften on its own.',
+          'Move down to your hips and lower back — areas that often carry unacknowledged strain. Breathe toward them with the intention of releasing, not forcing. Just awareness and breath.',
+          'Bring your attention to your legs — the thighs, the knees, the calves. These carry you through the world. Notice whatever is present there with the same quiet, non-judgmental attention.',
+          'And finally, your feet. The foundation that connects you to the earth beneath you. Notice the sensations there — pressure, temperature, tingling. These extremities are still part of you, still worth attention.',
+          'Now hold your entire body in awareness at once — all of it together, exactly as it is right now. Not as it was or as you wish it would be. As it is. This is your body today. It is enough.',
+          'Your body communicates constantly. This practice teaches you to hear it before it has to shout. That listening relationship, developed with patience, is one of the most powerful forms of self-care there is.',
+          'When you finish, carry a fragment of this bodily awareness into the next thing you do. Not a big meditation — just a small check-in. How does my body feel right now? That question, asked regularly, changes everything.',
+        ],
+      },
+      {
+        id: 'mindful-eating', label: 'Comida consciente',
+        phrases: [
+          'Before you eat, take this moment to arrive. To slow down from the pace of the day and become present to what you are about to receive. Your body will absorb not just food but the state you bring to it.',
+          'Notice the experience of hunger in your body right now, if it is present. Where do you feel it? What does it actually feel like? This awareness connects you to a real and intelligent signal.',
+          'Before the first bite, take a breath and look at what is in front of you. The colors, the textures, the smells. Food is sensory experience before it is fuel. Let yourself experience that.',
+          'Eating slowly and with awareness allows your body\'s natural satiety signals to catch up with your intake. That feedback loop works — but only if you are present enough to hear it.',
+          'This is a practice of respecting the nourishment your body needs. Not restricting, not overindulging from distraction — but genuinely listening to what is enough. That takes practice and gentleness.',
+          'If you are eating to comfort an emotion, notice that without judgment. That is something your body learned to do for good reasons. Simply naming it with compassion is a meaningful act of awareness.',
+          'The body does not differentiate between food eaten in stress and food eaten in calm — but the digestive system does. Calm enhances digestion, absorption, and satisfaction. This breath already helps.',
+          'There are no bad foods and no good foods in this moment — just what you have chosen and your relationship with it. Bring curiosity to that relationship rather than judgment. What do you notice?',
+          'Eating is one of the few moments in the day when you can practice full sensory presence. The taste, the texture, the temperature. Let each bite be complete before reaching for the next.',
+          'Gratitude for food — for having it, for the hands that prepared it, for the process that brought it here — changes the quality of the experience. It is not sentiment. It is a real shift in awareness.',
+          'You eat not just to fuel performance but to nourish a living being — yourself — who deserves that nourishment with care and presence. That reframe matters. You are worth feeding well.',
+          'When you leave this practice, bring just a fraction of this presence to whatever you eat next. Not perfection — just one slow breath before the first bite. That is the whole practice, distilled.',
         ],
       },
     ],

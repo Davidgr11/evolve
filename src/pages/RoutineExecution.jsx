@@ -11,6 +11,19 @@ import ConfirmModal from '../components/ConfirmModal';
 
 const THEME_HEX = { blue: '#3b82f6', purple: '#8b5cf6', orange: '#f97316', teal: '#0d9488' };
 
+const extractYoutubeId = (url) => {
+  const match = url?.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+  return match?.[1] || null;
+};
+
+const typeToStatKey = (type) => {
+  const t = (type || '').toLowerCase();
+  if (t === 'running' || t === 'correr') return 'running';
+  if (t === 'deportes' || t === 'sports') return 'sports';
+  if (['estiramiento', 'stretch', 'yoga', 'pilates', 'movilidad'].includes(t)) return 'stretch';
+  return 'workout';
+};
+
 const TYPE_LABEL = { stretch: 'Estiramiento', workout: 'Entrenamiento', running: 'Correr', sports: 'Deporte' };
 
 const RoutineExecution = () => {
@@ -78,7 +91,20 @@ const RoutineExecution = () => {
     return `${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const isYoutube = !!routine?.youtubeUrl;
+  const youtubeId = isYoutube ? extractYoutubeId(routine.youtubeUrl) : null;
+
   const handleComplete = () => {
+    if (isYoutube || !routine.exercises?.length) {
+      const statKey = typeToStatKey(routine.type);
+      if (statKey !== 'stretch') {
+        setShowStatsModal(true);
+      } else {
+        saveStatistics();
+      }
+      return;
+    }
+
     const isLastExercise = currentExerciseIndex === routine.exercises.length - 1;
     const isLastSeries = currentSeries === routine.series;
 
@@ -115,7 +141,7 @@ const RoutineExecution = () => {
 
       if (statsDoc.exists()) {
         const updates = {
-          [routine.type]: increment(1)
+          [typeToStatKey(routine.type)]: increment(1)
         };
 
         if (statsData.effort) {
@@ -138,7 +164,7 @@ const RoutineExecution = () => {
           effort: [], calories: 0, km: 0
         };
 
-        newStats[routine.type] = 1;
+        newStats[typeToStatKey(routine.type)] = 1;
         if (statsData.effort) newStats.effort = [parseInt(statsData.effort)];
         if (statsData.calories) newStats.calories = parseInt(statsData.calories);
         if (statsData.km) newStats.km = parseFloat(statsData.km);
@@ -175,14 +201,17 @@ const RoutineExecution = () => {
 
   if (!routine) return null;
 
-  const currentExercise = routine.exercises[currentExerciseIndex];
-  const isLastExercise = currentExerciseIndex === routine.exercises.length - 1;
-  const isLastSeries = currentSeries === routine.series;
-  const totalSteps = routine.series * routine.exercises.length;
-  const completedSteps = (currentSeries - 1) * routine.exercises.length + currentExerciseIndex;
-  const progressPct = Math.round(completedSteps / totalSteps * 100);
+  const hasExercises = !isYoutube && routine.exercises?.length > 0;
+  const currentExercise = hasExercises ? routine.exercises[currentExerciseIndex] : null;
+  const isLastExercise = hasExercises && currentExerciseIndex === routine.exercises.length - 1;
+  const isLastSeries = currentSeries === (routine.series || 1);
+  const totalSteps = hasExercises ? (routine.series || 1) * routine.exercises.length : 1;
+  const completedSteps = hasExercises ? (currentSeries - 1) * routine.exercises.length + currentExerciseIndex : 0;
+  const progressPct = hasExercises ? Math.round(completedSteps / totalSteps * 100) : 0;
 
-  const btnLabel = isLastExercise && isLastSeries
+  const btnLabel = isYoutube || !hasExercises
+    ? 'Completar rutina'
+    : isLastExercise && isLastSeries
     ? 'Completar rutina'
     : isLastExercise
     ? `Siguiente ronda (${currentSeries + 1}/${routine.series})`
@@ -230,9 +259,11 @@ const RoutineExecution = () => {
 
         {/* Stats row */}
         <div className="flex items-center justify-between">
-          <span className="text-sm text-gray-500 dark:text-gray-400">
-            Ronda <span className="font-semibold text-gray-700 dark:text-gray-300">{currentSeries}</span>/{routine.series}
-          </span>
+          {hasExercises ? (
+            <span className="text-sm text-gray-500 dark:text-gray-400">
+              Ronda <span className="font-semibold text-gray-700 dark:text-gray-300">{currentSeries}</span>/{routine.series || 1}
+            </span>
+          ) : <span />}
           <button
             onClick={() => setIsPaused(!isPaused)}
             className="flex items-center gap-1.5 text-sm font-semibold px-3 py-1.5 rounded-xl transition-colors"
@@ -242,47 +273,67 @@ const RoutineExecution = () => {
               ? <><Play className="w-3.5 h-3.5" /> Reanudar</>
               : <><Pause className="w-3.5 h-3.5" /> Pausar</>}
           </button>
-          <span className="text-sm text-gray-500 dark:text-gray-400">
-            <span className="font-semibold text-gray-700 dark:text-gray-300">{currentExerciseIndex + 1}</span>/{routine.exercises.length}
-          </span>
+          {hasExercises ? (
+            <span className="text-sm text-gray-500 dark:text-gray-400">
+              <span className="font-semibold text-gray-700 dark:text-gray-300">{currentExerciseIndex + 1}</span>/{routine.exercises.length}
+            </span>
+          ) : <span />}
         </div>
       </div>
 
-      {/* Exercise card */}
-      <div className="mx-4 liquid-glass-panel rounded-2xl overflow-hidden mb-4">
-        {currentExercise.imageUrl && (
-          <div className="pt-2.5 px-2.5">
-            <div className="w-full aspect-square rounded-2xl overflow-hidden">
-              <img
-                src={currentExercise.imageUrl}
-                alt={currentExercise.name}
-                className="w-full h-full object-cover"
+      {/* YouTube embed or exercise card */}
+      {isYoutube ? (
+        <div className="mx-4 liquid-glass-panel rounded-2xl overflow-hidden mb-4">
+          {youtubeId ? (
+            <div className="w-full aspect-video">
+              <iframe
+                src={`https://www.youtube.com/embed/${youtubeId}`}
+                title="Rutina"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+                className="w-full h-full"
               />
             </div>
-          </div>
-        )}
-
-        <div className="p-5">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 leading-tight mb-3">
-            {currentExercise.name}
-          </h2>
-
-          {currentExercise.repetitions && (
-            <div
-              className="inline-flex items-center px-4 py-2 rounded-xl mb-3 self-start"
-              style={{ backgroundColor: themeHex + '15', color: themeHex }}
-            >
-              <span className="text-base font-semibold">{currentExercise.repetitions}</span>
+          ) : (
+            <div className="p-5 text-center text-sm text-gray-400">URL de YouTube no válida</div>
+          )}
+        </div>
+      ) : (
+        <div className="mx-4 liquid-glass-panel rounded-2xl overflow-hidden mb-4">
+          {currentExercise.imageUrl && (
+            <div className="pt-2.5 px-2.5">
+              <div className="w-full aspect-square rounded-2xl overflow-hidden">
+                <img
+                  src={currentExercise.imageUrl}
+                  alt={currentExercise.name}
+                  className="w-full h-full object-cover"
+                />
+              </div>
             </div>
           )}
 
-          {currentExercise.instructions && (
-            <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
-              {currentExercise.instructions}
-            </p>
-          )}
+          <div className="p-5">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 leading-tight mb-3">
+              {currentExercise.name}
+            </h2>
+
+            {currentExercise.repetitions && (
+              <div
+                className="inline-flex items-center px-4 py-2 rounded-xl mb-3 self-start"
+                style={{ backgroundColor: themeHex + '15', color: themeHex }}
+              >
+                <span className="text-base font-semibold">{currentExercise.repetitions}</span>
+              </div>
+            )}
+
+            {currentExercise.instructions && (
+              <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+                {currentExercise.instructions}
+              </p>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Complete button */}
       <div
@@ -294,7 +345,7 @@ const RoutineExecution = () => {
           className="w-full text-white font-bold py-4 px-6 rounded-2xl flex items-center justify-center gap-2 transition-opacity active:opacity-80"
           style={{ backgroundColor: themeHex }}
         >
-          {isLastExercise && isLastSeries
+          {(isYoutube || !hasExercises || (isLastExercise && isLastSeries))
             ? <Check className="w-5 h-5" />
             : <ChevronRight className="w-5 h-5" />}
           {btnLabel}

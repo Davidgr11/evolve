@@ -11,7 +11,7 @@ import {
 import {
   Salad, Zap, Moon, Smile, BookOpen, Users,
   ChevronRight, ChevronDown, ChevronUp, Sparkles, CheckCircle, AlertCircle, X, Loader2, ChevronLeft, Info,
-  Plus, Edit, Trash2, TrendingUp, LogOut, Pencil, GripVertical, Eye,
+  Plus, Edit, Trash2, TrendingUp, LogOut, Pencil, GripVertical, Eye, Bell,
 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import confetti from 'canvas-confetti';
@@ -51,7 +51,7 @@ const PILLARS = [
   { key: 'ejercicio',   label: 'Actividad',   icon: Zap,      color: 'text-orange-500', desc: 'Si hoy completaste alguna rutina sin meta fija, el score es 100 automáticamente. Si no, se promedian solo las rutinas con meta semanal: se mide qué tan cerca estás de cumplir la frecuencia esperada según tu última sesión.' },
   { key: 'sueno',       label: 'Sueño',       icon: Moon,     color: 'text-purple-500', desc: 'Promedio de los últimos 7 días: hábitos nocturnos (sin pantallas, horario fijo, cena ligera) en 60% + nivel de descanso al despertar en 40%.' },
   { key: 'emocional',   label: 'Emocional',   icon: Smile,    color: 'text-blue-500',   desc: 'Sesiones de meditación registradas en la pestaña Medita (80%) + calificación de tu reflexión escrita en el check-in vespertino (20%).' },
-  { key: 'crecimiento', label: 'Crecimiento', icon: BookOpen, color: 'text-amber-500',  desc: 'Aprendizaje diario del check-in de los últimos 7 días (65%) + temas de Mente completados (15%) + libros leídos este año vs. tu meta (20%).' },
+  { key: 'crecimiento', label: 'Crecimiento', icon: BookOpen, color: 'text-amber-500',  desc: 'Aprendizaje diario del check-in de los últimos 7 días (80%) + libros leídos este año vs. tu meta (20%).' },
   { key: 'comunidad',   label: 'Comunidad',   icon: Users,    color: 'text-pink-500',   desc: 'Nivel de socialización de los últimos 7 días con datos: si no socializaste (0), con personas cómodas (65%) o saliste de tu zona de confort (100%).' },
 ];
 
@@ -315,7 +315,7 @@ Criterios para el score:
     }
   };
 
-  const TOTAL_STEPS = 3;
+  const TOTAL_STEPS = 4;
   const canGoBack = step > 1 && !saving && !coachResponse;
 
   return (
@@ -334,7 +334,7 @@ Criterios para el score:
             }
             {!alreadyDone && (
               <div className="flex gap-1.5">
-                {[1, 2, 3].map(d => (
+                {[1, 2, 3, 4].map(d => (
                   <div key={d} className={`h-1.5 rounded-full transition-all ${d === step ? 'w-6 bg-primary-500' : d < step ? 'w-1.5 bg-primary-300' : 'w-1.5 bg-gray-200 dark:bg-gray-700'}`} />
                 ))}
               </div>
@@ -420,32 +420,41 @@ Criterios para el score:
               </>
             )}
 
-            {/* ── Step 3: Emocional ── */}
+            {/* ── Step 3: Socialización ── */}
             {!alreadyDone && step === 3 && (
               <>
-                <h3 className="font-bold text-lg text-gray-900 dark:text-gray-100">Emocional</h3>
+                <h3 className="font-bold text-lg text-gray-900 dark:text-gray-100">Socialización</h3>
+                <p className="text-sm text-gray-400 dark:text-gray-500 -mt-3">¿Cómo fue tu interacción con otros hoy?</p>
                 <div className="space-y-2">
-                  <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Socialización</p>
-                  <div className="space-y-2">
-                    {SOCIAL_OPTIONS.map(o => (
-                      <button key={o.value} onClick={() => setCommunity(o.value)}
-                        className={`w-full py-2.5 px-3 rounded-xl text-sm text-left transition-all border-2 flex items-center gap-3 ${communityLevel === o.value ? o.accent : 'bg-white/50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300'}`}>
-                        <span className="text-lg flex-shrink-0">{o.emoji}</span>
-                        <span className="font-medium">{o.label}</span>
-                      </button>
-                    ))}
-                  </div>
+                  {SOCIAL_OPTIONS.map(o => (
+                    <button key={o.value} onClick={() => setCommunity(o.value)}
+                      className={`w-full py-2.5 px-3 rounded-xl text-sm text-left transition-all border-2 flex items-center gap-3 ${communityLevel === o.value ? o.accent : 'bg-white/50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300'}`}>
+                      <span className="text-lg flex-shrink-0">{o.emoji}</span>
+                      <span className="font-medium">{o.label}</span>
+                    </button>
+                  ))}
                 </div>
+                <button onClick={() => setStep(4)} className="btn-primary w-full py-3 flex items-center justify-center gap-2">
+                  Siguiente <ChevronRight className="w-4 h-4" />
+                </button>
+              </>
+            )}
+
+            {/* ── Step 4: Emocional ── */}
+            {!alreadyDone && step === 4 && (
+              <>
+                <h3 className="font-bold text-lg text-gray-900 dark:text-gray-100">Reflexión emocional</h3>
                 <div className="space-y-2">
-                  <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Explica cómo te sentiste hoy, qué emociones tuviste y cómo las manejaste <span className="normal-case font-normal text-gray-400">(opcional)</span>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    Describir cómo te sentiste — aunque sea una línea — te ayuda a entenderte mejor y obtener feedback personalizado 🌱
                   </p>
                   <textarea
                     className="input-field resize-none"
-                    rows={4}
-                    placeholder="Hoy me sentí..."
+                    rows={5}
+                    placeholder="Hoy me sentí... ¿qué emociones tuve? ¿cómo las manejé?"
                     value={emotionText}
                     onChange={e => setEmotionText(e.target.value)}
+                    autoFocus
                   />
                 </div>
 
@@ -649,12 +658,11 @@ const Home = () => {
     const weekStart = last7[0];
 
     try {
-      const [foodSnap, routinesSnap, wellbeingSnap, booksSnap, menteSnap, booksGoalSnap] = await Promise.all([
+      const [foodSnap, routinesSnap, wellbeingSnap, booksSnap, booksGoalSnap] = await Promise.all([
         getDoc(doc(db, `users/${user.uid}/food`, 'data')),
         getDocs(collection(db, `users/${user.uid}/routines`)),
         getDoc(doc(db, `users/${user.uid}/wellbeing`, 'data')),
         getDocs(collection(db, `users/${user.uid}/books`)),
-        getDoc(doc(db, `users/${user.uid}/mente`, 'data')),
         getDoc(doc(db, `users/${user.uid}/data`, 'books')),
       ]);
 
@@ -767,10 +775,10 @@ const Home = () => {
         if (comunidadDays.length) comunidad = Math.round(comunidadDays.reduce((a, b) => a + b, 0) / comunidadDays.length);
       }
 
-      // ── Crecimiento (65% daily learning · 15% learning items · 20% books goal)
+      // ── Crecimiento (80% daily learning · 20% books goal)
       let crecimiento = 0;
       {
-        // 65%: 7-day check-in growth avg
+        // 80%: 7-day check-in growth avg
         const growthDays = last7.map(d => {
           const ci = ciData[d];
           if (!ci || ci.growth == null) return null;
@@ -778,13 +786,6 @@ const Home = () => {
         }).filter(v => v !== null);
         const dailyLearning = growthDays.length
           ? Math.round(growthDays.reduce((a, b) => a + b, 0) / growthDays.length)
-          : 0;
-
-        // 15%: learning items completion
-        const menteData = menteSnap.exists() ? menteSnap.data() : {};
-        const items = menteData.learningItems || [];
-        const learningScore = items.length
-          ? Math.round(items.filter(i => i.completed).length / items.length * 100)
           : 0;
 
         // 20%: books read this year vs annual goal
@@ -796,7 +797,7 @@ const Home = () => {
         }).length;
         const booksScore = Math.min(100, Math.round(booksThisYear / booksGoal * 100));
 
-        crecimiento = Math.round(0.65 * dailyLearning + 0.15 * learningScore + 0.20 * booksScore);
+        crecimiento = Math.round(0.80 * dailyLearning + 0.20 * booksScore);
       }
 
       const computed = { nutricion, ejercicio, sueno, emocional, crecimiento, comunidad };
@@ -1167,20 +1168,31 @@ Plain text, sin markdown, en español.`;
         <div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 leading-tight">Inicio</h1>
         </div>
-        <button
-          onClick={() => setShowProfileModal(true)}
-          className="w-11 h-11 rounded-full overflow-hidden flex-shrink-0 ring-2 ring-white/70 dark:ring-gray-700 hover:ring-primary-300 transition-all shadow-sm"
-        >
-          {profilePhoto ? (
-            <img src={profilePhoto} alt="Perfil" className="w-full h-full object-cover" />
-          ) : (
-            <div className="w-full h-full bg-white/70 dark:bg-gray-800/70 flex items-center justify-center">
-              <span className="text-base font-bold text-gray-700 dark:text-gray-300">
-                {(user?.displayName || user?.email || '?')[0].toUpperCase()}
-              </span>
-            </div>
+        <div className="flex items-center gap-2">
+          {'Notification' in window && notifPermission !== 'granted' && (
+            <button
+              onClick={handleEnableNotifications}
+              className="w-9 h-9 flex items-center justify-center rounded-full bg-white/60 dark:bg-gray-700/60 text-gray-500 dark:text-gray-400 hover:text-primary-500 transition-colors"
+              aria-label="Activar notificaciones"
+            >
+              <Bell className="w-4 h-4" />
+            </button>
           )}
-        </button>
+          <button
+            onClick={() => setShowProfileModal(true)}
+            className="w-11 h-11 rounded-full overflow-hidden flex-shrink-0 ring-2 ring-white/70 dark:ring-gray-700 hover:ring-primary-300 transition-all shadow-sm"
+          >
+            {profilePhoto ? (
+              <img src={profilePhoto} alt="Perfil" className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full bg-white/70 dark:bg-gray-800/70 flex items-center justify-center">
+                <span className="text-base font-bold text-gray-700 dark:text-gray-300">
+                  {(user?.displayName || user?.email || '?')[0].toUpperCase()}
+                </span>
+              </div>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* ── Personal phrase ── */}
@@ -1207,9 +1219,6 @@ Plain text, sin markdown, en español.`;
           <>
             <div className="flex items-center justify-between">
               <p className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Check in</p>
-              {'Notification' in window && notifPermission !== 'granted' && (
-                <button onClick={handleEnableNotifications} className="text-xs text-blue-500 dark:text-blue-400 hover:text-blue-600 transition-colors">🔔 Activar avisos</button>
-              )}
             </div>
 
             {/* Morning sleep card */}
@@ -1218,12 +1227,13 @@ Plain text, sin markdown, en español.`;
                 onClick={() => isSleepWindow && !sleepFilled && setShowSleepCheckin(true)}
                 className={`w-full rounded-2xl p-4 flex items-center gap-3 transition-all ${
                   sleepFilled
-                    ? 'bg-purple-50/80 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700/50'
+                    ? 'border'
                     : 'liquid-glass-panel active:scale-[0.99]'
                 }`}
+                style={sleepFilled ? { backgroundColor: (THEME_PALETTE[colorTheme]?.hex ?? '#3b82f6') + '14', borderColor: (THEME_PALETTE[colorTheme]?.hex ?? '#3b82f6') + '40' } : undefined}
               >
                 {sleepFilled
-                  ? <CheckCircle className="w-5 h-5 text-purple-500 flex-shrink-0" />
+                  ? <CheckCircle className="w-5 h-5 flex-shrink-0" style={{ color: THEME_PALETTE[colorTheme]?.hex ?? '#3b82f6' }} />
                   : <Moon className="w-5 h-5 text-purple-400 flex-shrink-0" />
                 }
                 <div className="text-left min-w-0">
@@ -1244,12 +1254,13 @@ Plain text, sin markdown, en español.`;
                 onClick={() => setShowCheckin(true)}
                 className={`w-full rounded-2xl p-4 flex items-center gap-3 transition-all active:scale-[0.99] ${
                   todayCheckin?.savedAt
-                    ? 'bg-green-50/80 dark:bg-green-900/20 border border-green-200 dark:border-green-700/50'
+                    ? 'border'
                     : 'liquid-glass-panel'
                 }`}
+                style={todayCheckin?.savedAt ? { backgroundColor: (THEME_PALETTE[colorTheme]?.hex ?? '#3b82f6') + '14', borderColor: (THEME_PALETTE[colorTheme]?.hex ?? '#3b82f6') + '40' } : undefined}
               >
                 {todayCheckin?.savedAt
-                  ? <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />
+                  ? <CheckCircle className="w-5 h-5 flex-shrink-0" style={{ color: THEME_PALETTE[colorTheme]?.hex ?? '#3b82f6' }} />
                   : <div className="w-5 h-5 rounded-full border-2 border-gray-300 dark:border-gray-600 flex-shrink-0" />
                 }
                 <div className="text-left min-w-0">
@@ -1561,7 +1572,7 @@ Plain text, sin markdown, en español.`;
                 </button>
                 {claudeRec && (
                   <div className="mt-3 p-3 rounded-xl border" style={{ background: THEME_PALETTE[colorTheme]?.hex + '0e', borderColor: THEME_PALETTE[colorTheme]?.hex + '30' }}>
-                    <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed text-justify">{claudeRec}</p>
+                    <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed text-justify">{claudeRec.replace(/\*\*([^*]+)\*\*/g, '$1')}</p>
                   </div>
                 )}
               </div>

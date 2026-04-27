@@ -4,160 +4,197 @@ import { storage } from '../utils/firebase';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import imageCompression from 'browser-image-compression';
 import toast from '../utils/toast';
-import { X, Plus, Trash2, ChevronDown, ChevronUp, Sparkles, Loader2 } from 'lucide-react';
+import { X, Plus, Trash2, ChevronDown, ChevronUp, Youtube, GripVertical } from 'lucide-react';
 import ImageUpload from './ImageUpload';
-import { callClaude as _callClaude } from '../utils/cloudApi';
+import {
+  DndContext, closestCenter, PointerSensor, TouchSensor, useSensor, useSensors,
+} from '@dnd-kit/core';
+import {
+  SortableContext, verticalListSortingStrategy, useSortable, arrayMove,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
-// ── free-exercise-db image lookup (GitHub-hosted, no API key) ────────────────
-// Repo: https://github.com/yuhonas/free-exercise-db  (~873 exercises)
-const EXERCISE_DB_JSON = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/dist/exercises.json';
-const EXERCISE_DB_IMG  = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises';
-let _exerciseDb = null;
-
-const loadExerciseDb = async () => {
-  if (_exerciseDb) return _exerciseDb;
-  try {
-    const r = await fetch(EXERCISE_DB_JSON, { signal: AbortSignal.timeout(12000) });
-    if (!r.ok) return (_exerciseDb = []);
-    _exerciseDb = await r.json();
-    return _exerciseDb;
-  } catch {
-    return (_exerciseDb = []);
-  }
+const extractYoutubeId = (url) => {
+  const match = url?.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+  return match?.[1] || null;
 };
 
-const fetchExerciseImage = async (exerciseName) => {
-  try {
-    const db = await loadExerciseDb();
-    if (!db.length) return null;
+const ROUTINE_TYPES = [
+  { id: 'fuerza',       label: 'Fuerza',       emoji: '🏋️' },
+  { id: 'hiit',         label: 'HIIT',          emoji: '⚡' },
+  { id: 'cardio',       label: 'Cardio',        emoji: '🏃' },
+  { id: 'yoga',         label: 'Yoga',          emoji: '🧘' },
+  { id: 'pilates',      label: 'Pilates',       emoji: '🤸' },
+  { id: 'movilidad',    label: 'Movilidad',     emoji: '🌀' },
+  { id: 'estiramiento', label: 'Estiramiento',  emoji: '🦵' },
+  { id: 'running',      label: 'Running',       emoji: '👟' },
+  { id: 'ciclismo',     label: 'Ciclismo',      emoji: '🚴' },
+  { id: 'natacion',     label: 'Natación',      emoji: '🏊' },
+  { id: 'deportes',     label: 'Deportes',      emoji: '⚽' },
+  { id: 'funcional',    label: 'Funcional',     emoji: '🤜' },
+  { id: 'core',         label: 'Core',          emoji: '💪' },
+  { id: 'boxeo',        label: 'Boxeo',         emoji: '🥊' },
+  { id: 'crossfit',     label: 'CrossFit',      emoji: '🔥' },
+  { id: 'caminata',     label: 'Caminata',      emoji: '🚶' },
+  { id: 'otro',         label: 'Otro',          emoji: '✏️' },
+];
 
-    const needle = exerciseName.toLowerCase().trim();
-    const words  = needle.split(' ');
-
-    // 1. Exact match
-    let match = db.find(ex => ex.name?.toLowerCase() === needle);
-    // 2. DB name contains full query
-    if (!match) match = db.find(ex => ex.name?.toLowerCase().includes(needle));
-    // 3. Query contains DB name
-    if (!match) match = db.find(ex => needle.includes(ex.name?.toLowerCase() || '~~'));
-    // 4. First two words of query appear in DB name
-    if (!match && words.length >= 2) {
-      const prefix = words.slice(0, 2).join(' ');
-      match = db.find(ex => ex.name?.toLowerCase().includes(prefix));
-    }
-    // 5. First word alone
-    if (!match) match = db.find(ex => ex.name?.toLowerCase().includes(words[0]));
-
-    if (!match || !match.images?.length) return null;
-    return `${EXERCISE_DB_IMG}/${match.images[0]}`;
-  } catch {
-    return null;
-  }
+const findTypeId = (typeName) => {
+  if (!typeName) return null;
+  const match = ROUTINE_TYPES.find(
+    t => t.id !== 'otro' && t.label.toLowerCase() === typeName.toLowerCase()
+  );
+  return match ? match.id : 'otro';
 };
 
-// ── Claude helper ─────────────────────────────────────────────────────────────
-const callClaude = async (prompt, maxTokens = 300) => {
-  return (await _callClaude(prompt, maxTokens)).trim()
-    .replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim();
+// ── Sortable exercise item ─────────────────────────────────────────────────────
+const SortableExerciseItem = ({ ex, idx, isEdit, isOpen, onToggle, onRemove, onUpdate, onImageSelect, pendingImages }) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: ex._id });
+  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
+
+  return (
+    <div ref={setNodeRef} style={style} className="border border-gray-200 dark:border-gray-600 rounded-xl overflow-hidden">
+      <div
+        className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700/60 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+        onClick={() => onToggle(ex._id)}
+      >
+        {/* Drag handle — only shown in edit mode */}
+        {isEdit && (
+          <div
+            className="text-gray-300 dark:text-gray-500 cursor-grab active:cursor-grabbing flex-shrink-0 touch-none"
+            {...attributes}
+            {...listeners}
+            onClick={e => e.stopPropagation()}
+          >
+            <GripVertical className="w-4 h-4" />
+          </div>
+        )}
+        {ex.imageUrl ? (
+          <img src={ex.imageUrl} alt="" className="w-10 h-10 rounded-lg object-cover flex-shrink-0 bg-gray-200 dark:bg-gray-600" onError={() => onUpdate(ex._id, 'imageUrl', '')} />
+        ) : (
+          <div className="w-10 h-10 rounded-lg bg-gray-200 dark:bg-gray-600 flex items-center justify-center flex-shrink-0">
+            <span className="text-xs font-bold text-gray-400">{idx + 1}</span>
+          </div>
+        )}
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">
+            {ex.name || <span className="text-gray-400 italic">Sin nombre</span>}
+          </p>
+          {ex.repetitions && <p className="text-sm text-gray-400">{ex.repetitions}</p>}
+        </div>
+        <div className="flex items-center gap-0.5" onClick={e => e.stopPropagation()}>
+          <button type="button" onClick={() => onRemove(ex._id)} className="p-1.5 text-gray-400 hover:text-red-500 transition-colors">
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+          <div className="p-1.5 text-gray-400" onClick={() => onToggle(ex._id)}>
+            {isOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          </div>
+        </div>
+      </div>
+
+      {isOpen && (
+        <div className="p-4 space-y-3 bg-white dark:bg-gray-800">
+          <div>
+            <label className="label">Nombre</label>
+            <input className="input-field" value={ex.name} onChange={e => onUpdate(ex._id, 'name', e.target.value)} placeholder="ej. Sentadilla, Push-up, Plancha" autoFocus={!ex.name} />
+          </div>
+          <div>
+            <label className="label">Reps / duración</label>
+            <input className="input-field" value={ex.repetitions} onChange={e => onUpdate(ex._id, 'repetitions', e.target.value)} placeholder="ej. 12 reps · 45 seg · hasta el fallo" />
+          </div>
+          {ex.instructions && (
+            <div className="bg-blue-50/60 dark:bg-blue-900/10 rounded-xl p-3 border border-blue-200/50 dark:border-blue-700/30">
+              <p className="text-xs font-semibold text-blue-500 dark:text-blue-400 uppercase tracking-wide mb-1">Cómo hacerlo</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">{ex.instructions}</p>
+            </div>
+          )}
+          <div>
+            <label className="label">Imagen</label>
+            {ex.imageUrl && !pendingImages[ex._id] && (
+              <div className="mb-2">
+                <img src={ex.imageUrl} alt="" className="w-full max-h-36 object-contain rounded-xl bg-gray-100 dark:bg-gray-700" onError={() => onUpdate(ex._id, 'imageUrl', '')} />
+                <button type="button" onClick={() => onUpdate(ex._id, 'imageUrl', '')} className="text-sm text-gray-400 hover:text-red-400 mt-1 block">Quitar imagen</button>
+              </div>
+            )}
+            <ImageUpload
+              id={`img-${ex._id}`}
+              label="Subir imagen propia"
+              existingImageUrl={pendingImages[ex._id]?.preview}
+              onChange={e => { const f = e.target.files?.[0]; if (f) onImageSelect(ex._id, f); }}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
 };
 
 // ── Main component ────────────────────────────────────────────────────────────
 const RoutineModal = ({ routine, onClose, onSave }) => {
   const { user } = useAuth();
 
-  // Step 0 = describe (new only) · 1 = name/type/rounds · 2 = exercises
-  const [step, setStep] = useState(routine ? 1 : 0);
+  const isEdit = !!routine;
+  const [step, setStep] = useState(1); // new mode: 1=name+type, 2=mode+content, 3=meta
+  const [editTab, setEditTab] = useState(0); // 0=Detalles, 1=Ejercicios, 2=Meta
 
-  const [description, setDescription]     = useState('');
-  const [analyzeLoading, setAnalyzeLoading] = useState(false);
-
-  const [name, setName]           = useState(routine?.name || '');
-  const [type, setType]           = useState(routine?.type || '');
-  const [rounds, setRounds]       = useState(routine?.series ?? 3);
+  // ── Detalles state ────────────────────────────────────────────────────────
+  const [name, setName] = useState(routine?.name || '');
+  const initialTypeId = findTypeId(routine?.type);
+  const [selectedTypeId, setSelectedTypeId] = useState(initialTypeId);
+  const [type, setType] = useState(routine?.type || '');
   const [weeklyGoal, setWeeklyGoal] = useState(routine?.weeklyGoal ?? 2);
 
+  // ── Ejercicios state ──────────────────────────────────────────────────────
+  const [routineMode, setRoutineMode] = useState(routine?.youtubeUrl ? 'youtube' : (isEdit ? 'normal' : null));
+  const [youtubeUrl, setYoutubeUrl] = useState(routine?.youtubeUrl || '');
   const [exercises, setExercises] = useState(
     (routine?.exercises || []).map(ex => ({ ...ex, _id: Math.random().toString(36).slice(2) }))
   );
   const [expandedId, setExpandedId] = useState(null);
   const [pendingImages, setPendingImages] = useState({});
-  const [suggesting, setSuggesting]       = useState(false);
-  const [uploading, setUploading]         = useState(false);
+  const [uploading, setUploading] = useState(false);
 
-  // ── Step 0: AI classify description ──────────────────────────────────────
-  const handleAnalyze = async () => {
-    if (!description.trim()) { toast.error('Describe tu rutina primero'); return; }
-    setAnalyzeLoading(true);
-    try {
-      const text = await callClaude(
-        `A user wants to create a workout routine. Description: "${description.trim()}"
+  // ── DnD sensors ───────────────────────────────────────────────────────────
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor,   { activationConstraint: { delay: 150, tolerance: 5 } })
+  );
 
-Return ONLY a JSON object (no markdown, no extra text):
-{"name": "short creative routine name (same language as description)", "type": "category e.g. Fuerza, HIIT, Yoga, Pilates, Cardio, Estiramiento, Running, Deportes, Movilidad, Funcional — same language"}
-
-Be specific and creative with the name.`
-      );
-      const parsed = JSON.parse(text);
-      setName(parsed.name || '');
-      setType(parsed.type || '');
-      setStep(1);
-    } catch (err) {
-      toast.error('No se pudo analizar la descripción');
-      console.error(err);
-    } finally {
-      setAnalyzeLoading(false);
+  const handleDragEnd = (event) => {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      setExercises(prev => {
+        const oldIdx = prev.findIndex(e => e._id === active.id);
+        const newIdx = prev.findIndex(e => e._id === over.id);
+        return arrayMove(prev, oldIdx, newIdx);
+      });
     }
   };
 
-  // ── Step 2: suggest 3 exercises ───────────────────────────────────────────
-  const handleSuggest = async () => {
-    setSuggesting(true);
-    try {
-      const existing = exercises.map(e => e.name).filter(Boolean);
-      const skip = existing.length ? ` Already has: ${existing.join(', ')}. Do NOT repeat any.` : '';
-      const text = await callClaude(
-        `Suggest 3 exercises for a "${type || 'general'}" routine named "${name}".${skip}
-Return ONLY a JSON array:
-[{"name": "Standard English name", "reps": "e.g. 12 reps or 45 seconds", "instructions": "1-2 sentences: how to perform the exercise, key form cues"}]
-- Use common English names (needed for image search).
-- "reps" = reps OR duration per round — do NOT include set counts like "3x12", just "12 reps".
-- "instructions" must be in the same language as the routine name ("${name}").`,
-        400
-      );
+  // ── Type helpers ──────────────────────────────────────────────────────────
+  const effectiveType = () => {
+    if (!selectedTypeId) return type;
+    if (selectedTypeId === 'otro') return type;
+    return ROUTINE_TYPES.find(t => t.id === selectedTypeId)?.label ?? type;
+  };
 
-      const suggestions = JSON.parse(text);
-      if (!Array.isArray(suggestions)) throw new Error('bad format');
-
-      // Fetch images concurrently (non-blocking — exercises added even without image)
-      const withImages = await Promise.all(
-        suggestions.map(async (ex) => ({
-          _id: Math.random().toString(36).slice(2),
-          name: ex.name || '',
-          repetitions: ex.reps || '',
-          instructions: ex.instructions || '',
-          imageUrl: (await fetchExerciseImage(ex.name)) || '',
-          imagePath: '',
-        }))
-      );
-      setExercises(prev => [...prev, ...withImages]);
-      if (withImages.length) setExpandedId(withImages[0]._id);
-    } catch (err) {
-      toast.error('Error al obtener sugerencias');
-      console.error(err);
-    } finally {
-      setSuggesting(false);
+  const handleTypeSelect = (id) => {
+    setSelectedTypeId(id);
+    if (id !== 'otro') {
+      const found = ROUTINE_TYPES.find(t => t.id === id);
+      if (found) setType(found.label);
     }
   };
 
+  // ── Exercise helpers ──────────────────────────────────────────────────────
   const addManual = () => {
     const _id = Math.random().toString(36).slice(2);
     setExercises(prev => [...prev, { _id, name: '', repetitions: '', instructions: '', imageUrl: '', imagePath: '' }]);
     setExpandedId(_id);
   };
 
-  const updateExercise = (_id, field, value) => {
+  const updateExercise = (_id, field, value) =>
     setExercises(prev => prev.map(ex => ex._id === _id ? { ...ex, [field]: value } : ex));
-  };
 
   const removeExercise = (_id) => {
     setExercises(prev => prev.filter(ex => ex._id !== _id));
@@ -187,8 +224,17 @@ Return ONLY a JSON array:
     finally { setUploading(false); }
   };
 
+  // ── Save ──────────────────────────────────────────────────────────────────
   const handleSave = async () => {
     if (!name.trim()) { toast.error('La rutina necesita un nombre'); return; }
+    const finalType = effectiveType().trim() || 'general';
+
+    if (routineMode === 'youtube') {
+      if (!youtubeUrl.trim()) { toast.error('Ingresa la URL de YouTube'); return; }
+      onSave({ name: name.trim(), type: finalType, weeklyGoal, youtubeUrl: youtubeUrl.trim(), exercises: [], series: 1 });
+      return;
+    }
+
     if (exercises.length === 0) { toast.error('Agrega al menos un ejercicio'); return; }
 
     const processed = await Promise.all(
@@ -202,10 +248,241 @@ Return ONLY a JSON array:
       })
     );
 
-    onSave({ name: name.trim(), type: type.trim() || 'general', series: rounds, weeklyGoal, exercises: processed });
+    onSave({ name: name.trim(), type: finalType, weeklyGoal, exercises: processed, series: 1 });
   };
 
-  // ─────────────────────────────────────────────────────────────────────────
+  // ── Panels ────────────────────────────────────────────────────────────────
+  const DetallesPanel = () => (
+    <div className="p-5 space-y-4">
+      <div>
+        <label className="label">Nombre de la rutina</label>
+        <input
+          className="input-field"
+          value={name}
+          onChange={e => setName(e.target.value)}
+          placeholder="ej. Full Body, Piernas Fuego"
+          autoFocus
+        />
+      </div>
+
+      <div>
+        <label className="label">Tipo de rutina</label>
+        <div className="grid grid-cols-3 gap-2">
+          {ROUTINE_TYPES.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => handleTypeSelect(t.id)}
+              className={`flex flex-col items-center gap-1 py-2.5 rounded-xl border-2 transition-all ${
+                selectedTypeId === t.id
+                  ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
+                  : 'border-gray-200 dark:border-gray-600 bg-white/50 dark:bg-gray-800/50 hover:border-gray-300'
+              }`}
+            >
+              <span className="text-xl leading-none">{t.emoji}</span>
+              <span className="text-sm font-medium text-center leading-tight text-gray-700 dark:text-gray-300">{t.label}</span>
+            </button>
+          ))}
+        </div>
+        {selectedTypeId === 'otro' && (
+          <input
+            className="input-field mt-2"
+            value={type}
+            onChange={e => setType(e.target.value)}
+            placeholder="Describe el tipo de rutina"
+            autoFocus
+          />
+        )}
+      </div>
+    </div>
+  );
+
+  // Step 2 in new mode: mode picker → then content for chosen mode
+  const ModeContentPanel = () => {
+    const ytId = extractYoutubeId(youtubeUrl);
+    return (
+      <div className="p-5 space-y-4">
+        {/* Mode picker — only shown before a mode is chosen */}
+        {routineMode === null && (
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => setRoutineMode('normal')}
+              className="flex-1 flex flex-col items-center gap-2 py-5 rounded-2xl border-2 border-gray-200 dark:border-gray-600 bg-white/50 dark:bg-gray-800/50 hover:border-primary-500 transition-all"
+            >
+              <span className="text-3xl">🏃</span>
+              <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">Ejercicios</span>
+              <span className="text-xs text-gray-400 text-center">Agrega ejercicios manualmente</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setRoutineMode('youtube')}
+              className="flex-1 flex flex-col items-center gap-2 py-5 rounded-2xl border-2 border-gray-200 dark:border-gray-600 bg-white/50 dark:bg-gray-800/50 hover:border-red-400 transition-all"
+            >
+              <Youtube className="w-8 h-8 text-red-500" />
+              <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">YouTube</span>
+              <span className="text-xs text-gray-400 text-center">Enlaza un video de YouTube</span>
+            </button>
+          </div>
+        )}
+
+        {/* YouTube form */}
+        {routineMode === 'youtube' && (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 mb-1">
+              <Youtube className="w-4 h-4 text-red-500" />
+              <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">Video de YouTube</span>
+            </div>
+            <div>
+              <label className="label">URL del video</label>
+              <input
+                className="input-field"
+                value={youtubeUrl}
+                onChange={e => setYoutubeUrl(e.target.value)}
+                placeholder="https://www.youtube.com/watch?v=..."
+                autoFocus
+              />
+            </div>
+            {ytId && (
+              <div className="rounded-xl overflow-hidden">
+                <img src={`https://img.youtube.com/vi/${ytId}/hqdefault.jpg`} alt="Vista previa" className="w-full aspect-video object-cover rounded-xl" />
+              </div>
+            )}
+            {youtubeUrl && !ytId && (
+              <p className="text-sm text-red-500 dark:text-red-400">URL no válida — pega una URL de YouTube</p>
+            )}
+          </div>
+        )}
+
+        {/* Exercises form */}
+        {routineMode === 'normal' && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">🏃 Ejercicios</span>
+              <button
+                type="button"
+                onClick={addManual}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/70 dark:bg-gray-800/70 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 text-sm font-medium hover:bg-white dark:hover:bg-gray-800 transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                Agregar
+              </button>
+            </div>
+
+            {exercises.length === 0 && (
+              <p className="text-center text-sm text-gray-400 py-4">
+                Usa el botón de arriba para añadir ejercicios
+              </p>
+            )}
+
+            <div className="space-y-2">
+              {exercises.map((ex, idx) => (
+                <SortableExerciseItem
+                  key={ex._id}
+                  ex={ex}
+                  idx={idx}
+                  isEdit={false}
+                  isOpen={expandedId === ex._id}
+                  onToggle={(id) => setExpandedId(expandedId === id ? null : id)}
+                  onRemove={removeExercise}
+                  onUpdate={updateExercise}
+                  onImageSelect={handleImageSelect}
+                  pendingImages={pendingImages}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Edit mode ejercicios tab (with DnD)
+  const EjerciciosEditPanel = () => {
+    const ytId = extractYoutubeId(youtubeUrl);
+    return (
+      <div className="p-5 space-y-4">
+        {routineMode === 'youtube' ? (
+          <div className="space-y-3">
+            <div>
+              <label className="label">URL del video de YouTube</label>
+              <input
+                className="input-field"
+                value={youtubeUrl}
+                onChange={e => setYoutubeUrl(e.target.value)}
+                placeholder="https://www.youtube.com/watch?v=..."
+              />
+            </div>
+            {ytId && (
+              <div className="rounded-xl overflow-hidden">
+                <img src={`https://img.youtube.com/vi/${ytId}/hqdefault.jpg`} alt="Vista previa" className="w-full aspect-video object-cover rounded-xl" />
+              </div>
+            )}
+            {youtubeUrl && !ytId && (
+              <p className="text-sm text-red-500 dark:text-red-400">URL no válida</p>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">Ejercicios</span>
+              <button type="button" onClick={addManual} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/70 dark:bg-gray-800/70 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 text-sm font-medium hover:bg-white dark:hover:bg-gray-800 transition-colors">
+                <Plus className="w-4 h-4" />
+                Agregar
+              </button>
+            </div>
+
+            {exercises.length === 0 && (
+              <p className="text-center text-sm text-gray-400 py-4">Sin ejercicios aún</p>
+            )}
+
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <SortableContext items={exercises.map(e => e._id)} strategy={verticalListSortingStrategy}>
+                <div className="space-y-2">
+                  {exercises.map((ex, idx) => (
+                    <SortableExerciseItem
+                      key={ex._id}
+                      ex={ex}
+                      idx={idx}
+                      isEdit={true}
+                      isOpen={expandedId === ex._id}
+                      onToggle={(id) => setExpandedId(expandedId === id ? null : id)}
+                      onRemove={removeExercise}
+                      onUpdate={updateExercise}
+                      onImageSelect={handleImageSelect}
+                      pendingImages={pendingImages}
+                    />
+                  ))}
+                </div>
+              </SortableContext>
+            </DndContext>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const MetaPanel = () => (
+    <div className="p-5 space-y-4">
+      <div>
+        <label className="label">Meta semanal</label>
+        <div className="flex items-center gap-3">
+          <input type="range" min="0" max="7" step="1" className="flex-1 accent-primary-500"
+            value={weeklyGoal} onChange={e => setWeeklyGoal(Number(e.target.value))} />
+          <span className="text-sm font-semibold text-gray-700 dark:text-gray-300 w-20 text-right">
+            {weeklyGoal === 0 ? 'Sin meta' : `${weeklyGoal}x / sem`}
+          </span>
+        </div>
+        <p className="text-sm text-gray-400 mt-1">
+          {weeklyGoal === 0 ? 'No se evaluará en el radar de longevidad' : `Evaluado en el home: cada ${Math.round(7 / weeklyGoal)} días aprox.`}
+        </p>
+      </div>
+    </div>
+  );
+
+  // Step indicator title for new mode
+  const stepTitle = step === 1 ? 'Nueva rutina' : step === 2 ? (routineMode === null ? 'Tipo de contenido' : routineMode === 'youtube' ? 'Video YouTube' : 'Ejercicios') : 'Meta semanal';
+
   return (
     <div
       className="fixed z-50 liquid-glass-overlay"
@@ -219,14 +496,14 @@ Return ONLY a JSON array:
           onClick={e => e.stopPropagation()}
         >
           {/* Header */}
-          <div className="flex justify-between items-center px-5 pt-5 pb-4 border-b border-white/30 dark:border-white/10 flex-shrink-0">
+          <div className="flex justify-between items-center px-5 pt-5 pb-3 border-b border-white/30 dark:border-white/10 flex-shrink-0">
             <div>
               <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">
-                {routine ? 'Editar rutina' : ['Describe tu rutina', 'Detalles', 'Ejercicios'][step]}
+                {isEdit ? 'Editar rutina' : stepTitle}
               </h2>
-              {!routine && (
+              {!isEdit && (
                 <div className="flex gap-1 mt-1.5">
-                  {[0, 1, 2].map(s => (
+                  {[1, 2, 3].map(s => (
                     <div key={s} className={`h-1 rounded-full transition-all ${s === step ? 'w-6 bg-primary-500' : s < step ? 'w-3 bg-primary-300' : 'w-3 bg-gray-200 dark:bg-gray-700'}`} />
                   ))}
                 </div>
@@ -235,250 +512,99 @@ Return ONLY a JSON array:
             <button onClick={onClose}><X className="w-5 h-5 text-gray-400" /></button>
           </div>
 
+          {/* Edit mode: tabs */}
+          {isEdit && (
+            <div className="flex border-b border-white/30 dark:border-white/10 flex-shrink-0">
+              {['Detalles', 'Ejercicios', 'Meta'].map((tab, i) => (
+                <button
+                  key={i}
+                  onClick={() => setEditTab(i)}
+                  className={`flex-1 py-2.5 text-sm font-medium transition-colors border-b-2 ${
+                    editTab === i
+                      ? 'border-primary-500 text-primary-600 dark:text-primary-400'
+                      : 'border-transparent text-gray-500 dark:text-gray-400'
+                  }`}
+                >
+                  {tab}
+                </button>
+              ))}
+            </div>
+          )}
+
           <div className="flex-1 min-h-0 overflow-y-auto">
+            {/* New mode steps */}
+            {!isEdit && step === 1 && <DetallesPanel />}
+            {!isEdit && step === 2 && <ModeContentPanel />}
+            {!isEdit && step === 3 && <MetaPanel />}
 
-            {/* ── Step 0: Describe ── */}
-            {step === 0 && (
-              <div className="p-5 space-y-4">
-                <p className="text-sm text-gray-400">
-                  Describe qué quieres trabajar, tus objetivos, nivel, tiempo disponible... La IA le pondrá nombre y la categorizará.
-                </p>
-                <textarea
-                  className="input-field resize-none"
-                  rows={5}
-                  placeholder="ej. Quiero trabajar piernas y glúteos en 20 minutos, sin equipo, intensidad media, para tonificar..."
-                  value={description}
-                  onChange={e => setDescription(e.target.value)}
-                  autoFocus
-                />
+            {/* Edit mode tabs */}
+            {isEdit && editTab === 0 && <DetallesPanel />}
+            {isEdit && editTab === 1 && <EjerciciosEditPanel />}
+            {isEdit && editTab === 2 && <MetaPanel />}
+          </div>
+
+          {/* Footer */}
+          <div className="px-5 pb-5 pt-3 border-t border-white/30 dark:border-white/10 flex-shrink-0">
+            {/* New mode step 1 */}
+            {!isEdit && step === 1 && (
+              <button
+                onClick={() => setStep(2)}
+                disabled={!name.trim()}
+                className="w-full btn-primary py-3 disabled:opacity-60"
+              >
+                Continuar
+              </button>
+            )}
+
+            {/* New mode step 2 */}
+            {!isEdit && step === 2 && (
+              <div className="flex gap-2">
+                <button type="button" onClick={() => { setStep(1); setRoutineMode(null); }} className="btn-secondary px-4">
+                  ← Atrás
+                </button>
                 <button
-                  onClick={handleAnalyze}
-                  disabled={analyzeLoading || !description.trim()}
-                  className="w-full btn-primary py-3 flex items-center justify-center gap-2 disabled:opacity-60"
+                  type="button"
+                  onClick={() => setStep(3)}
+                  disabled={
+                    routineMode === null ||
+                    (routineMode === 'youtube' && !extractYoutubeId(youtubeUrl)) ||
+                    (routineMode === 'normal' && exercises.length === 0)
+                  }
+                  className="flex-1 btn-primary py-3 disabled:opacity-60"
                 >
-                  {analyzeLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                  {analyzeLoading ? 'Analizando...' : 'Crear con IA'}
+                  Continuar
                 </button>
               </div>
             )}
 
-            {/* ── Step 1: Name / type / rounds / goal ── */}
-            {step === 1 && (
-              <div className="p-5 space-y-4">
-                <div>
-                  <label className="label">Nombre de la rutina</label>
-                  <input
-                    className="input-field"
-                    value={name}
-                    onChange={e => setName(e.target.value)}
-                    placeholder="ej. Full Body, Piernas Fuego"
-                    autoFocus
-                  />
-                </div>
-                <div>
-                  <label className="label">Tipo / Categoría</label>
-                  <input
-                    className="input-field"
-                    value={type}
-                    onChange={e => setType(e.target.value)}
-                    placeholder="ej. Fuerza, HIIT, Yoga, Cardio"
-                  />
-                </div>
-                <div>
-                  <label className="label">Rondas</label>
-                  <p className="text-sm text-gray-400 mb-2">La lista completa de ejercicios se repite este número de veces</p>
-                  <div className="flex items-center gap-3">
-                    <button type="button" onClick={() => setRounds(r => Math.max(1, r - 1))}
-                      className="w-9 h-9 rounded-xl bg-gray-100 dark:bg-gray-700 font-bold text-lg text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center justify-center">−</button>
-                    <span className="text-2xl font-bold text-gray-900 dark:text-gray-100 w-8 text-center">{rounds}</span>
-                    <button type="button" onClick={() => setRounds(r => r + 1)}
-                      className="w-9 h-9 rounded-xl bg-gray-100 dark:bg-gray-700 font-bold text-lg text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center justify-center">+</button>
-                    <span className="text-sm text-gray-400">
-                      {rounds === 1 ? '1 ronda' : `${rounds} rondas`}
-                    </span>
-                  </div>
-                </div>
-                <div>
-                  <label className="label">Meta semanal</label>
-                  <div className="flex items-center gap-3">
-                    <input type="range" min="0" max="7" step="1" className="flex-1 accent-primary-500"
-                      value={weeklyGoal} onChange={e => setWeeklyGoal(Number(e.target.value))} />
-                    <span className="text-sm font-semibold text-gray-700 dark:text-gray-300 w-20 text-right">
-                      {weeklyGoal === 0 ? 'Sin meta' : `${weeklyGoal}x / sem`}
-                    </span>
-                  </div>
-                  <p className="text-sm text-gray-400 mt-1">
-                    {weeklyGoal === 0 ? 'No se evaluará en el radar de longevidad' : `Evaluado en el home: cada ${Math.round(7 / weeklyGoal)} días aprox.`}
-                  </p>
-                </div>
+            {/* New mode step 3 */}
+            {!isEdit && step === 3 && (
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setStep(2)} className="btn-secondary px-4">
+                  ← Atrás
+                </button>
                 <button
-                  onClick={() => setStep(2)}
-                  disabled={!name.trim()}
-                  className="w-full btn-primary py-3 disabled:opacity-60"
+                  type="button"
+                  onClick={handleSave}
+                  disabled={uploading}
+                  className="flex-1 btn-primary py-3 disabled:opacity-60"
                 >
-                  Continuar → Agregar ejercicios
+                  {uploading ? 'Guardando...' : 'Crear rutina'}
                 </button>
               </div>
             )}
 
-            {/* ── Step 2: Exercises ── */}
-            {step === 2 && (
-              <div className="p-5 space-y-3">
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={handleSuggest}
-                    disabled={suggesting}
-                    className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-700 text-primary-600 dark:text-primary-400 text-sm font-medium hover:bg-primary-100 transition-colors disabled:opacity-60"
-                  >
-                    {suggesting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                    {suggesting ? 'Buscando...' : exercises.length === 0 ? 'Sugerir ejercicios' : '+ 3 más con IA'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={addManual}
-                    className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-white/70 dark:bg-gray-800/70 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 text-sm font-medium hover:bg-white dark:hover:bg-gray-800 transition-colors"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Agregar manual
-                  </button>
-                </div>
-
-                {exercises.length === 0 && !suggesting && (
-                  <p className="text-center text-sm text-gray-400 py-8">
-                    Usa los botones de arriba para añadir ejercicios
-                  </p>
-                )}
-
-                <div className="space-y-2">
-                  {exercises.map((ex, idx) => {
-                    const isOpen = expandedId === ex._id;
-                    return (
-                      <div key={ex._id} className="border border-gray-200 dark:border-gray-600 rounded-xl overflow-hidden">
-                        {/* Row summary */}
-                        <div
-                          className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-700/60 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                          onClick={() => setExpandedId(isOpen ? null : ex._id)}
-                        >
-                          {ex.imageUrl ? (
-                            <img
-                              src={ex.imageUrl}
-                              alt=""
-                              className="w-10 h-10 rounded-lg object-cover flex-shrink-0 bg-gray-200 dark:bg-gray-600"
-                              onError={() => updateExercise(ex._id, 'imageUrl', '')}
-                            />
-                          ) : (
-                            <div className="w-10 h-10 rounded-lg bg-gray-200 dark:bg-gray-600 flex items-center justify-center flex-shrink-0">
-                              <span className="text-xs font-bold text-gray-400">{idx + 1}</span>
-                            </div>
-                          )}
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">
-                              {ex.name || <span className="text-gray-400 italic">Sin nombre</span>}
-                            </p>
-                            {ex.repetitions && (
-                              <p className="text-sm text-gray-400">{ex.repetitions}</p>
-                            )}
-                            {!ex.imageUrl && ex.instructions && (
-                              <p className="text-sm text-gray-400 italic truncate">{ex.instructions}</p>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-0.5" onClick={e => e.stopPropagation()}>
-                            <button
-                              type="button"
-                              onClick={() => removeExercise(ex._id)}
-                              className="p-1.5 text-gray-400 hover:text-red-500 transition-colors"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                            <div
-                              className="p-1.5 text-gray-400"
-                              onClick={() => setExpandedId(isOpen ? null : ex._id)}
-                            >
-                              {isOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Expanded edit */}
-                        {isOpen && (
-                          <div className="p-4 space-y-3 bg-white dark:bg-gray-800">
-                            <div>
-                              <label className="label">Nombre</label>
-                              <input
-                                className="input-field"
-                                value={ex.name}
-                                onChange={e => updateExercise(ex._id, 'name', e.target.value)}
-                                placeholder="ej. Sentadilla, Push-up, Plancha"
-                                autoFocus={!ex.name}
-                              />
-                            </div>
-                            <div>
-                              <label className="label">Reps / duración por ronda</label>
-                              <input
-                                className="input-field"
-                                value={ex.repetitions}
-                                onChange={e => updateExercise(ex._id, 'repetitions', e.target.value)}
-                                placeholder="ej. 12 reps · 45 seg · hasta el fallo"
-                              />
-                            </div>
-                            {ex.instructions && (
-                              <div className="bg-blue-50/60 dark:bg-blue-900/10 rounded-xl p-3 border border-blue-200/50 dark:border-blue-700/30">
-                                <p className="text-xs font-semibold text-blue-500 dark:text-blue-400 uppercase tracking-wide mb-1">Cómo hacerlo</p>
-                                <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">{ex.instructions}</p>
-                              </div>
-                            )}
-                            <div>
-                              <label className="label">Imagen</label>
-                              {ex.imageUrl && !pendingImages[ex._id] && (
-                                <div className="mb-2">
-                                  <img
-                                    src={ex.imageUrl}
-                                    alt=""
-                                    className="w-full max-h-36 object-contain rounded-xl bg-gray-100 dark:bg-gray-700"
-                                    onError={() => updateExercise(ex._id, 'imageUrl', '')}
-                                  />
-                                  <button
-                                    type="button"
-                                    onClick={() => updateExercise(ex._id, 'imageUrl', '')}
-                                    className="text-sm text-gray-400 hover:text-red-400 mt-1 block"
-                                  >
-                                    Quitar imagen
-                                  </button>
-                                </div>
-                              )}
-                              <ImageUpload
-                                id={`img-${ex._id}`}
-                                label="Subir imagen propia"
-                                existingImageUrl={pendingImages[ex._id]?.preview}
-                                onChange={e => { const f = e.target.files?.[0]; if (f) handleImageSelect(ex._id, f); }}
-                              />
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-
-                <div className="pt-2 flex gap-2">
-                  {!routine && (
-                    <button type="button" onClick={() => setStep(1)} className="btn-secondary px-4">
-                      ← Atrás
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={handleSave}
-                    disabled={uploading || exercises.length === 0}
-                    className="flex-1 btn-primary py-3 disabled:opacity-60"
-                  >
-                    {uploading ? 'Guardando...' : routine ? 'Guardar cambios' : 'Crear rutina'}
-                  </button>
-                </div>
-              </div>
+            {/* Edit mode */}
+            {isEdit && (
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={uploading}
+                className="w-full btn-primary py-3 disabled:opacity-60"
+              >
+                {uploading ? 'Guardando...' : 'Guardar cambios'}
+              </button>
             )}
-
           </div>
         </div>
       </div>

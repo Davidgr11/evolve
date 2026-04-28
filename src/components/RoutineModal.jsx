@@ -130,7 +130,7 @@ const SortableExerciseItem = ({ ex, idx, isEdit, isOpen, onToggle, onRemove, onU
 };
 
 // ── Main component ────────────────────────────────────────────────────────────
-const RoutineModal = ({ routine, onClose, onSave }) => {
+const RoutineModal = ({ routine, onClose, onSave, onDelete }) => {
   const { user } = useAuth();
 
   const isEdit = !!routine;
@@ -595,14 +595,25 @@ const RoutineModal = ({ routine, onClose, onSave }) => {
 
             {/* Edit mode */}
             {isEdit && (
-              <button
-                type="button"
-                onClick={handleSave}
-                disabled={uploading}
-                className="w-full btn-primary py-3 disabled:opacity-60"
-              >
-                {uploading ? 'Guardando...' : 'Guardar cambios'}
-              </button>
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  disabled={uploading}
+                  className="w-full btn-primary py-3 disabled:opacity-60"
+                >
+                  {uploading ? 'Guardando...' : 'Guardar cambios'}
+                </button>
+                {onDelete && (
+                  <button
+                    type="button"
+                    onClick={onDelete}
+                    className="w-full text-sm text-red-500 dark:text-red-400 hover:text-red-600 dark:hover:text-red-300 py-2 transition-colors"
+                  >
+                    Eliminar rutina
+                  </button>
+                )}
+              </div>
             )}
           </div>
         </div>

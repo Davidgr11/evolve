@@ -19,7 +19,7 @@ import { callClaude } from '../utils/cloudApi';
 import { ref, deleteObject } from 'firebase/storage';
 import toast from '../utils/toast';
 import {
-  Plus, Play, Edit, Trash2, Flame, Route,
+  Plus, Play, Edit, Flame, Route,
   Dumbbell, Sparkles, Trophy, Zap, Wind, PersonStanding, Swords, GripVertical
 } from 'lucide-react';
 import RoutineModal from '../components/RoutineModal';
@@ -89,7 +89,7 @@ const formatLastRun = (routine) => {
 };
 
 // ── SortableRoutineCard ───────────────────────────────────────────────────────
-const SortableRoutineCard = ({ routine, colorTheme, onStart, onEdit, onDelete }) => {
+const SortableRoutineCard = ({ routine, colorTheme, onStart, onEdit }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: routine.id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
@@ -100,9 +100,7 @@ const SortableRoutineCard = ({ routine, colorTheme, onStart, onEdit, onDelete })
   const weeklyDone = getWeeklyDone(routine);
   const weeklyGoal = routine.weeklyGoal || 0;
   const onTrack = weeklyGoal > 0 && weeklyDone >= weeklyGoal;
-  const exerciseLabel = routine.youtubeUrl
-    ? 'YouTube'
-    : `${routine.exercises?.length || 0} ej.`;
+  const isVideo = !!routine.youtubeUrl;
 
   return (
     <div ref={setNodeRef} style={style} className="liquid-glass-panel rounded-2xl overflow-hidden">
@@ -121,7 +119,7 @@ const SortableRoutineCard = ({ routine, colorTheme, onStart, onEdit, onDelete })
         {/* Main content */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate leading-tight">
+            <span className="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-tight">
               {routine.name}
             </span>
             <span
@@ -132,7 +130,12 @@ const SortableRoutineCard = ({ routine, colorTheme, onStart, onEdit, onDelete })
             </span>
           </div>
           <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-            <span className="text-xs text-gray-400 dark:text-gray-500">{exerciseLabel}</span>
+            <span
+              className="text-xs px-1.5 py-0.5 rounded-full font-medium"
+              style={{ backgroundColor: themeHex + '12', color: themeHex }}
+            >
+              {isVideo ? 'Video' : 'Ejercicios'}
+            </span>
             {lastRun && (
               <>
                 <span className="text-gray-300 dark:text-gray-600 text-xs">·</span>
@@ -154,9 +157,6 @@ const SortableRoutineCard = ({ routine, colorTheme, onStart, onEdit, onDelete })
         <div className="flex items-center gap-0.5 flex-shrink-0">
           <button onClick={onEdit} className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
             <Edit className="w-3.5 h-3.5" />
-          </button>
-          <button onClick={onDelete} className="p-2 text-gray-400 hover:text-red-400 transition-colors">
-            <Trash2 className="w-3.5 h-3.5" />
           </button>
           <button
             onClick={onStart}
@@ -330,13 +330,13 @@ Responde solo en texto plano — sin markdown, sin asteriscos, sin encabezados. 
       {/* Header */}
       <div className="flex justify-between items-end">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 leading-tight">
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 leading-tight">
             Actividad
           </h1>
         </div>
         <button
           onClick={() => { setEditingRoutine(null); setShowModal(true); }}
-          className="btn-primary flex items-center gap-1.5 text-sm"
+          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white/70 dark:bg-gray-800/70 border border-primary-200 dark:border-primary-700 text-primary-600 dark:text-primary-400 hover:bg-white dark:hover:bg-gray-800 transition-colors text-sm font-medium shadow-sm"
         >
           <Plus className="w-4 h-4" /> Nueva Rutina
         </button>
@@ -424,7 +424,6 @@ Responde solo en texto plano — sin markdown, sin asteriscos, sin encabezados. 
                     colorTheme={colorTheme}
                     onStart={() => navigate(`/routine/${routine.id}`)}
                     onEdit={() => { setEditingRoutine(routine); setShowModal(true); }}
-                    onDelete={() => setDeleteConfirm({ isOpen: true, routine })}
                   />
                 ))}
               </div>
@@ -438,6 +437,10 @@ Responde solo en texto plano — sin markdown, sin asteriscos, sin encabezados. 
           routine={editingRoutine}
           onClose={() => setShowModal(false)}
           onSave={handleSaveRoutine}
+          onDelete={editingRoutine ? () => {
+            setShowModal(false);
+            setDeleteConfirm({ isOpen: true, routine: editingRoutine });
+          } : undefined}
         />
       )}
 

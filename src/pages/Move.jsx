@@ -118,39 +118,38 @@ const SortableRoutineCard = ({ routine, colorTheme, onStart, onEdit }) => {
 
         {/* Main content */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-tight">
-              {routine.name}
-            </span>
+          {/* Line 1: name */}
+          <span className="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-tight">
+            {routine.name}
+          </span>
+          {/* Line 2: type + mode badges */}
+          <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
             <span
               className="text-xs px-1.5 py-0.5 rounded-full font-medium flex-shrink-0"
               style={{ backgroundColor: themeHex + '18', color: themeHex }}
             >
               {routine.type}
             </span>
-          </div>
-          <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-            <span
-              className="text-xs px-1.5 py-0.5 rounded-full font-medium"
-              style={{ backgroundColor: themeHex + '12', color: themeHex }}
-            >
+            <span className="text-xs px-1.5 py-0.5 rounded-full font-medium flex-shrink-0 bg-gray-100 text-gray-500 dark:bg-gray-700/60 dark:text-gray-400">
               {isVideo ? 'Video' : 'Ejercicios'}
             </span>
-            {lastRun && (
-              <>
-                <span className="text-gray-300 dark:text-gray-600 text-xs">·</span>
+          </div>
+          {/* Line 3: metrics */}
+          {(lastRun || weeklyGoal > 0) && (
+            <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+              {lastRun && (
                 <span className="text-xs text-gray-400 dark:text-gray-500">{lastRun}</span>
-              </>
-            )}
-            {weeklyGoal > 0 && (
-              <>
+              )}
+              {lastRun && weeklyGoal > 0 && (
                 <span className="text-gray-300 dark:text-gray-600 text-xs">·</span>
+              )}
+              {weeklyGoal > 0 && (
                 <span className="text-xs font-medium" style={{ color: onTrack ? themeHex : undefined }}>
                   {weeklyDone}/{weeklyGoal}{onTrack ? ' ✓' : ''}
                 </span>
-              </>
-            )}
-          </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Actions */}

@@ -365,6 +365,10 @@ const Books = () => {
         {/* Header */}
         <div className="flex justify-between items-center">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 leading-tight">Crecimiento</h1>
+          <button onClick={() => handleAiSuggestions([])} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/70 dark:bg-gray-800/70 border border-blue-100 dark:border-blue-800 text-blue-600 dark:text-blue-400 hover:bg-white dark:hover:bg-gray-800 transition-colors font-medium shadow-sm" style={{ fontSize: 14 }}>
+            <Sparkles className="w-3.5 h-3.5" />
+            Sugerencias
+          </button>
         </div>
 
         {/* Migration banner */}
@@ -446,13 +450,6 @@ const Books = () => {
             </div>
           </div>
 
-          {/* AI suggestions button */}
-          <div className="pt-3 border-t border-gray-100 dark:border-gray-700/50">
-            <button onClick={() => handleAiSuggestions([])} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/70 dark:bg-gray-700/70 border border-blue-100 dark:border-blue-800 text-blue-600 dark:text-blue-400 hover:bg-white dark:hover:bg-gray-700 transition-colors text-xs font-medium">
-              <Sparkles className="w-3.5 h-3.5" />
-              Sugerencias de libros
-            </button>
-          </div>
         </div>
 
         {/* Filter tabs */}

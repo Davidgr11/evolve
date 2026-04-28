@@ -11,18 +11,11 @@ import toast from '../utils/toast';
 import {
   Heart, Plus, ArrowLeft, MapPin, Gift, CheckSquare,
   Settings, Copy, Trash2, Edit, ExternalLink, Calendar,
-  X, Check, Users, StickyNote, GripVertical, ChevronDown, ChevronUp,
+  X, Check, Users, StickyNote, ChevronDown, ChevronUp,
 } from 'lucide-react';
 import { differenceInYears, differenceInDays, addYears, format } from 'date-fns';
 import ConfirmModal from '../components/ConfirmModal';
 import ImageUpload from '../components/ImageUpload';
-import {
-  DndContext, closestCenter, KeyboardSensor, PointerSensor, TouchSensor, useSensor, useSensors,
-} from '@dnd-kit/core';
-import {
-  arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy,
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -53,7 +46,7 @@ const IDEA_TYPES = [
   { id: 'restaurant', label: 'Restaurante', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' },
   { id: 'experience', label: 'Experiencia', color: 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300' },
   { id: 'event',      label: 'Evento',      color: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' },
-  { id: 'other',      label: 'Otro',        color: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300' },
+  { id: 'other',      label: 'Otro',        color: 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300' },
 ];
 
 const getIdeaTypeConfig = (id) => IDEA_TYPES.find((t) => t.id === id) || IDEA_TYPES[3];
@@ -66,23 +59,13 @@ const EmptyState = ({ message }) => (
   </div>
 );
 
-// ─── SortablePlanCard ─────────────────────────────────────────────────────────
+// ─── PlanCard ─────────────────────────────────────────────────────────────────
 
-const SortablePlanCard = ({ plan, onEdit, onDelete, showDrag }) => {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: plan.id });
+const PlanCard = ({ plan, onEdit, onDelete }) => {
   const typeConfig = getIdeaTypeConfig(plan.type);
   return (
-    <div
-      ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }}
-      className="liquid-glass-panel rounded-xl p-4"
-    >
+    <div className="liquid-glass-panel rounded-xl p-4">
       <div className="flex items-start gap-2">
-        {showDrag && (
-          <div {...attributes} {...listeners} className="cursor-grab touch-none text-gray-300 dark:text-gray-600 mt-0.5 flex-shrink-0">
-            <GripVertical className="w-4 h-4" />
-          </div>
-        )}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1 flex-wrap">
             <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${typeConfig.color}`}>
@@ -573,7 +556,7 @@ const ItemFormModal = ({ isOpen, onClose, onSave, editingItem, type, hideDate = 
     >
       <div className="flex items-center justify-center h-full pb-20 px-4">
         <div
-          className="liquid-glass-panel rounded-2xl w-full max-w-md flex flex-col"
+          className="liquid-glass-panel rounded-2xl w-full max-w-md flex flex-col overflow-x-hidden"
           style={{ maxHeight: 'calc(90vh - 80px)' }}
           onClick={(e) => e.stopPropagation()}
         >
@@ -626,7 +609,6 @@ const ItemFormModal = ({ isOpen, onClose, onSave, editingItem, type, hideDate = 
                     placeholder={type === 'place' ? 'ej. Restaurante Nicos' : 'ej. Airpods Pro'}
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    autoFocus
                   />
                 </div>
                 {type !== 'event-idea' && (
@@ -1091,12 +1073,6 @@ const Together = () => {
   const [couple, setCouple] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const planSensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  );
-
   const [activeTab, setActiveTab] = useState('events');
   const [view, setView] = useState('main'); // 'main' | 'event-detail'
   const [selectedEventId, setSelectedEventId] = useState(null);
@@ -1159,8 +1135,10 @@ const Together = () => {
     const unsub = onSnapshot(collection(db, `couples/${coupleId}/ideas`), (snap) => {
       const data = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
       data.sort((a, b) => {
-        if (a.order !== undefined && b.order !== undefined) return a.order - b.order;
-        return (a.createdAt || '').localeCompare(b.createdAt || '');
+        if (!a.date && !b.date) return (a.createdAt || '').localeCompare(b.createdAt || '');
+        if (!a.date) return 1;
+        if (!b.date) return -1;
+        return a.date.localeCompare(b.date);
       });
       setIdeas(data);
     });
@@ -1204,7 +1182,6 @@ const Together = () => {
     } else {
       await addDoc(collection(db, `couples/${coupleId}/ideas`), {
         ...data,
-        order: ideas.length,
         createdAt: new Date().toISOString(),
       });
       toast.success('Agregado');
@@ -1214,19 +1191,6 @@ const Together = () => {
   const handleDeleteIdea = async () => {
     await deleteDoc(doc(db, `couples/${coupleId}/ideas`, deleteIdeaConfirm.idea.id));
     toast.success('Eliminado');
-  };
-
-  const handleDragEndPlans = async ({ active, over }) => {
-    if (!over || active.id === over.id) return;
-    const oldIndex = ideas.findIndex((i) => i.id === active.id);
-    const newIndex = ideas.findIndex((i) => i.id === over.id);
-    const reordered = arrayMove(ideas, oldIndex, newIndex);
-    setIdeas(reordered);
-    await Promise.all(
-      reordered.map((idea, idx) =>
-        updateDoc(doc(db, `couples/${coupleId}/ideas`, idea.id), { order: idx })
-      )
-    );
   };
 
   const anniversary = computeAnniversary(couple?.anniversaryDate);
@@ -1439,21 +1403,16 @@ const Together = () => {
           {filteredIdeas.length === 0 ? (
             <EmptyState message="Sin planes aún" />
           ) : (
-            <DndContext sensors={planSensors} collisionDetection={closestCenter} onDragEnd={handleDragEndPlans}>
-              <SortableContext items={ideas.map((i) => i.id)} strategy={verticalListSortingStrategy}>
-                <div className="space-y-3">
-                  {filteredIdeas.map((plan) => (
-                    <SortablePlanCard
-                      key={plan.id}
-                      plan={plan}
-                      showDrag={ideaTypeFilter === 'all'}
-                      onEdit={() => { setEditingIdea(plan); setShowIdeaModal(true); }}
-                      onDelete={() => setDeleteIdeaConfirm({ isOpen: true, idea: plan })}
-                    />
-                  ))}
-                </div>
-              </SortableContext>
-            </DndContext>
+            <div className="space-y-3">
+              {filteredIdeas.map((plan) => (
+                <PlanCard
+                  key={plan.id}
+                  plan={plan}
+                  onEdit={() => { setEditingIdea(plan); setShowIdeaModal(true); }}
+                  onDelete={() => setDeleteIdeaConfirm({ isOpen: true, idea: plan })}
+                />
+              ))}
+            </div>
           )}
         </div>
       )}

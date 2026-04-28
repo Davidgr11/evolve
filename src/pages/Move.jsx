@@ -2,6 +2,13 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
+import {
+  DndContext, closestCenter, PointerSensor, TouchSensor, useSensor, useSensors,
+} from '@dnd-kit/core';
+import {
+  SortableContext, verticalListSortingStrategy, useSortable, arrayMove,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 const THEME_HEX = { blue: '#3b82f6', purple: '#8b5cf6', orange: '#f97316', teal: '#0d9488' };
 import { db, storage } from '../utils/firebase';
@@ -13,7 +20,7 @@ import { ref, deleteObject } from 'firebase/storage';
 import toast from '../utils/toast';
 import {
   Plus, Play, Edit, Trash2, Flame, Route,
-  Dumbbell, Sparkles, Trophy, Zap, Wind, PersonStanding, Swords
+  Dumbbell, Sparkles, Trophy, Zap, Wind, PersonStanding, Swords, GripVertical
 } from 'lucide-react';
 import RoutineModal from '../components/RoutineModal';
 import ConfirmModal from '../components/ConfirmModal';
@@ -81,15 +88,118 @@ const formatLastRun = (routine) => {
   return `hace ${days}d`;
 };
 
+// ── SortableRoutineCard ───────────────────────────────────────────────────────
+const SortableRoutineCard = ({ routine, colorTheme, onStart, onEdit, onDelete }) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: routine.id });
+  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
+
+  const statusBorder = getStatusBorder(routine);
+  const themeHex = THEME_HEX[colorTheme] ?? '#3b82f6';
+  const lastRun = formatLastRun(routine);
+  const weeklyDone = getWeeklyDone(routine);
+  const weeklyGoal = routine.weeklyGoal || 0;
+  const onTrack = weeklyGoal > 0 && weeklyDone >= weeklyGoal;
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`relative overflow-hidden rounded-2xl border-l-4 ${statusBorder} liquid-glass-panel shadow-sm`}
+    >
+      <div className="relative p-4">
+        <div className="flex items-start justify-between mb-2">
+          <span
+            className="inline-block text-xs px-2 py-0.5 rounded-full font-semibold uppercase tracking-wide"
+            style={{ backgroundColor: themeHex + '20', color: themeHex }}
+          >
+            {routine.type}
+          </span>
+          <div
+            {...attributes}
+            {...listeners}
+            className="cursor-grab active:cursor-grabbing touch-none text-gray-300 dark:text-gray-600 -mt-0.5 ml-2 flex-shrink-0"
+          >
+            <GripVertical className="w-4 h-4" />
+          </div>
+        </div>
+        <h3 className="font-bold text-lg text-gray-900 dark:text-gray-100 leading-tight mb-1">
+          {routine.name}
+        </h3>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">
+          {routine.youtubeUrl ? 'YouTube' : `${routine.exercises?.length || 0} ejercicio${(routine.exercises?.length || 0) !== 1 ? 's' : ''}`}
+        </p>
+        {weeklyGoal > 0 && (
+          <div className="flex items-center gap-2 mb-3">
+            <div className="flex gap-1">
+              {Array.from({ length: weeklyGoal }, (_, i) => (
+                <div
+                  key={i}
+                  className={`w-2.5 h-2.5 rounded-full transition-colors ${i < weeklyDone ? '' : 'bg-gray-200 dark:bg-gray-600'}`}
+                  style={i < weeklyDone ? { backgroundColor: themeHex } : undefined}
+                />
+              ))}
+            </div>
+            <span className="text-xs text-gray-400 dark:text-gray-500">
+              {weeklyDone}/{weeklyGoal} esta semana
+              {onTrack && <span className="ml-1" style={{ color: themeHex }}>✓</span>}
+            </span>
+          </div>
+        )}
+        <div className="flex items-center gap-3 text-sm text-gray-500 dark:text-gray-400 mb-4">
+          {lastRun && (
+            <span className="flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: themeHex }} />
+              {lastRun}
+            </span>
+          )}
+          {(routine.totalRuns || 0) > 0 && (
+            <span className="flex items-center gap-1">
+              <Trophy className="w-3 h-3" />
+              {routine.totalRuns} sesión{routine.totalRuns !== 1 ? 'es' : ''}
+            </span>
+          )}
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={onStart}
+            className="flex-1 bg-gray-900 dark:bg-gray-100 hover:bg-gray-800 dark:hover:bg-white text-white dark:text-gray-900 py-2 px-3 rounded-xl flex items-center justify-center gap-1.5 text-sm font-semibold transition-colors"
+          >
+            <Play className="w-4 h-4" /> Iniciar
+          </button>
+          <button
+            onClick={onEdit}
+            className="bg-white/70 dark:bg-gray-700/70 hover:bg-white dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 py-2 px-3 rounded-xl border border-white/60 dark:border-gray-600/60 transition-colors"
+          >
+            <Edit className="w-4 h-4" />
+          </button>
+          <button
+            onClick={onDelete}
+            className="bg-white/70 dark:bg-gray-700/70 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-400 py-2 px-3 rounded-xl border border-white/60 dark:border-gray-600/60 transition-colors"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const Move = () => {
   const { user } = useAuth();
   const { colorTheme } = useTheme();
   const navigate = useNavigate();
   const [routines, setRoutines] = useState([]);
+  const [routineOrder, setRoutineOrder] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingRoutine, setEditingRoutine] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState({ isOpen: false, routine: null });
+
+  const dndSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } })
+  );
   const [stats, setStats] = useState({
     month: { stretch: 0, workout: 0, running: 0, sports: 0, calories: 0, km: 0 },
     year:  { stretch: 0, workout: 0, running: 0, sports: 0, calories: 0, km: 0 }
@@ -110,7 +220,17 @@ const Move = () => {
   const loadRoutines = async () => {
     try {
       const snapshot = await getDocs(collection(db, `users/${user.uid}/routines`));
-      setRoutines(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+      const loaded = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      setRoutines(loaded);
+      try {
+        const stored = JSON.parse(localStorage.getItem('routineOrder') || '[]');
+        const loadedIds = loaded.map(r => r.id);
+        const validStored = stored.filter(id => loadedIds.includes(id));
+        const missing = loadedIds.filter(id => !validStored.includes(id));
+        setRoutineOrder([...validStored, ...missing]);
+      } catch {
+        setRoutineOrder(loaded.map(r => r.id));
+      }
     } catch { toast.error('Error al cargar las rutinas'); }
     finally { setLoading(false); }
   };
@@ -185,6 +305,19 @@ Responde solo en texto plano — sin markdown, sin asteriscos, sin encabezados. 
       loadRoutines();
     } catch { toast.error('Error al eliminar la rutina'); }
   };
+
+  const handleDragEndRoutines = ({ active, over }) => {
+    if (!over || active.id === over.id) return;
+    const oldIdx = routineOrder.indexOf(active.id);
+    const newIdx = routineOrder.indexOf(over.id);
+    const newOrder = arrayMove(routineOrder, oldIdx, newIdx);
+    setRoutineOrder(newOrder);
+    localStorage.setItem('routineOrder', JSON.stringify(newOrder));
+  };
+
+  const sortedRoutines = routineOrder
+    .map(id => routines.find(r => r.id === id))
+    .filter(Boolean);
 
   if (loading) return (
     <div className="flex items-center justify-center h-64">
@@ -273,7 +406,7 @@ Responde solo en texto plano — sin markdown, sin asteriscos, sin encabezados. 
           Mis Rutinas
         </p>
 
-        {routines.length === 0 ? (
+        {sortedRoutines.length === 0 ? (
           <div className="text-center py-16">
             <Dumbbell className="w-14 h-14 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
             <p className="text-gray-500 dark:text-gray-400 mb-4">Sin rutinas aún</p>
@@ -282,107 +415,22 @@ Responde solo en texto plano — sin markdown, sin asteriscos, sin encabezados. 
             </button>
           </div>
         ) : (
-          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-            {routines.map((routine) => {
-              const cfg = TYPE_CONFIG[routine.type] || TYPE_CONFIG.workout;
-              const TypeIcon = cfg.icon;
-              const lastRun = formatLastRun(routine);
-              const statusBorder = getStatusBorder(routine);
-              const themeHex = THEME_HEX[colorTheme] ?? '#3b82f6';
-
-              const weeklyDone = getWeeklyDone(routine);
-              const weeklyGoal = routine.weeklyGoal || 0;
-              const onTrack = weeklyGoal > 0 && weeklyDone >= weeklyGoal;
-
-              return (
-                <div
-                  key={routine.id}
-                  className={`relative overflow-hidden rounded-2xl border-l-4 ${statusBorder} liquid-glass-panel shadow-sm hover:shadow-md transition-shadow`}
-                >
-
-                  <div className="relative p-4">
-                    {/* Type badge */}
-                    <span
-                      className="inline-block text-xs px-2 py-0.5 rounded-full font-semibold uppercase tracking-wide mb-2"
-                      style={{ backgroundColor: themeHex + '20', color: themeHex }}
-                    >
-                      {routine.type}
-                    </span>
-
-                    {/* Name */}
-                    <h3 className="font-bold text-lg text-gray-900 dark:text-gray-100 leading-tight mb-1">
-                      {routine.name}
-                    </h3>
-
-                    {/* Meta */}
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">
-                      {routine.youtubeUrl ? 'YouTube' : `${routine.exercises?.length || 0} ejercicio${(routine.exercises?.length || 0) !== 1 ? 's' : ''}`}
-                    </p>
-
-                    {/* Weekly goal progress */}
-                    {weeklyGoal > 0 && (
-                      <div className="flex items-center gap-2 mb-3">
-                        <div className="flex gap-1">
-                          {Array.from({ length: weeklyGoal }, (_, i) => (
-                            <div
-                              key={i}
-                              className={`w-2.5 h-2.5 rounded-full transition-colors ${i < weeklyDone ? '' : 'bg-gray-200 dark:bg-gray-600'}`}
-                              style={i < weeklyDone ? { backgroundColor: themeHex } : undefined}
-                            />
-                          ))}
-                        </div>
-                        <span className="text-xs text-gray-400 dark:text-gray-500">
-                          {weeklyDone}/{weeklyGoal} esta semana
-                          {onTrack && <span className="ml-1" style={{ color: themeHex }}>✓</span>}
-                        </span>
-                      </div>
-                    )}
-
-                    {/* Last run + sessions */}
-                    <div className="flex items-center gap-3 text-sm text-gray-500 dark:text-gray-400 mb-4">
-                      {lastRun && (
-                        <span className="flex items-center gap-1">
-                          <span
-                            className="w-2 h-2 rounded-full inline-block"
-                            style={{ backgroundColor: themeHex }}
-                          />
-                          {lastRun}
-                        </span>
-                      )}
-                      {(routine.totalRuns || 0) > 0 && (
-                        <span className="flex items-center gap-1">
-                          <Trophy className="w-3 h-3" />
-                          {routine.totalRuns} sesión{routine.totalRuns !== 1 ? 'es' : ''}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Actions */}
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => navigate(`/routine/${routine.id}`)}
-                        className="flex-1 bg-gray-900 dark:bg-gray-100 hover:bg-gray-800 dark:hover:bg-white text-white dark:text-gray-900 py-2 px-3 rounded-xl flex items-center justify-center gap-1.5 text-sm font-semibold transition-colors"
-                      >
-                        <Play className="w-4 h-4" /> Iniciar
-                      </button>
-                      <button
-                        onClick={() => { setEditingRoutine(routine); setShowModal(true); }}
-                        className="bg-white/70 dark:bg-gray-700/70 hover:bg-white dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 py-2 px-3 rounded-xl border border-white/60 dark:border-gray-600/60 transition-colors"
-                      >
-                        <Edit className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => setDeleteConfirm({ isOpen: true, routine })}
-                        className="bg-white/70 dark:bg-gray-700/70 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-400 py-2 px-3 rounded-xl border border-white/60 dark:border-gray-600/60 transition-colors"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleDragEndRoutines}>
+            <SortableContext items={routineOrder} strategy={verticalListSortingStrategy}>
+              <div className="space-y-3">
+                {sortedRoutines.map((routine) => (
+                  <SortableRoutineCard
+                    key={routine.id}
+                    routine={routine}
+                    colorTheme={colorTheme}
+                    onStart={() => navigate(`/routine/${routine.id}`)}
+                    onEdit={() => { setEditingRoutine(routine); setShowModal(true); }}
+                    onDelete={() => setDeleteConfirm({ isOpen: true, routine })}
+                  />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
         )}
       </div>
 

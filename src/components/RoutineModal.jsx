@@ -96,7 +96,7 @@ const SortableExerciseItem = ({ ex, idx, isEdit, isOpen, onToggle, onRemove, onU
         <div className="p-4 space-y-3 bg-white dark:bg-gray-800">
           <div>
             <label className="label">Nombre</label>
-            <input className="input-field" value={ex.name} onChange={e => onUpdate(ex._id, 'name', e.target.value)} placeholder="ej. Sentadilla, Push-up, Plancha" autoFocus={!ex.name} />
+            <input className="input-field" value={ex.name} onChange={e => onUpdate(ex._id, 'name', e.target.value)} placeholder="ej. Sentadilla, Push-up, Plancha" />
           </div>
           <div>
             <label className="label">Reps / duración</label>
@@ -261,7 +261,6 @@ const RoutineModal = ({ routine, onClose, onSave }) => {
           value={name}
           onChange={e => setName(e.target.value)}
           placeholder="ej. Full Body, Piernas Fuego"
-          autoFocus
         />
       </div>
 
@@ -492,7 +491,7 @@ const RoutineModal = ({ routine, onClose, onSave }) => {
       <div className="flex items-center justify-center h-full pb-20 px-4">
         <div
           className="liquid-glass-panel rounded-2xl w-full max-w-lg flex flex-col overflow-hidden"
-          style={{ maxHeight: 'calc(90vh - 80px)' }}
+          style={{ maxHeight: 'calc(80vh - 80px)' }}
           onClick={e => e.stopPropagation()}
         >
           {/* Header */}
@@ -533,14 +532,14 @@ const RoutineModal = ({ routine, onClose, onSave }) => {
 
           <div className="flex-1 min-h-0 overflow-y-auto">
             {/* New mode steps */}
-            {!isEdit && step === 1 && <DetallesPanel />}
-            {!isEdit && step === 2 && <ModeContentPanel />}
-            {!isEdit && step === 3 && <MetaPanel />}
+            {!isEdit && step === 1 && DetallesPanel()}
+            {!isEdit && step === 2 && ModeContentPanel()}
+            {!isEdit && step === 3 && MetaPanel()}
 
             {/* Edit mode tabs */}
-            {isEdit && editTab === 0 && <DetallesPanel />}
-            {isEdit && editTab === 1 && <EjerciciosEditPanel />}
-            {isEdit && editTab === 2 && <MetaPanel />}
+            {isEdit && editTab === 0 && DetallesPanel()}
+            {isEdit && editTab === 1 && EjerciciosEditPanel()}
+            {isEdit && editTab === 2 && MetaPanel()}
           </div>
 
           {/* Footer */}

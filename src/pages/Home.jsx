@@ -1222,7 +1222,7 @@ Plain text, sin markdown, en español.`;
             </div>
 
             {/* Morning sleep card */}
-            {(isSleepWindow || sleepFilled) && (
+            {isSleepWindow && !sleepFilled && (
               <button
                 onClick={() => isSleepWindow && !sleepFilled && setShowSleepCheckin(true)}
                 className={`w-full rounded-2xl p-4 flex items-center gap-3 transition-all ${

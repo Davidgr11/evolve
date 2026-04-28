@@ -72,12 +72,12 @@ const getWeeklyDone = (routine) => {
   return routine.runDates.filter(d => d >= mondayStr).length;
 };
 
-const getStatusBorder = (routine) => {
-  if (!routine.lastRun) return 'border-l-gray-200 dark:border-l-gray-700';
+const getStatusColor = (routine) => {
+  if (!routine.lastRun) return '#9ca3af';
   const days = Math.floor((Date.now() - new Date(routine.lastRun)) / 86400000);
-  if (days <= 7)  return 'border-l-green-400';
-  if (days <= 14) return 'border-l-yellow-400';
-  return 'border-l-red-400';
+  if (days <= 7)  return '#4ade80';
+  if (days <= 14) return '#facc15';
+  return '#f87171';
 };
 
 const formatLastRun = (routine) => {
@@ -94,93 +94,92 @@ const SortableRoutineCard = ({ routine, colorTheme, onStart, onEdit, onDelete })
     useSortable({ id: routine.id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
 
-  const statusBorder = getStatusBorder(routine);
+  const statusColor = getStatusColor(routine);
   const themeHex = THEME_HEX[colorTheme] ?? '#3b82f6';
   const lastRun = formatLastRun(routine);
   const weeklyDone = getWeeklyDone(routine);
   const weeklyGoal = routine.weeklyGoal || 0;
   const onTrack = weeklyGoal > 0 && weeklyDone >= weeklyGoal;
+  const exerciseLabel = routine.youtubeUrl
+    ? 'YouTube'
+    : `${routine.exercises?.length || 0} ej.`;
 
   return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className={`relative overflow-hidden rounded-2xl border-l-4 ${statusBorder} liquid-glass-panel shadow-sm`}
-    >
-      <div className="relative p-4">
-        <div className="flex items-start justify-between mb-2">
-          <span
-            className="inline-block text-xs px-2 py-0.5 rounded-full font-semibold uppercase tracking-wide"
-            style={{ backgroundColor: themeHex + '20', color: themeHex }}
-          >
-            {routine.type}
-          </span>
-          <div
-            {...attributes}
-            {...listeners}
-            className="cursor-grab active:cursor-grabbing touch-none text-gray-300 dark:text-gray-600 -mt-0.5 ml-2 flex-shrink-0"
-          >
-            <GripVertical className="w-4 h-4" />
-          </div>
+    <div ref={setNodeRef} style={style} className="liquid-glass-panel rounded-2xl overflow-hidden">
+      <div className="flex items-center gap-2 px-3 py-3">
+        {/* Drag handle */}
+        <div
+          {...attributes} {...listeners}
+          className="cursor-grab active:cursor-grabbing touch-none text-gray-300 dark:text-gray-600 flex-shrink-0"
+        >
+          <GripVertical className="w-4 h-4" />
         </div>
-        <h3 className="font-bold text-lg text-gray-900 dark:text-gray-100 leading-tight mb-1">
-          {routine.name}
-        </h3>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">
-          {routine.youtubeUrl ? 'YouTube' : `${routine.exercises?.length || 0} ejercicio${(routine.exercises?.length || 0) !== 1 ? 's' : ''}`}
-        </p>
-        {weeklyGoal > 0 && (
-          <div className="flex items-center gap-2 mb-3">
-            <div className="flex gap-1">
-              {Array.from({ length: weeklyGoal }, (_, i) => (
-                <div
-                  key={i}
-                  className={`w-2.5 h-2.5 rounded-full transition-colors ${i < weeklyDone ? '' : 'bg-gray-200 dark:bg-gray-600'}`}
-                  style={i < weeklyDone ? { backgroundColor: themeHex } : undefined}
-                />
-              ))}
-            </div>
-            <span className="text-xs text-gray-400 dark:text-gray-500">
-              {weeklyDone}/{weeklyGoal} esta semana
-              {onTrack && <span className="ml-1" style={{ color: themeHex }}>✓</span>}
+
+        {/* Status dot */}
+        <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: statusColor }} />
+
+        {/* Main content */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate leading-tight">
+              {routine.name}
+            </span>
+            <span
+              className="text-xs px-1.5 py-0.5 rounded-full font-medium flex-shrink-0"
+              style={{ backgroundColor: themeHex + '18', color: themeHex }}
+            >
+              {routine.type}
             </span>
           </div>
-        )}
-        <div className="flex items-center gap-3 text-sm text-gray-500 dark:text-gray-400 mb-4">
-          {lastRun && (
-            <span className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: themeHex }} />
-              {lastRun}
-            </span>
-          )}
-          {(routine.totalRuns || 0) > 0 && (
-            <span className="flex items-center gap-1">
-              <Trophy className="w-3 h-3" />
-              {routine.totalRuns} sesión{routine.totalRuns !== 1 ? 'es' : ''}
-            </span>
-          )}
+          <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+            <span className="text-xs text-gray-400 dark:text-gray-500">{exerciseLabel}</span>
+            {lastRun && (
+              <>
+                <span className="text-gray-300 dark:text-gray-600 text-xs">·</span>
+                <span className="text-xs text-gray-400 dark:text-gray-500">{lastRun}</span>
+              </>
+            )}
+            {weeklyGoal > 0 && (
+              <>
+                <span className="text-gray-300 dark:text-gray-600 text-xs">·</span>
+                <span className="text-xs font-medium" style={{ color: onTrack ? themeHex : undefined }}>
+                  {weeklyDone}/{weeklyGoal}{onTrack ? ' ✓' : ''}
+                </span>
+              </>
+            )}
+          </div>
         </div>
-        <div className="flex gap-2">
+
+        {/* Actions */}
+        <div className="flex items-center gap-0.5 flex-shrink-0">
+          <button onClick={onEdit} className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
+            <Edit className="w-3.5 h-3.5" />
+          </button>
+          <button onClick={onDelete} className="p-2 text-gray-400 hover:text-red-400 transition-colors">
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
           <button
             onClick={onStart}
-            className="flex-1 bg-gray-900 dark:bg-gray-100 hover:bg-gray-800 dark:hover:bg-white text-white dark:text-gray-900 py-2 px-3 rounded-xl flex items-center justify-center gap-1.5 text-sm font-semibold transition-colors"
+            className="ml-1 flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold text-white active:opacity-80 transition-opacity"
+            style={{ backgroundColor: themeHex }}
           >
-            <Play className="w-4 h-4" /> Iniciar
-          </button>
-          <button
-            onClick={onEdit}
-            className="bg-white/70 dark:bg-gray-700/70 hover:bg-white dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 py-2 px-3 rounded-xl border border-white/60 dark:border-gray-600/60 transition-colors"
-          >
-            <Edit className="w-4 h-4" />
-          </button>
-          <button
-            onClick={onDelete}
-            className="bg-white/70 dark:bg-gray-700/70 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-400 py-2 px-3 rounded-xl border border-white/60 dark:border-gray-600/60 transition-colors"
-          >
-            <Trash2 className="w-4 h-4" />
+            <Play className="w-3 h-3" fill="currentColor" /> Iniciar
           </button>
         </div>
       </div>
+
+      {/* Weekly progress bar */}
+      {weeklyGoal > 0 && (
+        <div className="flex gap-1 px-4 pb-2.5 ml-9">
+          {Array.from({ length: weeklyGoal }, (_, i) => (
+            <div
+              key={i}
+              className={`h-1 flex-1 rounded-full ${i >= weeklyDone ? 'bg-gray-200 dark:bg-gray-700' : ''}`}
+              style={i < weeklyDone ? { backgroundColor: themeHex } : undefined}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 };
@@ -331,7 +330,7 @@ Responde solo en texto plano — sin markdown, sin asteriscos, sin encabezados. 
       {/* Header */}
       <div className="flex justify-between items-end">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 leading-tight">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 leading-tight">
             Actividad
           </h1>
         </div>
@@ -352,7 +351,7 @@ Responde solo en texto plano — sin markdown, sin asteriscos, sin encabezados. 
           <div className="flex items-stretch">
             <div className="flex-1 flex flex-col items-center gap-1">
               <Flame className="w-5 h-5 text-orange-400 mb-0.5" />
-              <p className="text-3xl font-bold text-gray-900 dark:text-gray-100 leading-none">
+              <p className="text-xl font-bold text-gray-900 dark:text-gray-100 leading-none">
                 {stats.year.calories.toLocaleString()}
               </p>
               <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide font-medium">kcal</p>
@@ -360,7 +359,7 @@ Responde solo en texto plano — sin markdown, sin asteriscos, sin encabezados. 
             <div className="w-px bg-gray-100 dark:bg-gray-700 mx-4" />
             <div className="flex-1 flex flex-col items-center gap-1">
               <Route className="w-5 h-5 text-blue-400 mb-0.5" />
-              <p className="text-3xl font-bold text-gray-900 dark:text-gray-100 leading-none">
+              <p className="text-xl font-bold text-gray-900 dark:text-gray-100 leading-none">
                 {(stats.year.km || 0).toFixed(1)}
               </p>
               <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide font-medium">km</p>
@@ -368,7 +367,7 @@ Responde solo en texto plano — sin markdown, sin asteriscos, sin encabezados. 
             <div className="w-px bg-gray-100 dark:bg-gray-700 mx-4" />
             <div className="flex-1 flex flex-col items-center gap-1">
               <Dumbbell className="w-5 h-5 text-purple-400 mb-0.5" />
-              <p className="text-3xl font-bold text-gray-900 dark:text-gray-100 leading-none">
+              <p className="text-xl font-bold text-gray-900 dark:text-gray-100 leading-none">
                 {(stats.year.stretch || 0) + (stats.year.workout || 0) + (stats.year.running || 0) + (stats.year.sports || 0)}
               </p>
               <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide font-medium">rutinas</p>

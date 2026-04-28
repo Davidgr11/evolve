@@ -52,7 +52,7 @@ const IDEA_TYPES = [
   { id: 'restaurant', label: 'Restaurante', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' },
   { id: 'experience', label: 'Experiencia', color: 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300' },
   { id: 'event',      label: 'Evento',      color: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' },
-  { id: 'other',      label: 'Otro',        color: 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300' },
+  { id: 'other',      label: 'Otro',        color: 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300' },
 ];
 
 const getIdeaTypeConfig = (id) => IDEA_TYPES.find((t) => t.id === id) || IDEA_TYPES[3];
@@ -65,21 +65,11 @@ const EmptyState = ({ message }) => (
   </div>
 );
 
-const SortablePlanCard = ({ plan, onEdit, onDelete, showDrag }) => {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: plan.id });
+const PlanCard = ({ plan, onEdit, onDelete }) => {
   const typeConfig = getIdeaTypeConfig(plan.type);
   return (
-    <div
-      ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 }}
-      className="liquid-glass-panel rounded-xl p-4"
-    >
+    <div className="liquid-glass-panel rounded-xl p-4">
       <div className="flex items-start gap-2">
-        {showDrag && (
-          <div {...attributes} {...listeners} className="cursor-grab touch-none text-gray-300 dark:text-gray-600 mt-0.5 flex-shrink-0">
-            <GripVertical className="w-4 h-4" />
-          </div>
-        )}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1 flex-wrap">
             <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${typeConfig.color}`}>
@@ -439,7 +429,7 @@ const ItemFormModal = ({ isOpen, onClose, onSave, editingItem, type, hideDate = 
   return (
     <div className="fixed z-50 liquid-glass-overlay" style={{ top: 0, left: 0, right: 0, bottom: 0, margin: 0 }} onClick={onClose}>
       <div className="flex items-center justify-center h-full pb-20 px-4">
-        <div className="liquid-glass-panel rounded-2xl w-full max-w-md flex flex-col" style={{ maxHeight: 'calc(84vh - 80px)' }} onClick={(e) => e.stopPropagation()}>
+        <div className="liquid-glass-panel rounded-2xl w-full max-w-md flex flex-col overflow-x-hidden" style={{ maxHeight: 'calc(84vh - 80px)' }} onClick={(e) => e.stopPropagation()}>
           <div className="flex justify-between items-center px-5 pt-5 pb-4 flex-shrink-0 border-b border-white/30 dark:border-white/10">
             <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">{titles[type]}</h2>
             <button onClick={onClose} className="text-gray-500 hover:text-gray-700 dark:text-gray-400"><X className="w-6 h-6" /></button>
@@ -467,7 +457,7 @@ const ItemFormModal = ({ isOpen, onClose, onSave, editingItem, type, hideDate = 
                 )}
                 <div>
                   <label className="label">Nombre *</label>
-                  <input className="input-field" placeholder={type === 'place' ? 'ej. Restaurante Nicos' : type === 'event-idea' ? 'ej. Auriculares inalámbricos' : 'ej. Salida al cine'} value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+                  <input className="input-field" placeholder={type === 'place' ? 'ej. Restaurante Nicos' : type === 'event-idea' ? 'ej. Auriculares inalámbricos' : 'ej. Salida al cine'} value={name} onChange={(e) => setName(e.target.value)} />
                 </div>
                 {type !== 'event-idea' && (
                   <div>
@@ -509,18 +499,12 @@ const PlansModal = ({ isOpen, onClose, coupleId, ideas, setIdeas }) => {
   const [editingIdea, setEditingIdea] = useState(null);
   const [deleteIdeaConfirm, setDeleteIdeaConfirm] = useState({ isOpen: false, idea: null });
 
-  const planSensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  );
-
   const handleSaveIdea = async (data) => {
     if (editingIdea) {
       await updateDoc(doc(db, `couples/${coupleId}/ideas`, editingIdea.id), data);
       toast.success('Actualizado');
     } else {
-      await addDoc(collection(db, `couples/${coupleId}/ideas`), { ...data, order: ideas.length, createdAt: new Date().toISOString() });
+      await addDoc(collection(db, `couples/${coupleId}/ideas`), { ...data, createdAt: new Date().toISOString() });
       toast.success('Agregado');
     }
     setEditingIdea(null);
@@ -529,15 +513,6 @@ const PlansModal = ({ isOpen, onClose, coupleId, ideas, setIdeas }) => {
   const handleDeleteIdea = async () => {
     await deleteDoc(doc(db, `couples/${coupleId}/ideas`, deleteIdeaConfirm.idea.id));
     toast.success('Eliminado');
-  };
-
-  const handleDragEnd = async ({ active, over }) => {
-    if (!over || active.id === over.id) return;
-    const oldIndex = ideas.findIndex((i) => i.id === active.id);
-    const newIndex = ideas.findIndex((i) => i.id === over.id);
-    const reordered = arrayMove(ideas, oldIndex, newIndex);
-    setIdeas(reordered);
-    await Promise.all(reordered.map((idea, idx) => updateDoc(doc(db, `couples/${coupleId}/ideas`, idea.id), { order: idx })));
   };
 
   const filteredIdeas = ideaTypeFilter === 'all' ? ideas : ideas.filter((i) => i.type === ideaTypeFilter);
@@ -574,19 +549,15 @@ const PlansModal = ({ isOpen, onClose, coupleId, ideas, setIdeas }) => {
             {filteredIdeas.length === 0 ? (
               <EmptyState message="Sin planes aún" />
             ) : (
-              <DndContext sensors={planSensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                <SortableContext items={ideas.map((i) => i.id)} strategy={verticalListSortingStrategy}>
-                  <div className="space-y-3">
-                    {filteredIdeas.map((plan) => (
-                      <SortablePlanCard
-                        key={plan.id} plan={plan} showDrag={ideaTypeFilter === 'all'}
-                        onEdit={() => { setEditingIdea(plan); setShowIdeaModal(true); }}
-                        onDelete={() => setDeleteIdeaConfirm({ isOpen: true, idea: plan })}
-                      />
-                    ))}
-                  </div>
-                </SortableContext>
-              </DndContext>
+              <div className="space-y-3">
+                {filteredIdeas.map((plan) => (
+                  <PlanCard
+                    key={plan.id} plan={plan}
+                    onEdit={() => { setEditingIdea(plan); setShowIdeaModal(true); }}
+                    onDelete={() => setDeleteIdeaConfirm({ isOpen: true, idea: plan })}
+                  />
+                ))}
+              </div>
             )}
           </div>
         </div>
@@ -1021,8 +992,10 @@ const CoupleSection = () => {
     return onSnapshot(collection(db, `couples/${coupleId}/ideas`), (snap) => {
       const data = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
       data.sort((a, b) => {
-        if (a.order !== undefined && b.order !== undefined) return a.order - b.order;
-        return (a.createdAt || '').localeCompare(b.createdAt || '');
+        if (!a.date && !b.date) return (a.createdAt || '').localeCompare(b.createdAt || '');
+        if (!a.date) return 1;
+        if (!b.date) return -1;
+        return a.date.localeCompare(b.date);
       });
       setIdeas(data);
     });

@@ -59,19 +59,6 @@ const GROUP_COLORS = {
   'estoicismo':  { from: '#78350f', to: '#d97706' },
 };
 
-const CUSTOM_MONTHLY_LIMIT = 10;
-
-const getCustomMonthKey = () => {
-  const d = new Date();
-  return `meditationCustom_${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-};
-
-const getCustomUsed = () => parseInt(localStorage.getItem(getCustomMonthKey()) || '0', 10);
-const incrementCustomUsed = () => {
-  const key = getCustomMonthKey();
-  localStorage.setItem(key, String(getCustomUsed() + 1));
-};
-
 const getThemeColor = (themeId) => {
   for (const g of THEME_GROUPS) {
     if (g.themes.some(t => t.id === themeId)) {
@@ -385,7 +372,6 @@ const Meditate = () => {
     try { return JSON.parse(localStorage.getItem('meditationFavorites') || '[]'); }
     catch { return []; }
   });
-  const [customUsed, setCustomUsed] = useState(getCustomUsed);
 
   // Modals
   const [soundModal, setSoundModal]       = useState(false);
@@ -666,10 +652,6 @@ const Meditate = () => {
       setIsLoading(false);
       setDurationModal(null);
       setCustomModal(false);
-      if (isCustom) {
-        incrementCustomUsed();
-        setCustomUsed(getCustomUsed());
-      }
       setCompletedMeta({ mins: startDuration.mins, themeLabel });
       beginSession(rawPhrases, startDuration.secs, buffers, ctx, () => saveMeditation(themeLabel, startDuration.mins, tid));
     } catch {
@@ -915,23 +897,16 @@ const Meditate = () => {
                 </div>
               </div>
 
-              {customUsed >= CUSTOM_MONTHLY_LIMIT ? (
-                <div className="text-center py-2">
-                  <p className="text-sm font-semibold text-red-500 dark:text-red-400">Límite mensual alcanzado</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Reinicia el {new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1).toLocaleDateString('es-MX', { day: 'numeric', month: 'long' })}</p>
-                </div>
-              ) : (
-                <button
-                  onClick={() => handleStart('custom', selectedDuration)}
-                  disabled={isLoading || !customText.trim()}
-                  className="btn-primary w-full py-4 text-base font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
-                >
-                  {isLoading
-                    ? <><Loader2 className="w-5 h-5 animate-spin" /> Preparando sesión...</>
-                    : <><Wind className="w-5 h-5" /> Comenzar · {CUSTOM_MONTHLY_LIMIT - customUsed} restantes</>
-                  }
-                </button>
-              )}
+              <button
+                onClick={() => handleStart('custom', selectedDuration)}
+                disabled={isLoading || !customText.trim()}
+                className="btn-primary w-full py-4 text-base font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {isLoading
+                  ? <><Loader2 className="w-5 h-5 animate-spin" /> Preparando sesión...</>
+                  : <><Wind className="w-5 h-5" /> Comenzar</>
+                }
+              </button>
           </div>
         </div>
       )}

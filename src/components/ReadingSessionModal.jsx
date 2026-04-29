@@ -342,16 +342,16 @@ const ReadingSessionModal = ({ onClose, onSessionComplete, readingBooks }) => {
         const mm = String(Math.floor(remainingSecs / 60)).padStart(2, '0');
         const ss = String(remainingSecs % 60).padStart(2, '0');
         return (
-          <div className="flex-1 flex flex-col px-5"
-            style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 28px)', paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 28px)' }}>
+          <div className="flex-1 flex flex-col items-center justify-center gap-6 px-5"
+            style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 20px)', paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 20px)' }}>
 
             {/* Timer + progress bar */}
-            <div className="flex flex-col items-center pt-2 pb-5">
-              <span className="text-7xl font-bold text-white font-mono tracking-wider leading-none tabular-nums">
+            <div className="flex flex-col items-center gap-3 w-full">
+              <span className="text-5xl font-bold text-white font-mono tracking-wider leading-none tabular-nums">
                 {mm}:{ss}
               </span>
-              <p className="text-xs text-white/35 font-medium uppercase tracking-widest mt-2 mb-4">restante</p>
-              <div className="w-full max-w-[280px] h-1.5 bg-white/10 rounded-full overflow-hidden">
+              <p className="text-xs text-white/35 font-medium uppercase tracking-widest">restante</p>
+              <div className="w-full max-w-[260px] h-1.5 bg-white/10 rounded-full overflow-hidden">
                 <div
                   className="h-full rounded-full transition-all duration-1000"
                   style={{
@@ -364,23 +364,23 @@ const ReadingSessionModal = ({ onClose, onSessionComplete, readingBooks }) => {
             </div>
 
             {/* Book cover */}
-            <div className="flex-1 flex flex-col items-center justify-center gap-3 min-h-0">
+            <div className="flex flex-col items-center gap-2">
               {selectedBook?.coverUrl ? (
                 <img src={selectedBook.coverUrl} alt=""
-                  className="rounded-2xl flex-shrink-0"
+                  className="rounded-2xl"
                   style={{
-                    width: 140, height: 210, objectFit: 'cover',
+                    width: 130, height: 195, objectFit: 'cover',
                     boxShadow: '0 20px 60px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.08)',
                   }}
                 />
               ) : (
-                <div className="rounded-2xl flex items-center justify-center flex-shrink-0"
+                <div className="rounded-2xl flex items-center justify-center"
                   style={{
-                    width: 140, height: 210,
+                    width: 130, height: 195,
                     background: 'rgba(110,231,183,0.08)',
                     border: '1px solid rgba(110,231,183,0.2)',
                   }}>
-                  <BookOpen className="w-14 h-14 text-emerald-400/40" />
+                  <BookOpen className="w-12 h-12 text-emerald-400/40" />
                 </div>
               )}
               {selectedBook && (
@@ -391,7 +391,7 @@ const ReadingSessionModal = ({ onClose, onSessionComplete, readingBooks }) => {
             </div>
 
             {/* Sound picker */}
-            <div className="pt-4">
+            <div className="w-full">
               <p className="text-xs font-semibold text-white/35 uppercase tracking-widest mb-2.5 text-center">Sonido</p>
               <div className="grid grid-cols-4 gap-2 max-w-sm mx-auto">
                 {SOUNDS.map(({ id, label, Icon }) => {
@@ -415,17 +415,15 @@ const ReadingSessionModal = ({ onClose, onSessionComplete, readingBooks }) => {
             </div>
 
             {/* Terminar button */}
-            <div className="pt-4">
-              <button onClick={handleEndEarly}
-                className="w-full py-4 rounded-2xl font-semibold text-base transition-opacity active:opacity-80"
-                style={{
-                  backgroundColor: 'rgba(255,255,255,0.1)',
-                  color: 'rgba(255,255,255,0.65)',
-                  border: '1px solid rgba(255,255,255,0.15)',
-                }}>
-                Terminar sesión
-              </button>
-            </div>
+            <button onClick={handleEndEarly}
+              className="w-full max-w-sm py-3.5 rounded-2xl font-semibold text-base transition-opacity active:opacity-80"
+              style={{
+                backgroundColor: 'rgba(255,255,255,0.1)',
+                color: 'rgba(255,255,255,0.65)',
+                border: '1px solid rgba(255,255,255,0.15)',
+              }}>
+              Terminar sesión
+            </button>
           </div>
         );
       })()}

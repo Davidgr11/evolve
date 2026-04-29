@@ -440,10 +440,14 @@ const Books = () => {
           const hex = THEME_HEX[colorTheme] ?? '#3b82f6';
           const hrs = Math.floor(readingMinutesYear / 60);
           const minsRem = readingMinutesYear % 60;
-          const readingLabel = readingMinutesYear >= 60
-            ? `${hrs}h${minsRem > 0 ? ` ${minsRem}m` : ''}`
-            : `${readingMinutesYear}m`;
           const progressPct = Math.min(100, (booksThisYear / annualGoal) * 100);
+
+          const milestone = readingMinutesYear >= 3000 ? '📚 Lector legendario'
+            : readingMinutesYear >= 1500 ? '🔥 Lector avanzado'
+            : readingMinutesYear >= 600  ? '⭐ Lector constante'
+            : readingMinutesYear >= 60   ? '🌱 Empezando'
+            : readingMinutesYear > 0     ? '💡 Primera sesión'
+            : null;
 
           return (
             <div className="px-4 py-4 liquid-glass-panel rounded-2xl space-y-4">
@@ -471,17 +475,13 @@ const Books = () => {
                 </div>
               </div>
 
-              {/* 3-metric row */}
-              <div className="grid grid-cols-3 divide-x divide-gray-100 dark:divide-gray-700/50">
-                <div className="text-center px-2">
-                  <p className="text-xl font-bold text-gray-900 dark:text-gray-100 leading-none">{readBooks.length}</p>
+              {/* 2-metric row */}
+              <div className="grid grid-cols-2 divide-x divide-gray-100 dark:divide-gray-700/50">
+                <div className="text-center px-3">
+                  <p className="text-2xl font-bold text-gray-900 dark:text-gray-100 leading-none">{readBooks.length}</p>
                   <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1.5 uppercase tracking-wide">Total leídos</p>
                 </div>
-                <div className="text-center px-2">
-                  <p className="text-xl font-bold text-gray-900 dark:text-gray-100 leading-none">{readingLabel}</p>
-                  <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1.5 uppercase tracking-wide">Este año</p>
-                </div>
-                <div className="text-center px-2">
+                <div className="text-center px-3">
                   <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 leading-tight line-clamp-1">
                     {topGenre || '—'}
                   </p>
@@ -489,21 +489,35 @@ const Books = () => {
                 </div>
               </div>
 
-              {/* Year pill chips */}
-              {booksPerYear.length > 0 && (
-                <div className="flex gap-2 flex-wrap border-t border-gray-100 dark:border-gray-700/50 pt-3">
-                  {booksPerYear.slice(-4).map(({ year, count }) => (
-                    <div
-                      key={year}
-                      className="flex items-center gap-1.5 px-3 py-1 rounded-full"
-                      style={{ backgroundColor: `${hex}18` }}
-                    >
-                      <span className="text-[11px] text-gray-500 dark:text-gray-400 font-medium">{year}</span>
-                      <span className="text-[11px] font-bold" style={{ color: hex }}>{count} lib.</span>
-                    </div>
-                  ))}
+              {/* Gamified reading time */}
+              <div className="relative overflow-hidden rounded-2xl px-4 py-3"
+                style={{ background: `linear-gradient(135deg, ${hex}18, ${hex}08)`, border: `1px solid ${hex}22` }}>
+                <div className="absolute -right-3 -top-3 w-16 h-16 rounded-full opacity-25 pointer-events-none"
+                  style={{ background: `radial-gradient(circle, ${hex}, transparent)` }} />
+                <p className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1.5">Lectura este año</p>
+                <div className="flex items-baseline gap-1.5">
+                  {readingMinutesYear >= 60 ? (
+                    <>
+                      <span className="text-4xl font-bold leading-none" style={{ color: hex }}>{hrs}</span>
+                      <span className="text-lg text-gray-400 dark:text-gray-500 font-medium">h</span>
+                      {minsRem > 0 && (
+                        <>
+                          <span className="text-2xl font-bold leading-none text-gray-700 dark:text-gray-300">{minsRem}</span>
+                          <span className="text-sm text-gray-400 dark:text-gray-500 font-medium">min</span>
+                        </>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-4xl font-bold leading-none" style={{ color: hex }}>{readingMinutesYear}</span>
+                      <span className="text-lg text-gray-400 dark:text-gray-500 font-medium">min</span>
+                    </>
+                  )}
                 </div>
-              )}
+                {milestone && (
+                  <p className="text-xs font-semibold mt-1" style={{ color: `${hex}bb` }}>{milestone}</p>
+                )}
+              </div>
 
             </div>
           );

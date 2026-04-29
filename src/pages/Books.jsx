@@ -484,19 +484,25 @@ const Books = () => {
                 )}
               </div>
 
-              {/* Per-year bar chart */}
+              {/* Per-year column chart (last 3 years) */}
               {booksPerYear.length > 0 && (
-                <div className="border-t border-gray-100 dark:border-gray-700/50 pt-3 space-y-1.5">
-                  {booksPerYear.map(({ year, count }) => (
-                    <div key={year} className="flex items-center gap-2">
-                      <span className="text-xs text-gray-400 dark:text-gray-500 w-10 text-right flex-shrink-0">{year}</span>
-                      <div className="flex-1 h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
-                        <div className="h-full rounded-full transition-all duration-500"
-                          style={{ width: `${Math.max(4, (count / maxCount) * 100)}%`, backgroundColor: hex }} />
+                <div className="border-t border-gray-100 dark:border-gray-700/50 pt-3">
+                  <div className="flex gap-3 items-end justify-center">
+                    {booksPerYear.slice(-3).map(({ year, count }) => (
+                      <div key={year} className="flex-1 flex flex-col items-center gap-1.5">
+                        <span className="text-xs font-bold text-gray-700 dark:text-gray-300">{count}</span>
+                        <div className="w-full rounded-t-lg overflow-hidden bg-gray-100 dark:bg-gray-700/60" style={{ height: 40 }}>
+                          <div className="w-full rounded-t-lg transition-all duration-500"
+                            style={{
+                              height: `${Math.max(8, (count / maxCount) * 40)}px`,
+                              backgroundColor: hex + 'cc',
+                              marginTop: `${40 - Math.max(8, (count / maxCount) * 40)}px`,
+                            }} />
+                        </div>
+                        <span className="text-[10px] text-gray-400 dark:text-gray-500">{year}</span>
                       </div>
-                      <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 w-4 flex-shrink-0">{count}</span>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               )}
 

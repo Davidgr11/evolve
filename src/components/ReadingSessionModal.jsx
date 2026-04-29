@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { X, Play, Square, BookOpen, Check } from 'lucide-react';
+import { X, Play, BookOpen, Check, ChevronLeft } from 'lucide-react';
 import { CloudRain, Waves, TreePine, Flame, Music2, VolumeX, Wind, Droplets } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 
@@ -168,37 +168,6 @@ const ClockPicker = ({ value, onChange }) => (
   </div>
 );
 
-// ── Countdown ring ────────────────────────────────────────────────────────────
-
-const CIRC_R = 100, CIRCUMFERENCE = 2 * Math.PI * CIRC_R;
-
-const CountdownRing = ({ totalSecs, remainingSecs, book }) => {
-  const progress = remainingSecs / totalSecs;
-  const offset = CIRCUMFERENCE * (1 - progress);
-  const mins = Math.floor(remainingSecs / 60);
-  const secs = remainingSecs % 60;
-
-  return (
-    <div className="relative flex items-center justify-center" style={{ width: 240, height: 240 }}>
-      <svg width={240} height={240} className="rotate-[-90deg] absolute inset-0">
-        <circle cx={120} cy={120} r={CIRC_R} fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="6" />
-        <circle cx={120} cy={120} r={CIRC_R} fill="none" stroke="rgba(255,255,255,0.85)" strokeWidth="6"
-          strokeDasharray={CIRCUMFERENCE} strokeDashoffset={offset} strokeLinecap="round"
-          style={{ transition: 'stroke-dashoffset 1s linear' }} />
-      </svg>
-      <div className="flex flex-col items-center">
-        <span className="text-5xl font-bold text-white tabular-nums leading-none">
-          {String(mins).padStart(2,'0')}:{String(secs).padStart(2,'0')}
-        </span>
-        {book && (
-          <span className="text-sm text-white/60 mt-2 text-center px-8 leading-tight">
-            {book.title}
-          </span>
-        )}
-      </div>
-    </div>
-  );
-};
 
 // ── Main component ────────────────────────────────────────────────────────────
 
@@ -270,10 +239,8 @@ const ReadingSessionModal = ({ onClose, onSessionComplete, readingBooks }) => {
     } catch {}
   };
 
-  const bg = 'linear-gradient(160deg, #120b04 0%, #231407 50%, #120b04 100%)';
-
   return (
-    <div className="fixed inset-0 z-[100] flex flex-col select-none" style={{ background: bg }}>
+    <div className="fixed inset-0 z-[100] meditation-bg flex flex-col select-none">
 
       {/* ── SETUP ── */}
       {view === 'setup' && (
@@ -343,57 +310,91 @@ const ReadingSessionModal = ({ onClose, onSessionComplete, readingBooks }) => {
       )}
 
       {/* ── ACTIVE ── */}
-      {view === 'active' && (
-        <div className="flex-1 flex flex-col items-center justify-center gap-8 px-5 py-8">
-          <CountdownRing
-            totalSecs={selectedMins * 60}
-            remainingSecs={remainingSecs}
-            book={selectedBook}
-          />
-
-          {/* Sound picker */}
-          <div className="w-full max-w-sm">
-            <p className="text-xs font-semibold text-white/40 uppercase tracking-widest mb-3 text-center">Sonido</p>
-            <div className="grid grid-cols-4 gap-2">
-              {SOUNDS.map(({ id, label, Icon }) => {
-                const active = selectedSound === id;
-                return (
-                  <button key={id} onClick={() => handleActiveSound(id)}
-                    className="flex flex-col items-center gap-1 py-2.5 px-1 rounded-xl border transition-all"
-                    style={{
-                      backgroundColor: active ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.05)',
-                      borderColor: active ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.08)',
-                    }}
-                  >
-                    <Icon className="w-4 h-4" color={active ? 'white' : 'rgba(255,255,255,0.4)'} />
-                    <span className="text-[10px] font-medium" style={{ color: active ? 'white' : 'rgba(255,255,255,0.4)' }}>
-                      {label}
-                    </span>
-                  </button>
-                );
-              })}
+      {view === 'active' && (() => {
+        const elapsed = selectedMins * 60 - remainingSecs;
+        const progress = elapsed / (selectedMins * 60);
+        const mm = String(Math.floor(remainingSecs / 60)).padStart(2, '0');
+        const ss = String(remainingSecs % 60).padStart(2, '0');
+        return (
+          <>
+            {/* Green progress strip */}
+            <div className="absolute left-0 right-0 h-0.5 bg-white/20" style={{ top: 0 }}>
+              <div className="h-full bg-emerald-400/70 transition-all duration-1000"
+                style={{ width: `${progress * 100}%` }} />
             </div>
-          </div>
 
-          <button onClick={handleEndEarly}
-            className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-medium transition-colors"
-            style={{ backgroundColor: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.6)', border: '1px solid rgba(255,255,255,0.12)' }}
-          >
-            <Square className="w-4 h-4" />
-            Terminar sesión
-          </button>
-        </div>
-      )}
+            {/* Top bar */}
+            <div className="absolute left-0 right-0 flex items-center justify-between px-5"
+              style={{ top: 'calc(env(safe-area-inset-top, 0px) + 20px)' }}>
+              <button onClick={handleEndEarly}
+                className="flex items-center gap-1.5 text-white/65 hover:text-white/95 transition-colors">
+                <ChevronLeft className="w-5 h-5" />
+                <span className="text-base font-medium">Salir</span>
+              </button>
+              <span className="text-white/60 text-lg font-mono tracking-widest">{mm}:{ss}</span>
+            </div>
+
+            {/* Center: book cover */}
+            <div className="flex-1 flex flex-col items-center justify-center gap-4 px-8">
+              {selectedBook?.coverUrl ? (
+                <img src={selectedBook.coverUrl} alt=""
+                  className="rounded-2xl"
+                  style={{ width: 150, height: 220, objectFit: 'cover',
+                    boxShadow: '0 20px 60px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.08)' }} />
+              ) : (
+                <div className="rounded-2xl flex items-center justify-center"
+                  style={{ width: 150, height: 220,
+                    background: 'rgba(110,231,183,0.08)',
+                    border: '1px solid rgba(110,231,183,0.2)' }}>
+                  <BookOpen className="w-14 h-14 text-emerald-400/40" />
+                </div>
+              )}
+              {selectedBook && (
+                <p className="text-white/55 text-sm text-center leading-snug max-w-[200px]">
+                  {selectedBook.title}
+                </p>
+              )}
+            </div>
+
+            {/* Sound picker */}
+            <div className="px-5 pb-8 w-full">
+              <p className="text-xs font-semibold text-white/35 uppercase tracking-widest mb-2.5 text-center">Sonido</p>
+              <div className="grid grid-cols-4 gap-2 max-w-sm mx-auto">
+                {SOUNDS.map(({ id, label, Icon }) => {
+                  const isActive = selectedSound === id;
+                  return (
+                    <button key={id} onClick={() => handleActiveSound(id)}
+                      className="flex flex-col items-center gap-1 py-2 px-1 rounded-xl border transition-all"
+                      style={{
+                        backgroundColor: isActive ? 'rgba(110,231,183,0.15)' : 'rgba(255,255,255,0.05)',
+                        borderColor: isActive ? 'rgba(110,231,183,0.4)' : 'rgba(255,255,255,0.08)',
+                      }}>
+                      <Icon className="w-4 h-4" color={isActive ? '#6ee7b7' : 'rgba(255,255,255,0.35)'} />
+                      <span className="text-[10px] font-medium"
+                        style={{ color: isActive ? '#6ee7b7' : 'rgba(255,255,255,0.35)' }}>
+                        {label}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </>
+        );
+      })()}
 
       {/* ── DONE ── */}
       {view === 'done' && (
         <div className="flex-1 flex flex-col items-center justify-center gap-6 px-8 text-center">
           <div className="w-20 h-20 rounded-full flex items-center justify-center"
-            style={{ background: 'radial-gradient(circle, rgba(255,220,150,0.3), rgba(200,140,50,0.2))' }}>
-            <BookOpen className="w-9 h-9 text-amber-300" />
+            style={{ background: 'radial-gradient(circle, rgba(167,243,208,0.9), rgba(52,211,153,0.75))',
+              boxShadow: '0 0 60px rgba(52,211,153,0.4)' }}>
+            <BookOpen className="w-9 h-9 text-white" />
           </div>
           <div>
-            <p className="text-5xl font-bold text-white leading-none">{elapsedMins}<span className="text-2xl ml-1 text-white/60">min</span></p>
+            <p className="text-5xl font-bold text-white leading-none">
+              {elapsedMins}<span className="text-2xl ml-1 text-white/50">min</span>
+            </p>
             <p className="text-sm text-white/50 mt-2">de lectura registrados</p>
           </div>
           {selectedBook && (
@@ -401,7 +402,7 @@ const ReadingSessionModal = ({ onClose, onSessionComplete, readingBooks }) => {
               style={{ backgroundColor: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)' }}>
               {selectedBook.coverUrl
                 ? <img src={selectedBook.coverUrl} alt="" className="w-8 h-11 object-cover rounded" />
-                : <BookOpen className="w-5 h-5 text-amber-300" />
+                : <BookOpen className="w-5 h-5 text-emerald-400" />
               }
               <div className="text-left">
                 <p className="text-sm font-semibold text-white">{selectedBook.title}</p>
@@ -411,8 +412,8 @@ const ReadingSessionModal = ({ onClose, onSessionComplete, readingBooks }) => {
           )}
           <button onClick={onClose}
             className="w-full max-w-xs py-4 rounded-2xl font-semibold text-base"
-            style={{ backgroundColor: 'rgba(255,255,255,0.15)', color: 'white', border: '1px solid rgba(255,255,255,0.2)' }}
-          >
+            style={{ backgroundColor: 'rgba(110,231,183,0.2)', color: '#6ee7b7',
+              border: '1px solid rgba(110,231,183,0.3)' }}>
             Cerrar
           </button>
         </div>

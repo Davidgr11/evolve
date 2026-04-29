@@ -440,21 +440,6 @@ const Books = () => {
           const hex = THEME_HEX[colorTheme] ?? '#3b82f6';
           const progressPct = Math.min(100, (booksThisYear / annualGoal) * 100);
 
-          // Reading pace formula
-          // Default: 500 min/book (250 pages × 2 min/page)
-          // Calibrated from user's actual data once ≥2 books are finished with minutes logged
-          const DEFAULT_MIN_PER_BOOK = 500;
-          const minPerBook = (booksThisYear >= 2 && readingMinutesYear > 0)
-            ? Math.round(readingMinutesYear / booksThisYear)
-            : DEFAULT_MIN_PER_BOOK;
-          const totalMinEstimated = annualGoal * minPerBook;
-          const minRemaining = Math.max(0, totalMinEstimated - readingMinutesYear);
-          const today = new Date();
-          const endOfYear = new Date(currentYear, 11, 31);
-          const daysRemaining = Math.max(1, Math.ceil((endOfYear - today) / (1000 * 60 * 60 * 24)));
-          const dailyPace = Math.ceil(minRemaining / daysRemaining);
-          const goalMet = minRemaining <= 0;
-
           const hrs = Math.floor(readingMinutesYear / 60);
           const minsRem = readingMinutesYear % 60;
           const readingLabel = readingMinutesYear >= 60
@@ -502,30 +487,12 @@ const Books = () => {
               </div>
 
               {/* Motivational daily pace */}
-              <div className="border-t border-gray-100 dark:border-gray-700/50 pt-3">
-                <p className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1.5">
-                  {goalMet ? 'Ritmo de lectura' : 'Para cumplir tu meta'}
-                </p>
-                {goalMet ? (
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xl font-bold text-gray-900 dark:text-gray-100">¡Meta lograda!</span>
-                    <span className="text-base">🎉</span>
-                    {readingMinutesYear > 0 && (
-                      <span className="text-xs text-gray-400 dark:text-gray-500 ml-1">· {readingLabel} leídos</span>
-                    )}
-                  </div>
-                ) : (
-                  <div className="flex items-baseline justify-between">
-                    <div className="flex items-baseline gap-1.5">
-                      <span className="text-2xl font-bold leading-none" style={{ color: hex }}>~{dailyPace}</span>
-                      <span className="text-sm text-gray-400 dark:text-gray-500 font-medium">min/día</span>
-                    </div>
-                    <span className="text-xs text-gray-400 dark:text-gray-500">
-                      {readingMinutesYear > 0 ? `llevas ${readingLabel} · ` : ''}{daysRemaining}d restantes
-                    </span>
-                  </div>
-                )}
-              </div>
+              {readingMinutesYear > 0 && (
+                <div className="border-t border-gray-100 dark:border-gray-700/50 pt-3 flex items-baseline justify-between">
+                  <p className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-widest">Lectura registrada</p>
+                  <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">{readingLabel}</p>
+                </div>
+              )}
 
             </div>
           );

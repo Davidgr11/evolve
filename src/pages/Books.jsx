@@ -4,7 +4,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { db } from '../utils/firebase';
 import {
   collection, getDocs, addDoc, updateDoc, deleteDoc,
-  doc, setDoc, getDoc,
+  doc, setDoc, getDoc, increment as fsIncrement,
 } from 'firebase/firestore';
 import toast from '../utils/toast';
 import {
@@ -131,9 +131,9 @@ const Books = () => {
   // Single modal for all AI results
   const [aiModal, setAiModal] = useState(null);
 
-  const [showSessionModal, setShowSessionModal] = useState(false);
+  const [sessionActive, setSessionActive] = useState(false);
   const [readingMinutesYear, setReadingMinutesYear] = useState(0);
-  const [readingMinutesMonth, setReadingMinutesMonth] = useState(0);
+  const [booksPerYear, setBooksPerYear] = useState([]);
 
   useEffect(() => { loadData(); }, [user]);
   useEffect(() => { setCurrentPage(1); }, [filterStatus, searchQuery, sortBy]);
@@ -141,30 +141,32 @@ const Books = () => {
   const loadData = async () => {
     try {
       const year = new Date().getFullYear();
-      const month = String(new Date().getMonth() + 1).padStart(2, '0');
-      const curMonthPrefix = `${year}-${month}`;
-
-      const [snap, goalSnap, sessionsSnap] = await Promise.all([
+      const [snap, bookStatsSnap, goalFallback] = await Promise.all([
         getDocs(collection(db, `users/${user.uid}/books`)),
+        getDocs(collection(db, `users/${user.uid}/bookStats`)),
         getDoc(doc(db, `users/${user.uid}/data`, 'books')),
-        getDocs(collection(db, `users/${user.uid}/readingSessions`)),
       ]);
       const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       setBooks(data);
       setUnmigrated(data.filter(b => !b.coverUrl && !b.coverFetched));
-      if (goalSnap.exists() && goalSnap.data().annualGoal) {
-        const g = goalSnap.data().annualGoal;
-        setAnnualGoal(g);
-        setGoalInput(String(g));
-      }
-      let totalYear = 0, totalMonth = 0;
-      sessionsSnap.forEach(d => {
-        const s = d.data();
-        if (s.date && s.date.startsWith(String(year))) totalYear += s.minutes || 0;
-        if (s.date && s.date.startsWith(curMonthPrefix)) totalMonth += s.minutes || 0;
+
+      const perYear = [];
+      let curYearData = null;
+      bookStatsSnap.forEach(d => {
+        const y = parseInt(d.id);
+        const dd = d.data();
+        perYear.push({ year: y, count: dd.count || 0 });
+        if (y === year) curYearData = dd;
       });
-      setReadingMinutesYear(totalYear);
-      setReadingMinutesMonth(totalMonth);
+      perYear.sort((a, b) => a.year - b.year);
+      setBooksPerYear(perYear);
+      setReadingMinutesYear(curYearData?.readingMinutes || 0);
+
+      const goal = curYearData?.goal
+        ?? (goalFallback.exists() ? goalFallback.data().annualGoal : null)
+        ?? 12;
+      setAnnualGoal(goal);
+      setGoalInput(String(goal));
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
   };
@@ -175,8 +177,21 @@ const Books = () => {
     setGoalInput(String(n));
     setShowGoalModal(false);
     try {
-      await setDoc(doc(db, `users/${user.uid}/data`, 'books'), { annualGoal: n }, { merge: true });
+      const year = new Date().getFullYear().toString();
+      await setDoc(doc(db, `users/${user.uid}/bookStats`, year), { goal: n }, { merge: true });
     } catch { /* silent */ }
+  };
+
+  const handleSessionComplete = async (mins) => {
+    try {
+      const year = new Date().getFullYear().toString();
+      await setDoc(
+        doc(db, `users/${user.uid}/bookStats`, year),
+        { readingMinutes: fsIncrement(mins) },
+        { merge: true }
+      );
+      setReadingMinutesYear(prev => prev + mins);
+    } catch (err) { console.error(err); }
   };
 
   // ── Derived stats ─────────────────────────────────────────────────────────
@@ -384,7 +399,7 @@ const Books = () => {
         <div className="flex justify-between items-center">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 leading-tight">Lectura</h1>
           <button
-            onClick={() => setShowSessionModal(true)}
+            onClick={() => setSessionActive(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/70 dark:bg-gray-800/70 border border-primary-200 dark:border-primary-700 text-primary-600 dark:text-primary-400 hover:bg-white dark:hover:bg-gray-800 transition-colors font-medium shadow-sm text-sm"
           >
             <BookOpen className="w-3.5 h-3.5" />
@@ -421,14 +436,18 @@ const Books = () => {
         <p className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Estadísticas</p>
 
         {/* Stats panel */}
-        <div className="px-4 py-4 liquid-glass-panel rounded-2xl space-y-3">
-          {/* Annual goal row */}
-          {(() => {
-            const hex = THEME_HEX[colorTheme] ?? '#3b82f6';
-            return (
+        {(() => {
+          const hex = THEME_HEX[colorTheme] ?? '#3b82f6';
+          const maxCount = Math.max(...booksPerYear.map(y => y.count), 1);
+          const readingLabel = readingMinutesYear >= 60
+            ? `${Math.floor(readingMinutesYear / 60)}h ${readingMinutesYear % 60 > 0 ? `${readingMinutesYear % 60}m` : ''}`
+            : `${readingMinutesYear}m`;
+          return (
+            <div className="px-4 py-4 liquid-glass-panel rounded-2xl space-y-4">
+
+              {/* Goal row */}
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  {/* Left: books progress */}
                   <div className="flex items-end gap-2">
                     <span className="text-xl font-bold leading-none" style={{ color: hex }}>{booksThisYear}</span>
                     <span className="text-sm text-gray-400 dark:text-gray-500 mb-px">/ {annualGoal} libros</span>
@@ -437,43 +456,53 @@ const Books = () => {
                       <Pencil className="w-3.5 h-3.5" />
                     </button>
                   </div>
-                  {/* Right: reading time this month */}
                   <div className="text-right">
-                    <p className="text-xl font-bold text-gray-900 dark:text-gray-100 leading-none">
-                      {readingMinutesMonth >= 60
-                        ? `${Math.round(readingMinutesMonth / 60)}h`
-                        : `${readingMinutesMonth}m`}
-                    </p>
-                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5 uppercase tracking-wide">lectura este mes</p>
+                    <p className="text-xl font-bold text-gray-900 dark:text-gray-100 leading-none">{readingLabel}</p>
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5 uppercase tracking-wide">lectura este año</p>
                   </div>
                 </div>
                 <div className="h-2.5 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
-                  <div
-                    className="h-full rounded-full transition-all duration-500"
-                    style={{ width: `${Math.min(100, (booksThisYear / annualGoal) * 100)}%`, backgroundColor: hex }}
-                  />
+                  <div className="h-full rounded-full transition-all duration-500"
+                    style={{ width: `${Math.min(100, (booksThisYear / annualGoal) * 100)}%`, backgroundColor: hex }} />
                 </div>
               </div>
-            );
-          })()}
 
-          {/* Bottom stats row */}
-          <div className="flex gap-3 pt-1">
-            <div className="flex-1 text-center">
-              <p className="text-xl font-bold text-gray-900 dark:text-gray-100 leading-none">{readBooks.length}</p>
-              <p className="text-xs text-gray-400 dark:text-gray-500 mt-1 uppercase tracking-wide">Total leídos</p>
-            </div>
-            {topGenre && (
-              <>
-                <div className="w-px bg-gray-100 dark:bg-gray-700" />
+              {/* Stats row */}
+              <div className="flex gap-3">
                 <div className="flex-1 text-center">
-                  <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 leading-tight">{topGenre}</p>
-                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-1 uppercase tracking-wide">Género top</p>
+                  <p className="text-xl font-bold text-gray-900 dark:text-gray-100 leading-none">{readBooks.length}</p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-1 uppercase tracking-wide">Total leídos</p>
                 </div>
-              </>
-            )}
-          </div>
-        </div>
+                {topGenre && (
+                  <>
+                    <div className="w-px bg-gray-100 dark:bg-gray-700" />
+                    <div className="flex-1 text-center">
+                      <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 leading-tight">{topGenre}</p>
+                      <p className="text-xs text-gray-400 dark:text-gray-500 mt-1 uppercase tracking-wide">Género top</p>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Per-year bar chart */}
+              {booksPerYear.length > 0 && (
+                <div className="border-t border-gray-100 dark:border-gray-700/50 pt-3 space-y-1.5">
+                  {booksPerYear.map(({ year, count }) => (
+                    <div key={year} className="flex items-center gap-2">
+                      <span className="text-xs text-gray-400 dark:text-gray-500 w-10 text-right flex-shrink-0">{year}</span>
+                      <div className="flex-1 h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
+                        <div className="h-full rounded-full transition-all duration-500"
+                          style={{ width: `${Math.max(4, (count / maxCount) * 100)}%`, backgroundColor: hex }} />
+                      </div>
+                      <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 w-4 flex-shrink-0">{count}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+            </div>
+          );
+        })()}
 
         {/* ── Libros subheading + actions ── */}
         <div className="flex items-center justify-between">
@@ -659,11 +688,12 @@ const Books = () => {
         </div>
       )}
 
-      {/* ── Reading Session Modal ── */}
-      {showSessionModal && (
+      {/* ── Reading Session (full-screen) ── */}
+      {sessionActive && (
         <ReadingSessionModal
           readingBooks={books.filter(b => b.status === 'reading')}
-          onClose={() => { setShowSessionModal(false); loadData(); }}
+          onClose={() => setSessionActive(false)}
+          onSessionComplete={handleSessionComplete}
         />
       )}
 

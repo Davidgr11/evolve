@@ -1,11 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { X, Play, Square, BookOpen, Check, Clock } from 'lucide-react';
+import { X, Play, Square, BookOpen, Check } from 'lucide-react';
 import { CloudRain, Waves, TreePine, Flame, Music2, VolumeX, Wind, Droplets } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
-import { useAuth } from '../contexts/AuthContext';
-import { db } from '../utils/firebase';
-import { collection, addDoc } from 'firebase/firestore';
-import toast from '../utils/toast';
 
 const THEME_HEX = { blue: '#3b82f6', purple: '#8b5cf6', orange: '#f97316', teal: '#0d9488' };
 
@@ -57,15 +53,11 @@ const startAmbient = (type, ctx) => {
   master.connect(ctx.destination);
   master.gain.setTargetAtTime(0.35, ctx.currentTime, 2);
   const nodes = [];
-
   const addLFO = (rate, depth, targetParam) => {
-    const lfo = ctx.createOscillator();
-    const lg = ctx.createGain();
+    const lfo = ctx.createOscillator(); const lg = ctx.createGain();
     lfo.frequency.value = rate; lg.gain.value = depth;
-    lfo.connect(lg); lg.connect(targetParam);
-    lfo.start(); nodes.push(lfo, lg);
+    lfo.connect(lg); lg.connect(targetParam); lfo.start(); nodes.push(lfo, lg);
   };
-
   switch (type) {
     case 'rain': {
       const src = makeSource(ctx, false);
@@ -76,44 +68,34 @@ const startAmbient = (type, ctx) => {
       const g2 = ctx.createGain(); g2.gain.value=0.15;
       src.connect(bp); bp.connect(hp); hp.connect(master);
       src2.connect(bp2); bp2.connect(g2); g2.connect(master);
-      addLFO(1.8, 0.06, master.gain);
-      src.start(); src2.start(); nodes.push(src, bp, hp, src2, bp2, g2);
-      break;
+      addLFO(1.8, 0.06, master.gain); src.start(); src2.start(); nodes.push(src,bp,hp,src2,bp2,g2); break;
     }
     case 'ocean': {
       const src = makeSource(ctx, true);
       const lp = ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=500;
-      addLFO(0.08, 0.22, master.gain);
-      addLFO(0.13, 0.1, master.gain);
-      src.connect(lp); lp.connect(master); src.start(); nodes.push(src, lp);
-      break;
+      addLFO(0.08, 0.22, master.gain); addLFO(0.13, 0.1, master.gain);
+      src.connect(lp); lp.connect(master); src.start(); nodes.push(src, lp); break;
     }
     case 'forest': {
       const src = makeSource(ctx, true);
       const bp = ctx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=750; bp.Q.value=0.6;
-      master.gain.setTargetAtTime(0.14, ctx.currentTime, 2);
-      addLFO(0.3, 0.04, master.gain);
-      src.connect(bp); bp.connect(master); src.start(); nodes.push(src, bp);
-      break;
+      master.gain.setTargetAtTime(0.14, ctx.currentTime, 2); addLFO(0.3, 0.04, master.gain);
+      src.connect(bp); bp.connect(master); src.start(); nodes.push(src, bp); break;
     }
     case 'river': {
       const src = makeSource(ctx, true);
       const bp = ctx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=600; bp.Q.value=1.2;
       const lp = ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=1200;
-      addLFO(0.6, 0.08, master.gain);
-      addLFO(1.1, 0.05, master.gain);
-      src.connect(bp); bp.connect(lp); lp.connect(master); src.start(); nodes.push(src, bp, lp);
-      break;
+      addLFO(0.6, 0.08, master.gain); addLFO(1.1, 0.05, master.gain);
+      src.connect(bp); bp.connect(lp); lp.connect(master); src.start(); nodes.push(src,bp,lp); break;
     }
     case 'wind': {
       const src = makeSource(ctx, true);
       const hp = ctx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=400;
       const lp = ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=2000;
       master.gain.setTargetAtTime(0.2, ctx.currentTime, 2);
-      addLFO(0.15, 0.18, master.gain);
-      addLFO(0.4, 0.06, master.gain);
-      src.connect(hp); hp.connect(lp); lp.connect(master); src.start(); nodes.push(src, hp, lp);
-      break;
+      addLFO(0.15, 0.18, master.gain); addLFO(0.4, 0.06, master.gain);
+      src.connect(hp); hp.connect(lp); lp.connect(master); src.start(); nodes.push(src,hp,lp); break;
     }
     case 'fire': {
       const src = makeSource(ctx, false);
@@ -122,27 +104,21 @@ const startAmbient = (type, ctx) => {
       lfo.type='sawtooth'; lfo.frequency.value=3.8; lg.gain.value=0.07;
       lfo.connect(lg); lg.connect(master.gain); lfo.start();
       master.gain.setTargetAtTime(0.22, ctx.currentTime, 2);
-      src.connect(lp); lp.connect(master); src.start(); nodes.push(src, lp, lfo, lg);
-      break;
+      src.connect(lp); lp.connect(master); src.start(); nodes.push(src,lp,lfo,lg); break;
     }
     case 'cuencos': {
-      const freqs = [432, 528, 720];
-      freqs.forEach((freq, i) => {
+      [432,528,720].forEach((freq,i) => {
         const osc = ctx.createOscillator(); const og = ctx.createGain();
         const lfo = ctx.createOscillator(); const lg = ctx.createGain();
-        osc.type = 'sine'; osc.frequency.value = freq;
-        og.gain.value = 0.10;
-        lfo.type = 'sine'; lfo.frequency.value = 0.25 + i * 0.08; lg.gain.value = 0.05;
-        lfo.connect(lg); lg.connect(og.gain);
-        osc.connect(og); og.connect(master);
-        osc.start(); lfo.start(); nodes.push(osc, og, lfo, lg);
+        osc.type='sine'; osc.frequency.value=freq; og.gain.value=0.10;
+        lfo.type='sine'; lfo.frequency.value=0.25+i*0.08; lg.gain.value=0.05;
+        lfo.connect(lg); lg.connect(og.gain); osc.connect(og); og.connect(master);
+        osc.start(); lfo.start(); nodes.push(osc,og,lfo,lg);
       });
-      master.gain.setTargetAtTime(0.28, ctx.currentTime, 3);
-      break;
+      master.gain.setTargetAtTime(0.28, ctx.currentTime, 3); break;
     }
     default: break;
   }
-
   return {
     fadeOut: () => {
       master.gain.setTargetAtTime(0, ctx.currentTime, 0.8);
@@ -154,96 +130,71 @@ const startAmbient = (type, ctx) => {
   };
 };
 
-// ── Timer clock picker ────────────────────────────────────────────────────────
+// ── Clock picker ──────────────────────────────────────────────────────────────
 
-const SIZE = 220;
-const CX = SIZE / 2;
-const RING_R = 82;
+const SIZE = 240, CX = 120, RING_R = 90;
 
-const ClockPicker = ({ value, onChange, themeHex }) => {
-  return (
-    <div className="relative mx-auto" style={{ width: SIZE, height: SIZE }}>
-      {/* Background circle track */}
-      <svg width={SIZE} height={SIZE} className="absolute inset-0">
-        <circle cx={CX} cy={CX} r={RING_R} fill="none" stroke="currentColor"
-          className="text-gray-100 dark:text-gray-700" strokeWidth="2" />
-      </svg>
-
-      {/* Center label */}
-      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-        <span className="text-4xl font-bold text-gray-900 dark:text-gray-100 leading-none" style={{ color: themeHex }}>
-          {value}
-        </span>
-        <span className="text-sm text-gray-400 dark:text-gray-500 mt-1">min</span>
-      </div>
-
-      {/* 12 touch targets */}
-      {TIMER_STEPS.map((mins, i) => {
-        const angle = (i / 12) * 2 * Math.PI - Math.PI / 2;
-        const x = CX + RING_R * Math.cos(angle);
-        const y = CX + RING_R * Math.sin(angle);
-        const selected = value === mins;
-        return (
-          <button
-            key={mins}
-            onClick={() => onChange(mins)}
-            className="absolute flex items-center justify-center rounded-full transition-all"
-            style={{
-              width: 34,
-              height: 34,
-              left: x - 17,
-              top: y - 17,
-              backgroundColor: selected ? themeHex : undefined,
-              border: selected ? 'none' : undefined,
-            }}
-          >
-            <span
-              className={`text-xs font-semibold ${selected ? 'text-white' : 'text-gray-500 dark:text-gray-400'}`}
-            >
-              {mins}
-            </span>
-          </button>
-        );
-      })}
+const ClockPicker = ({ value, onChange }) => (
+  <div className="relative mx-auto" style={{ width: SIZE, height: SIZE }}>
+    <svg width={SIZE} height={SIZE} className="absolute inset-0">
+      <circle cx={CX} cy={CX} r={RING_R} fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="1.5" />
+    </svg>
+    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+      <span className="text-5xl font-bold text-white leading-none">{value}</span>
+      <span className="text-sm text-white/50 mt-1">min</span>
     </div>
-  );
-};
+    {TIMER_STEPS.map((mins, i) => {
+      const angle = (i / 12) * 2 * Math.PI - Math.PI / 2;
+      const x = CX + RING_R * Math.cos(angle);
+      const y = CX + RING_R * Math.sin(angle);
+      const selected = value === mins;
+      return (
+        <button
+          key={mins}
+          onClick={() => onChange(mins)}
+          className="absolute flex items-center justify-center rounded-full transition-all"
+          style={{
+            width: 36, height: 36,
+            left: x - 18, top: y - 18,
+            backgroundColor: selected ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.1)',
+          }}
+        >
+          <span className={`text-xs font-bold ${selected ? 'text-stone-900' : 'text-white/70'}`}>
+            {mins}
+          </span>
+        </button>
+      );
+    })}
+  </div>
+);
 
 // ── Countdown ring ────────────────────────────────────────────────────────────
 
-const RING_RADIUS = 80;
-const CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
+const CIRC_R = 100, CIRCUMFERENCE = 2 * Math.PI * CIRC_R;
 
-const CountdownRing = ({ totalSecs, remainingSecs, themeHex, book }) => {
+const CountdownRing = ({ totalSecs, remainingSecs, book }) => {
   const progress = remainingSecs / totalSecs;
   const offset = CIRCUMFERENCE * (1 - progress);
   const mins = Math.floor(remainingSecs / 60);
   const secs = remainingSecs % 60;
 
   return (
-    <div className="flex flex-col items-center gap-4">
-      <div className="relative" style={{ width: 200, height: 200 }}>
-        <svg width={200} height={200} className="rotate-[-90deg]">
-          <circle cx={100} cy={100} r={RING_RADIUS} fill="none"
-            stroke="currentColor" strokeWidth="6"
-            className="text-gray-100 dark:text-gray-700" />
-          <circle cx={100} cy={100} r={RING_RADIUS} fill="none"
-            stroke={themeHex} strokeWidth="6"
-            strokeDasharray={CIRCUMFERENCE}
-            strokeDashoffset={offset}
-            strokeLinecap="round"
-            style={{ transition: 'stroke-dashoffset 1s linear' }} />
-        </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-3xl font-bold text-gray-900 dark:text-gray-100 tabular-nums">
-            {String(mins).padStart(2,'0')}:{String(secs).padStart(2,'0')}
+    <div className="relative flex items-center justify-center" style={{ width: 240, height: 240 }}>
+      <svg width={240} height={240} className="rotate-[-90deg] absolute inset-0">
+        <circle cx={120} cy={120} r={CIRC_R} fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="6" />
+        <circle cx={120} cy={120} r={CIRC_R} fill="none" stroke="rgba(255,255,255,0.85)" strokeWidth="6"
+          strokeDasharray={CIRCUMFERENCE} strokeDashoffset={offset} strokeLinecap="round"
+          style={{ transition: 'stroke-dashoffset 1s linear' }} />
+      </svg>
+      <div className="flex flex-col items-center">
+        <span className="text-5xl font-bold text-white tabular-nums leading-none">
+          {String(mins).padStart(2,'0')}:{String(secs).padStart(2,'0')}
+        </span>
+        {book && (
+          <span className="text-sm text-white/60 mt-2 text-center px-8 leading-tight">
+            {book.title}
           </span>
-          {book && (
-            <span className="text-xs text-gray-400 dark:text-gray-500 mt-1 text-center px-4 leading-tight max-w-[140px]">
-              {book.title}
-            </span>
-          )}
-        </div>
+        )}
       </div>
     </div>
   );
@@ -251,27 +202,22 @@ const CountdownRing = ({ totalSecs, remainingSecs, themeHex, book }) => {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-const ReadingSessionModal = ({ onClose, readingBooks }) => {
-  const { user } = useAuth();
+const ReadingSessionModal = ({ onClose, onSessionComplete, readingBooks }) => {
   const { colorTheme } = useTheme();
   const themeHex = THEME_HEX[colorTheme] ?? '#3b82f6';
 
-  const [view, setView] = useState('setup'); // setup | active | done
+  const [view, setView] = useState('setup');
   const [selectedMins, setSelectedMins] = useState(20);
   const [selectedBook, setSelectedBook] = useState(null);
   const [selectedSound, setSelectedSound] = useState('none');
-
   const [remainingSecs, setRemainingSecs] = useState(0);
   const [elapsedMins, setElapsedMins] = useState(0);
 
-  const timerRef = useRef(null);
+  const timerRef   = useRef(null);
   const audioCtxRef = useRef(null);
-  const ambientRef = useRef(null);
+  const ambientRef  = useRef(null);
 
-  const stopAmbient = () => {
-    ambientRef.current?.fadeOut();
-    ambientRef.current = null;
-  };
+  const stopAmbient = () => { ambientRef.current?.fadeOut(); ambientRef.current = null; };
 
   useEffect(() => {
     return () => {
@@ -282,28 +228,16 @@ const ReadingSessionModal = ({ onClose, readingBooks }) => {
   }, []);
 
   const handleStart = () => {
-    const totalSecs = selectedMins * 60;
-    setRemainingSecs(totalSecs);
+    setRemainingSecs(selectedMins * 60);
     setView('active');
-
-    // Start ambient audio
-    if (selectedSound !== 'none') {
-      try {
-        const ctx = new (window.AudioContext || window.webkitAudioContext)();
-        audioCtxRef.current = ctx;
-        ambientRef.current = startAmbient(selectedSound, ctx);
-      } catch {}
-    }
-
-    // Start countdown
     const startedAt = Date.now();
+    const totalSecs = selectedMins * 60;
     timerRef.current = setInterval(() => {
       const elapsed = Math.floor((Date.now() - startedAt) / 1000);
       const remaining = totalSecs - elapsed;
       if (remaining <= 0) {
         clearInterval(timerRef.current);
-        const actualMins = Math.round(elapsed / 60) || selectedMins;
-        handleComplete(actualMins);
+        finishSession(Math.round(elapsed / 60) || selectedMins);
       } else {
         setRemainingSecs(remaining);
       }
@@ -312,34 +246,20 @@ const ReadingSessionModal = ({ onClose, readingBooks }) => {
 
   const handleEndEarly = () => {
     clearInterval(timerRef.current);
-    const totalSecs = selectedMins * 60;
-    const done = totalSecs - remainingSecs;
-    const actualMins = Math.max(1, Math.round(done / 60));
-    handleComplete(actualMins);
+    const done = selectedMins * 60 - remainingSecs;
+    finishSession(Math.max(1, Math.round(done / 60)));
   };
 
-  const handleComplete = async (mins) => {
+  const finishSession = (mins) => {
     stopAmbient();
     try { audioCtxRef.current?.close(); } catch {}
     setElapsedMins(mins);
     setView('done');
-
-    // Save to Firestore
-    try {
-      const now = new Date();
-      await addDoc(collection(db, `users/${user.uid}/readingSessions`), {
-        minutes: mins,
-        bookId: selectedBook?.id || null,
-        bookTitle: selectedBook?.title || null,
-        date: now.toISOString().split('T')[0],
-        completedAt: now.toISOString(),
-      });
-    } catch (err) { console.error('Error saving session', err); }
+    onSessionComplete?.(mins);
   };
 
   const handleActiveSound = (soundId) => {
-    ambientRef.current?.fadeOut();
-    ambientRef.current = null;
+    stopAmbient();
     setSelectedSound(soundId);
     if (soundId === 'none') return;
     try {
@@ -350,181 +270,153 @@ const ReadingSessionModal = ({ onClose, readingBooks }) => {
     } catch {}
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center px-4 pb-20">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => {
-        if (view === 'active') return;
-        onClose();
-      }} />
-      <div className="relative liquid-glass-panel rounded-3xl w-full max-w-md flex flex-col overflow-hidden"
-        style={{ maxHeight: '88vh' }}>
+  const bg = 'linear-gradient(160deg, #120b04 0%, #231407 50%, #120b04 100%)';
 
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 pt-5 pb-2 flex-shrink-0">
-          <div className="flex items-center gap-2">
-            <BookOpen className="w-5 h-5" style={{ color: themeHex }} />
-            <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">
-              {view === 'setup' ? 'Sesión de lectura' : view === 'active' ? 'Leyendo...' : '¡Sesión completada!'}
-            </h2>
-          </div>
-          {view !== 'active' && (
-            <button onClick={onClose} className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+  return (
+    <div className="fixed inset-0 z-[100] flex flex-col select-none" style={{ background: bg }}>
+
+      {/* ── SETUP ── */}
+      {view === 'setup' && (
+        <>
+          {/* Top bar */}
+          <div className="flex items-center justify-between px-5 pt-safe pt-6 pb-4 flex-shrink-0">
+            <button onClick={onClose} className="p-2 text-white/50 hover:text-white/80 transition-colors">
               <X className="w-5 h-5" />
             </button>
-          )}
-        </div>
+            <span className="text-sm font-semibold text-white/70 uppercase tracking-wider">Sesión de lectura</span>
+            <div className="w-9" />
+          </div>
 
-        <div className="overflow-y-auto flex-1 px-5 pb-6">
-
-          {/* ── SETUP ── */}
-          {view === 'setup' && (
-            <div className="space-y-6 pt-3">
-
-              {/* Timer picker */}
-              <div>
-                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4 text-center">
-                  Duración
-                </p>
-                <ClockPicker value={selectedMins} onChange={setSelectedMins} themeHex={themeHex} />
-              </div>
-
-              {/* Book selector */}
-              {readingBooks.length > 0 && (
-                <div>
-                  <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
-                    ¿Qué estás leyendo? <span className="font-normal normal-case">(opcional)</span>
-                  </p>
-                  <div className="space-y-2">
-                    {readingBooks.map(book => (
-                      <button
-                        key={book.id}
-                        onClick={() => setSelectedBook(selectedBook?.id === book.id ? null : book)}
-                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-colors text-left ${
-                          selectedBook?.id === book.id
-                            ? 'border-transparent'
-                            : 'border-gray-100 dark:border-gray-700 bg-white/50 dark:bg-gray-800/50 hover:bg-white/80 dark:hover:bg-gray-800/80'
-                        }`}
-                        style={selectedBook?.id === book.id ? {
-                          backgroundColor: themeHex + '15',
-                          borderColor: themeHex + '60',
-                        } : undefined}
-                      >
-                        {book.coverUrl ? (
-                          <img src={book.coverUrl} alt="" className="w-8 h-12 object-cover rounded-lg flex-shrink-0" />
-                        ) : (
-                          <div className="w-8 h-12 rounded-lg flex-shrink-0 bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
-                            <span className="text-sm font-bold text-gray-400">{book.title.charAt(0)}</span>
-                          </div>
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-tight">{book.title}</p>
-                          {book.author && <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{book.author}</p>}
-                        </div>
-                        {selectedBook?.id === book.id && (
-                          <Check className="w-4 h-4 flex-shrink-0" style={{ color: themeHex }} />
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Start */}
-              <button
-                onClick={handleStart}
-                className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl text-white font-semibold text-base transition-opacity active:opacity-80"
-                style={{ backgroundColor: themeHex }}
-              >
-                <Play className="w-5 h-5" fill="currentColor" />
-                Iniciar — {selectedMins} min
-              </button>
+          <div className="flex-1 overflow-y-auto px-5 pb-8 space-y-8">
+            {/* Timer */}
+            <div className="flex flex-col items-center gap-2 pt-2">
+              <p className="text-xs font-semibold text-white/40 uppercase tracking-widest mb-2">Duración</p>
+              <ClockPicker value={selectedMins} onChange={setSelectedMins} />
             </div>
-          )}
 
-          {/* ── ACTIVE ── */}
-          {view === 'active' && (
-            <div className="flex flex-col items-center gap-5 pt-4">
-              <CountdownRing
-                totalSecs={selectedMins * 60}
-                remainingSecs={remainingSecs}
-                themeHex={themeHex}
-                book={selectedBook}
-              />
-
-              {/* Sound picker */}
-              <div className="w-full">
-                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2 text-center">
-                  Sonido de fondo
+            {/* Book selector */}
+            {readingBooks.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-white/40 uppercase tracking-widest mb-3">
+                  ¿Qué estás leyendo? <span className="font-normal normal-case opacity-60">(opcional)</span>
                 </p>
-                <div className="grid grid-cols-4 gap-2">
-                  {SOUNDS.map(({ id, label, Icon }) => {
-                    const active = selectedSound === id;
+                <div className="space-y-2">
+                  {readingBooks.map(book => {
+                    const sel = selectedBook?.id === book.id;
                     return (
-                      <button
-                        key={id}
-                        onClick={() => handleActiveSound(id)}
-                        className={`flex flex-col items-center gap-1 py-2 px-1 rounded-xl border transition-colors ${
-                          active ? 'border-transparent' : 'border-gray-100 dark:border-gray-700 bg-white/50 dark:bg-gray-800/50'
-                        }`}
-                        style={active ? { backgroundColor: themeHex + '18', borderColor: themeHex + '50' } : undefined}
+                      <button key={book.id}
+                        onClick={() => setSelectedBook(sel ? null : book)}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl border transition-colors text-left"
+                        style={{
+                          backgroundColor: sel ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.05)',
+                          borderColor: sel ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.08)',
+                        }}
                       >
-                        <Icon className="w-4 h-4" style={active ? { color: themeHex } : { color: '#9ca3af' }} />
-                        <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400">{label}</span>
+                        {book.coverUrl
+                          ? <img src={book.coverUrl} alt="" className="w-8 h-12 object-cover rounded-lg flex-shrink-0" />
+                          : <div className="w-8 h-12 rounded-lg flex-shrink-0 bg-white/10 flex items-center justify-center">
+                              <span className="text-sm font-bold text-white/50">{book.title.charAt(0)}</span>
+                            </div>
+                        }
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-white leading-tight">{book.title}</p>
+                          {book.author && <p className="text-xs text-white/50 mt-0.5">{book.author}</p>}
+                        </div>
+                        {sel && <Check className="w-4 h-4 flex-shrink-0 text-white/80" />}
                       </button>
                     );
                   })}
                 </div>
               </div>
+            )}
 
-              <button
-                onClick={handleEndEarly}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white/70 dark:bg-gray-800/70 text-gray-600 dark:text-gray-300 text-sm font-medium hover:bg-white dark:hover:bg-gray-800 transition-colors"
-              >
-                <Square className="w-4 h-4" />
-                Terminar sesión
-              </button>
+            {/* Start button */}
+            <button onClick={handleStart}
+              className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl font-semibold text-base transition-opacity active:opacity-80"
+              style={{ backgroundColor: 'rgba(255,255,255,0.15)', color: 'white', border: '1px solid rgba(255,255,255,0.2)' }}
+            >
+              <Play className="w-5 h-5" fill="currentColor" />
+              Iniciar — {selectedMins} min
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* ── ACTIVE ── */}
+      {view === 'active' && (
+        <div className="flex-1 flex flex-col items-center justify-center gap-8 px-5 py-8">
+          <CountdownRing
+            totalSecs={selectedMins * 60}
+            remainingSecs={remainingSecs}
+            book={selectedBook}
+          />
+
+          {/* Sound picker */}
+          <div className="w-full max-w-sm">
+            <p className="text-xs font-semibold text-white/40 uppercase tracking-widest mb-3 text-center">Sonido</p>
+            <div className="grid grid-cols-4 gap-2">
+              {SOUNDS.map(({ id, label, Icon }) => {
+                const active = selectedSound === id;
+                return (
+                  <button key={id} onClick={() => handleActiveSound(id)}
+                    className="flex flex-col items-center gap-1 py-2.5 px-1 rounded-xl border transition-all"
+                    style={{
+                      backgroundColor: active ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.05)',
+                      borderColor: active ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.08)',
+                    }}
+                  >
+                    <Icon className="w-4 h-4" color={active ? 'white' : 'rgba(255,255,255,0.4)'} />
+                    <span className="text-[10px] font-medium" style={{ color: active ? 'white' : 'rgba(255,255,255,0.4)' }}>
+                      {label}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
-          )}
+          </div>
 
-          {/* ── DONE ── */}
-          {view === 'done' && (
-            <div className="flex flex-col items-center gap-5 pt-4 text-center">
-              <div className="w-16 h-16 rounded-full flex items-center justify-center"
-                style={{ backgroundColor: themeHex + '20' }}>
-                <Check className="w-8 h-8" style={{ color: themeHex }} />
-              </div>
-
-              <div>
-                <p className="text-3xl font-bold text-gray-900 dark:text-gray-100 leading-none">{elapsedMins} min</p>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">de tiempo de lectura registrados</p>
-              </div>
-
-              {selectedBook && (
-                <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-2xl"
-                  style={{ backgroundColor: themeHex + '12' }}>
-                  {selectedBook.coverUrl ? (
-                    <img src={selectedBook.coverUrl} alt="" className="w-8 h-11 object-cover rounded" />
-                  ) : (
-                    <BookOpen className="w-5 h-5" style={{ color: themeHex }} />
-                  )}
-                  <div className="text-left">
-                    <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{selectedBook.title}</p>
-                    {selectedBook.author && <p className="text-xs text-gray-400">{selectedBook.author}</p>}
-                  </div>
-                </div>
-              )}
-
-              <button
-                onClick={onClose}
-                className="w-full py-3.5 rounded-2xl text-white font-semibold text-base"
-                style={{ backgroundColor: themeHex }}
-              >
-                Cerrar
-              </button>
-            </div>
-          )}
+          <button onClick={handleEndEarly}
+            className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-medium transition-colors"
+            style={{ backgroundColor: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.6)', border: '1px solid rgba(255,255,255,0.12)' }}
+          >
+            <Square className="w-4 h-4" />
+            Terminar sesión
+          </button>
         </div>
-      </div>
+      )}
+
+      {/* ── DONE ── */}
+      {view === 'done' && (
+        <div className="flex-1 flex flex-col items-center justify-center gap-6 px-8 text-center">
+          <div className="w-20 h-20 rounded-full flex items-center justify-center"
+            style={{ background: 'radial-gradient(circle, rgba(255,220,150,0.3), rgba(200,140,50,0.2))' }}>
+            <BookOpen className="w-9 h-9 text-amber-300" />
+          </div>
+          <div>
+            <p className="text-5xl font-bold text-white leading-none">{elapsedMins}<span className="text-2xl ml-1 text-white/60">min</span></p>
+            <p className="text-sm text-white/50 mt-2">de lectura registrados</p>
+          </div>
+          {selectedBook && (
+            <div className="flex items-center gap-3 px-4 py-3 rounded-2xl"
+              style={{ backgroundColor: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)' }}>
+              {selectedBook.coverUrl
+                ? <img src={selectedBook.coverUrl} alt="" className="w-8 h-11 object-cover rounded" />
+                : <BookOpen className="w-5 h-5 text-amber-300" />
+              }
+              <div className="text-left">
+                <p className="text-sm font-semibold text-white">{selectedBook.title}</p>
+                {selectedBook.author && <p className="text-xs text-white/50">{selectedBook.author}</p>}
+              </div>
+            </div>
+          )}
+          <button onClick={onClose}
+            className="w-full max-w-xs py-4 rounded-2xl font-semibold text-base"
+            style={{ backgroundColor: 'rgba(255,255,255,0.15)', color: 'white', border: '1px solid rgba(255,255,255,0.2)' }}
+          >
+            Cerrar
+          </button>
+        </div>
+      )}
     </div>
   );
 };

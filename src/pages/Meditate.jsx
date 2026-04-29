@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
 import { db } from '../utils/firebase';
 import { doc, getDoc, setDoc, increment as fsIncrement } from 'firebase/firestore';
 import {
@@ -58,6 +59,8 @@ const GROUP_COLORS = {
   'pausa':       { from: '#7c3aed', to: '#a78bfa' },
   'estoicismo':  { from: '#78350f', to: '#d97706' },
 };
+
+const THEME_HEX = { blue: '#3b82f6', purple: '#8b5cf6', orange: '#f97316', teal: '#0d9488' };
 
 const CUSTOM_MONTHLY_LIMIT = 15;
 
@@ -360,6 +363,7 @@ const SortableGroup = ({ group, onPlay, favorites, onToggleFavorite }) => {
 
 const Meditate = () => {
   const { user } = useAuth();
+  const { colorTheme } = useTheme();
 
   // step: 'setup' | 'session' | 'complete'
   const [step, setStep] = useState('setup');
@@ -800,26 +804,50 @@ const Meditate = () => {
       </div>
 
       {/* Today stats */}
-      <div className="liquid-glass-panel rounded-2xl p-4 space-y-3">
-        <p className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Hoy</p>
-        <div className="grid grid-cols-2 divide-x divide-gray-100 dark:divide-gray-700/50">
-          <div className="text-center pr-4">
-            <p className="text-3xl font-bold text-gray-900 dark:text-gray-100 leading-none">{todayCount}</p>
-            <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1.5 uppercase tracking-wide">sesiones</p>
+      {(() => {
+        const GOAL = 2;
+        const fillPct = Math.min(todayCount / GOAL, 1);
+        const R = 42;
+        const CIRC = 2 * Math.PI * R;
+        const strokeOffset = CIRC * (1 - fillPct);
+        const hex = THEME_HEX[colorTheme] ?? '#3b82f6';
+        const motivPhrase = todayCount === 0 ? `Meta: ${GOAL} sesiones hoy`
+          : todayCount >= 3 ? '¡Excelente práctica hoy!'
+          : todayCount >= GOAL ? 'Gran constancia hoy'
+          : 'Sigue construyendo el hábito';
+        return (
+          <div className="liquid-glass-panel rounded-2xl p-4">
+            <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">Hoy</p>
+            <div className="flex items-center gap-4">
+              {/* Ring */}
+              <div className="relative flex-shrink-0" style={{ width: 84, height: 84 }}>
+                <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 100 100">
+                  <circle cx="50" cy="50" r={R} fill="none" stroke="currentColor" strokeWidth="9"
+                    className="text-gray-100 dark:text-gray-700" />
+                  {todayCount > 0 && (
+                    <circle cx="50" cy="50" r={R} fill="none"
+                      stroke={hex} strokeWidth="9" strokeLinecap="round"
+                      strokeDasharray={CIRC} strokeDashoffset={strokeOffset}
+                      style={{ transition: 'stroke-dashoffset 0.8s cubic-bezier(0.34,1.56,0.64,1)' }}
+                    />
+                  )}
+                </svg>
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  <span className="text-xl font-bold text-gray-900 dark:text-gray-100 leading-none">{todayCount}</span>
+                  <span className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">/ {GOAL}</span>
+                </div>
+              </div>
+              {/* Right side */}
+              <div className="flex flex-col gap-1">
+                {todayMins > 0 && (
+                  <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">{todayMins} min meditados</p>
+                )}
+                <p className="text-sm text-gray-400 dark:text-gray-500">{motivPhrase}</p>
+              </div>
+            </div>
           </div>
-          <div className="text-center pl-4">
-            <p className="text-3xl font-bold text-gray-900 dark:text-gray-100 leading-none">{todayMins}</p>
-            <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1.5 uppercase tracking-wide">minutos</p>
-          </div>
-        </div>
-        {todayCount > 0 && (
-          <div className="border-t border-gray-100 dark:border-gray-700/50 pt-2.5">
-            <p className="text-xs text-gray-400 dark:text-gray-500 text-center">
-              {todayCount >= 3 ? '¡Excelente práctica hoy!' : todayCount >= 2 ? 'Gran constancia' : 'Sigue construyendo el hábito'}
-            </p>
-          </div>
-        )}
-      </div>
+        );
+      })()}
 
       {/* Favorites */}
       {favorites.length > 0 && (

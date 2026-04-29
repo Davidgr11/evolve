@@ -453,7 +453,7 @@ const Books = () => {
               <div>
                 <div className="flex items-center justify-between mb-2.5">
                   <div className="flex items-baseline gap-1.5">
-                    <span className="text-3xl font-bold leading-none" style={{ color: hex }}>{booksThisYear}</span>
+                    <span className="text-2xl font-bold leading-none" style={{ color: hex }}>{booksThisYear}</span>
                     <span className="text-sm text-gray-400 dark:text-gray-500">/ {annualGoal} libros</span>
                     {booksThisYear >= annualGoal && <span className="text-base ml-0.5">🎉</span>}
                   </div>
@@ -475,21 +475,21 @@ const Books = () => {
               {/* 2-metric row */}
               <div className="grid grid-cols-2 divide-x divide-gray-100 dark:divide-gray-700/50">
                 <div className="text-center px-3">
-                  <p className="text-2xl font-bold text-gray-900 dark:text-gray-100 leading-none">{readBooks.length}</p>
-                  <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1.5 uppercase tracking-wide">Total leídos</p>
+                  <p className="text-xl font-bold text-gray-900 dark:text-gray-100 leading-none">{readBooks.length}</p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-1.5 uppercase tracking-wide">Total leídos</p>
                 </div>
                 <div className="text-center px-3">
                   <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 leading-tight">
                     {topGenre || '—'}
                   </p>
-                  <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1.5 uppercase tracking-wide">Género top</p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-1.5 uppercase tracking-wide">Género top</p>
                 </div>
               </div>
 
               {/* Motivational daily pace */}
               {readingMinutesYear > 0 && (
                 <div className="border-t border-gray-100 dark:border-gray-700/50 pt-3 flex items-baseline justify-between">
-                  <p className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-widest">Lectura registrada</p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500 uppercase tracking-widest">Lectura registrada</p>
                   <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">{readingLabel}</p>
                 </div>
               )}

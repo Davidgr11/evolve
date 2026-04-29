@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../utils/firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, increment as fsIncrement } from 'firebase/firestore';
 import {
   ChevronLeft, Loader2, Play, Square,
   CloudRain, Waves, TreePine, Flame, Music2, VolumeX, Wind, Droplets,
@@ -57,6 +57,13 @@ const GROUP_COLORS = {
   'movimiento':  { from: '#065f46', to: '#10b981' },
   'pausa':       { from: '#7c3aed', to: '#a78bfa' },
   'estoicismo':  { from: '#78350f', to: '#d97706' },
+};
+
+const CUSTOM_MONTHLY_LIMIT = 15;
+
+const toMonthKey = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 };
 
 const getThemeColor = (themeId) => {
@@ -383,9 +390,10 @@ const Meditate = () => {
   const [customText, setCustomText] = useState('');
 
   // Session state
-  const [isLoading, setIsLoading]   = useState(false);
-  const [todayCount, setTodayCount] = useState(0);
-  const [todayMins, setTodayMins]   = useState(0);
+  const [isLoading, setIsLoading]         = useState(false);
+  const [todayCount, setTodayCount]       = useState(0);
+  const [todayMins, setTodayMins]         = useState(0);
+  const [customMonthUsed, setCustomMonthUsed] = useState(0);
   const [elapsed, setElapsed]       = useState(0);
   const [totalSecs, setTotalSecs]   = useState(0);
   const [phrase, setPhrase]         = useState('');
@@ -452,9 +460,11 @@ const Meditate = () => {
     const todayStr = toLocalDateStr(new Date());
     getDoc(doc(db, `users/${user.uid}/wellbeing`, 'data')).then(snap => {
       if (snap.exists()) {
-        const meds = snap.data().meditations?.[todayStr] || [];
+        const data = snap.data();
+        const meds = data.meditations?.[todayStr] || [];
         setTodayCount(meds.length);
         setTodayMins(meds.reduce((s, m) => s + (m.mins || 0), 0));
+        setCustomMonthUsed(data.customMeditations?.[toMonthKey()] || 0);
       }
     });
   }, [user]);
@@ -547,9 +557,12 @@ const Meditate = () => {
       );
       const todayMeds = cleaned[todayStr] || [];
       cleaned[todayStr] = [...todayMeds, { at: new Date().toISOString(), mins: durationMins, themeId: tid, themeLabel }];
-      await setDoc(ref, { meditations: cleaned }, { merge: true });
+      const update = { meditations: cleaned };
+      if (tid === 'custom') update.customMeditations = { [toMonthKey()]: fsIncrement(1) };
+      await setDoc(ref, update, { merge: true });
       setTodayCount(c => c + 1);
       setTodayMins(m => m + durationMins);
+      if (tid === 'custom') setCustomMonthUsed(n => n + 1);
     } catch { /* non-critical */ }
   }, [user]);
 
@@ -786,23 +799,26 @@ const Meditate = () => {
         </div>
       </div>
 
-      {/* Today count */}
-      <div className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-primary-50 dark:bg-gray-800/60 border border-primary-200 dark:border-gray-700">
-        <div className="w-9 h-9 rounded-full bg-primary-100 dark:bg-gray-700 flex items-center justify-center flex-shrink-0 text-lg">🧘</div>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-bold text-primary-600 dark:text-primary-400">
-            {todayCount === 0
-              ? 'Sin sesiones hoy'
-              : todayCount === 1
-              ? '1 sesión completada hoy'
-              : `${todayCount} sesiones hoy`}
-          </p>
-          <p className="text-xs text-primary-600/70 dark:text-primary-400/70 mt-0.5">
-            {todayCount === 0
-              ? 'Empieza tu primera sesión del día'
-              : `${todayMins} min meditados · ${todayCount >= 3 ? '¡Excelente práctica!' : 'Sigue construyendo el hábito'}`}
-          </p>
+      {/* Today stats */}
+      <div className="liquid-glass-panel rounded-2xl p-4 space-y-3">
+        <p className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Hoy</p>
+        <div className="grid grid-cols-2 divide-x divide-gray-100 dark:divide-gray-700/50">
+          <div className="text-center pr-4">
+            <p className="text-3xl font-bold text-gray-900 dark:text-gray-100 leading-none">{todayCount}</p>
+            <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1.5 uppercase tracking-wide">sesiones</p>
+          </div>
+          <div className="text-center pl-4">
+            <p className="text-3xl font-bold text-gray-900 dark:text-gray-100 leading-none">{todayMins}</p>
+            <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1.5 uppercase tracking-wide">minutos</p>
+          </div>
         </div>
+        {todayCount > 0 && (
+          <div className="border-t border-gray-100 dark:border-gray-700/50 pt-2.5">
+            <p className="text-xs text-gray-400 dark:text-gray-500 text-center">
+              {todayCount >= 3 ? '¡Excelente práctica hoy!' : todayCount >= 2 ? 'Gran constancia' : 'Sigue construyendo el hábito'}
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Favorites */}
@@ -897,16 +913,28 @@ const Meditate = () => {
                 </div>
               </div>
 
-              <button
-                onClick={() => handleStart('custom', selectedDuration)}
-                disabled={isLoading || !customText.trim()}
-                className="btn-primary w-full py-4 text-base font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
-              >
-                {isLoading
-                  ? <><Loader2 className="w-5 h-5 animate-spin" /> Preparando sesión...</>
-                  : <><Wind className="w-5 h-5" /> Comenzar</>
-                }
-              </button>
+              {customMonthUsed >= CUSTOM_MONTHLY_LIMIT ? (
+                <div className="text-center py-2 space-y-1">
+                  <p className="text-sm font-semibold text-red-500 dark:text-red-400">Límite mensual alcanzado</p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500">Se reinicia el 1 del próximo mes</p>
+                </div>
+              ) : (
+                <>
+                  <button
+                    onClick={() => handleStart('custom', selectedDuration)}
+                    disabled={isLoading || !customText.trim()}
+                    className="btn-primary w-full py-4 text-base font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    {isLoading
+                      ? <><Loader2 className="w-5 h-5 animate-spin" /> Preparando sesión...</>
+                      : <><Wind className="w-5 h-5" /> Comenzar</>
+                    }
+                  </button>
+                  <p className="text-center text-[11px] text-gray-400 dark:text-gray-500">
+                    {CUSTOM_MONTHLY_LIMIT - customMonthUsed} de {CUSTOM_MONTHLY_LIMIT} disponibles este mes
+                  </p>
+                </>
+              )}
           </div>
         </div>
       )}

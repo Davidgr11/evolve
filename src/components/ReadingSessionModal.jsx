@@ -272,7 +272,7 @@ const ReadingSessionModal = ({ onClose, onSessionComplete, readingBooks }) => {
       {view === 'setup' && (
         <>
           {/* Top bar */}
-          <div className="flex items-center justify-between px-5 pt-safe pt-6 pb-4 flex-shrink-0">
+          <div className="flex items-center justify-between px-5 pb-4 flex-shrink-0" style={{ paddingTop: 'calc(env(safe-area-inset-top) + 20px)' }}>
             <button onClick={onClose} className="p-2 text-white/50 hover:text-white/80 transition-colors">
               <X className="w-5 h-5" />
             </button>

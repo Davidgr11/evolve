@@ -494,7 +494,7 @@ const Books = () => {
                   <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1.5 uppercase tracking-wide">Total leídos</p>
                 </div>
                 <div className="text-center px-3">
-                  <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 leading-tight line-clamp-1">
+                  <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 leading-tight">
                     {topGenre || '—'}
                   </p>
                   <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1.5 uppercase tracking-wide">Género top</p>

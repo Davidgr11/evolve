@@ -51,8 +51,12 @@ const GROUP_COLORS = {
   'relaciones':  { from: '#9d174d', to: '#db2777' },
   'situaciones': { from: '#4b5563', to: '#6b7280' },
   'emociones':   { from: '#5b21b6', to: '#8b5cf6' },
-  'descanso':    { from: '#065f46', to: '#10b981' },
+  'manana':      { from: '#b45309', to: '#f59e0b' },
+  'noche':       { from: '#1e3a5f', to: '#3b82f6' },
   'cuerpo':      { from: '#0f766e', to: '#2dd4bf' },
+  'movimiento':  { from: '#065f46', to: '#10b981' },
+  'pausa':       { from: '#7c3aed', to: '#a78bfa' },
+  'estoicismo':  { from: '#78350f', to: '#d97706' },
 };
 
 const getTimeSuggestedTheme = () => {

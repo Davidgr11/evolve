@@ -501,33 +501,29 @@ const Books = () => {
                 </div>
               </div>
 
-              {/* Motivational daily pace card */}
-              <div className="relative overflow-hidden rounded-2xl px-4 py-3.5"
-                style={{ background: `linear-gradient(135deg, ${hex}18, ${hex}08)`, border: `1px solid ${hex}22` }}>
-                <div className="absolute -right-3 -top-3 w-16 h-16 rounded-full opacity-25 pointer-events-none"
-                  style={{ background: `radial-gradient(circle, ${hex}, transparent)` }} />
-
+              {/* Motivational daily pace */}
+              <div className="border-t border-gray-100 dark:border-gray-700/50 pt-3">
+                <p className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1.5">
+                  {goalMet ? 'Ritmo de lectura' : 'Para cumplir tu meta'}
+                </p>
                 {goalMet ? (
-                  <>
-                    <p className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1.5">Ritmo de lectura</p>
-                    <p className="text-xl font-bold" style={{ color: hex }}>¡Meta lograda! 🎉</p>
-                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                      {readingMinutesYear > 0 ? `Llevas ${readingLabel} este año` : 'Sigue leyendo para mantener el ritmo'}
-                    </p>
-                  </>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xl font-bold text-gray-900 dark:text-gray-100">¡Meta lograda!</span>
+                    <span className="text-base">🎉</span>
+                    {readingMinutesYear > 0 && (
+                      <span className="text-xs text-gray-400 dark:text-gray-500 ml-1">· {readingLabel} leídos</span>
+                    )}
+                  </div>
                 ) : (
-                  <>
-                    <p className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1.5">Para cumplir tu meta</p>
+                  <div className="flex items-baseline justify-between">
                     <div className="flex items-baseline gap-1.5">
-                      <span className="text-4xl font-bold leading-none" style={{ color: hex }}>~{dailyPace}</span>
-                      <span className="text-lg text-gray-400 dark:text-gray-500 font-medium">min/día</span>
+                      <span className="text-2xl font-bold leading-none" style={{ color: hex }}>~{dailyPace}</span>
+                      <span className="text-sm text-gray-400 dark:text-gray-500 font-medium">min/día</span>
                     </div>
-                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-1.5 leading-snug">
-                      {readingMinutesYear > 0
-                        ? `Llevas ${readingLabel} · ${daysRemaining} días restantes`
-                        : `${daysRemaining} días restantes · estimado`}
-                    </p>
-                  </>
+                    <span className="text-xs text-gray-400 dark:text-gray-500">
+                      {readingMinutesYear > 0 ? `llevas ${readingLabel} · ` : ''}{daysRemaining}d restantes
+                    </span>
+                  </div>
                 )}
               </div>
 

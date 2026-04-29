@@ -385,8 +385,7 @@ const Books = () => {
           <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 leading-tight">Lectura</h1>
           <button
             onClick={() => setShowSessionModal(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-white font-medium shadow-sm transition-opacity active:opacity-80"
-            style={{ backgroundColor: THEME_HEX[colorTheme] ?? '#3b82f6', fontSize: 14 }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/70 dark:bg-gray-800/70 border border-primary-200 dark:border-primary-700 text-primary-600 dark:text-primary-400 hover:bg-white dark:hover:bg-gray-800 transition-colors font-medium shadow-sm text-sm"
           >
             <BookOpen className="w-3.5 h-3.5" />
             Empezar Sesión
@@ -422,23 +421,33 @@ const Books = () => {
         <p className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Estadísticas</p>
 
         {/* Stats panel */}
-        <div className="px-4 py-4 liquid-glass-panel rounded-2xl space-y-4">
-          {/* Annual goal */}
+        <div className="px-4 py-4 liquid-glass-panel rounded-2xl space-y-3">
+          {/* Annual goal row */}
           {(() => {
             const hex = THEME_HEX[colorTheme] ?? '#3b82f6';
             return (
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-end gap-3">
-                    <span className="text-4xl font-bold leading-none" style={{ color: hex }}>{booksThisYear}</span>
-                    <span className="text-lg text-gray-400 dark:text-gray-500 mb-0.5">/ {annualGoal} libros</span>
-                    {booksThisYear >= annualGoal && <span className="text-sm mb-0.5">🎉</span>}
-                    <button onClick={() => { setGoalInput(String(annualGoal)); setShowGoalModal(true); }} className="mb-0.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
+                  {/* Left: books progress */}
+                  <div className="flex items-end gap-2">
+                    <span className="text-xl font-bold leading-none" style={{ color: hex }}>{booksThisYear}</span>
+                    <span className="text-sm text-gray-400 dark:text-gray-500 mb-px">/ {annualGoal} libros</span>
+                    {booksThisYear >= annualGoal && <span className="text-sm mb-px">🎉</span>}
+                    <button onClick={() => { setGoalInput(String(annualGoal)); setShowGoalModal(true); }} className="mb-px text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
                       <Pencil className="w-3.5 h-3.5" />
                     </button>
                   </div>
+                  {/* Right: reading time this month */}
+                  <div className="text-right">
+                    <p className="text-xl font-bold text-gray-900 dark:text-gray-100 leading-none">
+                      {readingMinutesMonth >= 60
+                        ? `${Math.round(readingMinutesMonth / 60)}h`
+                        : `${readingMinutesMonth}m`}
+                    </p>
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5 uppercase tracking-wide">lectura este mes</p>
+                  </div>
                 </div>
-                <div className="h-3 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
+                <div className="h-2.5 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
                   <div
                     className="h-full rounded-full transition-all duration-500"
                     style={{ width: `${Math.min(100, (booksThisYear / annualGoal) * 100)}%`, backgroundColor: hex }}
@@ -448,20 +457,11 @@ const Books = () => {
             );
           })()}
 
-          {/* Reading stats row */}
+          {/* Bottom stats row */}
           <div className="flex gap-3 pt-1">
             <div className="flex-1 text-center">
-              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100 leading-none">{readBooks.length}</p>
+              <p className="text-xl font-bold text-gray-900 dark:text-gray-100 leading-none">{readBooks.length}</p>
               <p className="text-xs text-gray-400 dark:text-gray-500 mt-1 uppercase tracking-wide">Total leídos</p>
-            </div>
-            <div className="w-px bg-gray-100 dark:bg-gray-700" />
-            <div className="flex-1 text-center">
-              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100 leading-none">
-                {readingMinutesMonth >= 60
-                  ? `${Math.round(readingMinutesMonth / 60)}h`
-                  : `${readingMinutesMonth}m`}
-              </p>
-              <p className="text-xs text-gray-400 dark:text-gray-500 mt-1 uppercase tracking-wide">Este mes</p>
             </div>
             {topGenre && (
               <>
@@ -479,11 +479,11 @@ const Books = () => {
         <div className="flex items-center justify-between">
           <p className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Libros</p>
           <div className="flex items-center gap-2">
-            <button onClick={openAddModal} className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white/70 dark:bg-gray-800/70 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-white dark:hover:bg-gray-800 transition-colors text-xs font-medium shadow-sm">
+            <button onClick={openAddModal} className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white/70 dark:bg-gray-800/70 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-white dark:hover:bg-gray-800 transition-colors text-sm font-medium shadow-sm">
               <Plus className="w-3.5 h-3.5" />
               Añadir
             </button>
-            <button onClick={() => handleAiSuggestions([])} className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white/70 dark:bg-gray-800/70 border border-blue-100 dark:border-blue-800 text-blue-600 dark:text-blue-400 hover:bg-white dark:hover:bg-gray-800 transition-colors text-xs font-medium shadow-sm">
+            <button onClick={() => handleAiSuggestions([])} className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white/70 dark:bg-gray-800/70 border border-blue-100 dark:border-blue-800 text-blue-600 dark:text-blue-400 hover:bg-white dark:hover:bg-gray-800 transition-colors text-sm font-medium shadow-sm">
               <Sparkles className="w-3.5 h-3.5" />
               Sugerencias
             </button>

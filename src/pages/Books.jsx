@@ -438,71 +438,70 @@ const Books = () => {
         {/* Stats panel */}
         {(() => {
           const hex = THEME_HEX[colorTheme] ?? '#3b82f6';
-          const maxCount = Math.max(...booksPerYear.map(y => y.count), 1);
+          const hrs = Math.floor(readingMinutesYear / 60);
+          const minsRem = readingMinutesYear % 60;
           const readingLabel = readingMinutesYear >= 60
-            ? `${Math.floor(readingMinutesYear / 60)}h ${readingMinutesYear % 60 > 0 ? `${readingMinutesYear % 60}m` : ''}`
+            ? `${hrs}h${minsRem > 0 ? ` ${minsRem}m` : ''}`
             : `${readingMinutesYear}m`;
+          const progressPct = Math.min(100, (booksThisYear / annualGoal) * 100);
+
           return (
             <div className="px-4 py-4 liquid-glass-panel rounded-2xl space-y-4">
 
               {/* Goal row */}
               <div>
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-end gap-2">
-                    <span className="text-xl font-bold leading-none" style={{ color: hex }}>{booksThisYear}</span>
-                    <span className="text-sm text-gray-400 dark:text-gray-500 mb-px">/ {annualGoal} libros</span>
-                    {booksThisYear >= annualGoal && <span className="text-sm mb-px">🎉</span>}
-                    <button onClick={() => { setGoalInput(String(annualGoal)); setShowGoalModal(true); }} className="mb-px text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
-                      <Pencil className="w-3.5 h-3.5" />
-                    </button>
+                <div className="flex items-center justify-between mb-2.5">
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-3xl font-bold leading-none" style={{ color: hex }}>{booksThisYear}</span>
+                    <span className="text-sm text-gray-400 dark:text-gray-500">/ {annualGoal} libros</span>
+                    {booksThisYear >= annualGoal && <span className="text-base ml-0.5">🎉</span>}
                   </div>
-                  <div className="text-right">
-                    <p className="text-xl font-bold text-gray-900 dark:text-gray-100 leading-none">{readingLabel}</p>
-                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5 uppercase tracking-wide">lectura este año</p>
-                  </div>
+                  <button
+                    onClick={() => { setGoalInput(String(annualGoal)); setShowGoalModal(true); }}
+                    className="text-gray-300 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400 transition-colors"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
                 </div>
-                <div className="h-2.5 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
-                  <div className="h-full rounded-full transition-all duration-500"
-                    style={{ width: `${Math.min(100, (booksThisYear / annualGoal) * 100)}%`, backgroundColor: hex }} />
+                <div className="h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all duration-500"
+                    style={{ width: `${progressPct}%`, backgroundColor: hex }}
+                  />
                 </div>
               </div>
 
-              {/* Stats row */}
-              <div className="flex gap-3">
-                <div className="flex-1 text-center">
+              {/* 3-metric row */}
+              <div className="grid grid-cols-3 divide-x divide-gray-100 dark:divide-gray-700/50">
+                <div className="text-center px-2">
                   <p className="text-xl font-bold text-gray-900 dark:text-gray-100 leading-none">{readBooks.length}</p>
-                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-1 uppercase tracking-wide">Total leídos</p>
+                  <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1.5 uppercase tracking-wide">Total leídos</p>
                 </div>
-                {topGenre && (
-                  <>
-                    <div className="w-px bg-gray-100 dark:bg-gray-700" />
-                    <div className="flex-1 text-center">
-                      <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 leading-tight">{topGenre}</p>
-                      <p className="text-xs text-gray-400 dark:text-gray-500 mt-1 uppercase tracking-wide">Género top</p>
-                    </div>
-                  </>
-                )}
+                <div className="text-center px-2">
+                  <p className="text-xl font-bold text-gray-900 dark:text-gray-100 leading-none">{readingLabel}</p>
+                  <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1.5 uppercase tracking-wide">Este año</p>
+                </div>
+                <div className="text-center px-2">
+                  <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 leading-tight line-clamp-1">
+                    {topGenre || '—'}
+                  </p>
+                  <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1.5 uppercase tracking-wide">Género top</p>
+                </div>
               </div>
 
-              {/* Per-year column chart (last 3 years) */}
+              {/* Year pill chips */}
               {booksPerYear.length > 0 && (
-                <div className="border-t border-gray-100 dark:border-gray-700/50 pt-3">
-                  <div className="flex gap-3 items-end justify-center">
-                    {booksPerYear.slice(-3).map(({ year, count }) => (
-                      <div key={year} className="flex-1 flex flex-col items-center gap-1.5">
-                        <span className="text-xs font-bold text-gray-700 dark:text-gray-300">{count}</span>
-                        <div className="w-full rounded-t-lg overflow-hidden bg-gray-100 dark:bg-gray-700/60" style={{ height: 40 }}>
-                          <div className="w-full rounded-t-lg transition-all duration-500"
-                            style={{
-                              height: `${Math.max(8, (count / maxCount) * 40)}px`,
-                              backgroundColor: hex + 'cc',
-                              marginTop: `${40 - Math.max(8, (count / maxCount) * 40)}px`,
-                            }} />
-                        </div>
-                        <span className="text-[10px] text-gray-400 dark:text-gray-500">{year}</span>
-                      </div>
-                    ))}
-                  </div>
+                <div className="flex gap-2 flex-wrap border-t border-gray-100 dark:border-gray-700/50 pt-3">
+                  {booksPerYear.slice(-4).map(({ year, count }) => (
+                    <div
+                      key={year}
+                      className="flex items-center gap-1.5 px-3 py-1 rounded-full"
+                      style={{ backgroundColor: `${hex}18` }}
+                    >
+                      <span className="text-[11px] text-gray-500 dark:text-gray-400 font-medium">{year}</span>
+                      <span className="text-[11px] font-bold" style={{ color: hex }}>{count} lib.</span>
+                    </div>
+                  ))}
                 </div>
               )}
 

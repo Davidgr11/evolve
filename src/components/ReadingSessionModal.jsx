@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { X, Play, BookOpen, Check, ChevronLeft } from 'lucide-react';
+import { X, Play, BookOpen, Check } from 'lucide-react';
 import { CloudRain, Waves, TreePine, Flame, Music2, VolumeX, Wind, Droplets } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 
@@ -182,11 +182,34 @@ const ReadingSessionModal = ({ onClose, onSessionComplete, readingBooks }) => {
   const [remainingSecs, setRemainingSecs] = useState(0);
   const [elapsedMins, setElapsedMins] = useState(0);
 
-  const timerRef   = useRef(null);
+  const timerRef    = useRef(null);
   const audioCtxRef = useRef(null);
   const ambientRef  = useRef(null);
+  const startedAtRef = useRef(null);
+  const totalSecsRef = useRef(0);
+
+  // selectedMins ref so visibilitychange handler always has fresh value
+  const selectedMinsRef = useRef(selectedMins);
+  useEffect(() => { selectedMinsRef.current = selectedMins; }, [selectedMins]);
 
   const stopAmbient = () => { ambientRef.current?.fadeOut(); ambientRef.current = null; };
+
+  // When screen wakes up, recalculate remaining time from wall clock
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.hidden || !startedAtRef.current) return;
+      const elapsed = Math.floor((Date.now() - startedAtRef.current) / 1000);
+      const remaining = totalSecsRef.current - elapsed;
+      if (remaining <= 0) {
+        clearInterval(timerRef.current);
+        finishSession(selectedMinsRef.current);
+      } else {
+        setRemainingSecs(remaining);
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -197,16 +220,17 @@ const ReadingSessionModal = ({ onClose, onSessionComplete, readingBooks }) => {
   }, []);
 
   const handleStart = () => {
-    setRemainingSecs(selectedMins * 60);
-    setView('active');
-    const startedAt = Date.now();
     const totalSecs = selectedMins * 60;
+    totalSecsRef.current = totalSecs;
+    startedAtRef.current = Date.now();
+    setRemainingSecs(totalSecs);
+    setView('active');
     timerRef.current = setInterval(() => {
-      const elapsed = Math.floor((Date.now() - startedAt) / 1000);
+      const elapsed = Math.floor((Date.now() - startedAtRef.current) / 1000);
       const remaining = totalSecs - elapsed;
       if (remaining <= 0) {
         clearInterval(timerRef.current);
-        finishSession(Math.round(elapsed / 60) || selectedMins);
+        finishSession(selectedMinsRef.current);
       } else {
         setRemainingSecs(remaining);
       }
@@ -215,8 +239,10 @@ const ReadingSessionModal = ({ onClose, onSessionComplete, readingBooks }) => {
 
   const handleEndEarly = () => {
     clearInterval(timerRef.current);
-    const done = selectedMins * 60 - remainingSecs;
-    finishSession(Math.max(1, Math.round(done / 60)));
+    const elapsed = startedAtRef.current
+      ? Math.floor((Date.now() - startedAtRef.current) / 1000)
+      : totalSecsRef.current - remainingSecs;
+    finishSession(Math.max(1, Math.round(elapsed / 60)));
   };
 
   const finishSession = (mins) => {
@@ -316,48 +342,56 @@ const ReadingSessionModal = ({ onClose, onSessionComplete, readingBooks }) => {
         const mm = String(Math.floor(remainingSecs / 60)).padStart(2, '0');
         const ss = String(remainingSecs % 60).padStart(2, '0');
         return (
-          <>
-            {/* Green progress strip */}
-            <div className="absolute left-0 right-0 h-0.5 bg-white/20" style={{ top: 0 }}>
-              <div className="h-full bg-emerald-400/70 transition-all duration-1000"
-                style={{ width: `${progress * 100}%` }} />
+          <div className="flex-1 flex flex-col px-5"
+            style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 28px)', paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 28px)' }}>
+
+            {/* Timer + progress bar */}
+            <div className="flex flex-col items-center pt-2 pb-5">
+              <span className="text-7xl font-bold text-white font-mono tracking-wider leading-none tabular-nums">
+                {mm}:{ss}
+              </span>
+              <p className="text-xs text-white/35 font-medium uppercase tracking-widest mt-2 mb-4">restante</p>
+              <div className="w-full max-w-[280px] h-1.5 bg-white/10 rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all duration-1000"
+                  style={{
+                    width: `${progress * 100}%`,
+                    background: 'linear-gradient(90deg, #059669, #34d399)',
+                    boxShadow: '0 0 10px rgba(52,211,153,0.5)',
+                  }}
+                />
+              </div>
             </div>
 
-            {/* Top bar */}
-            <div className="absolute left-0 right-0 flex items-center justify-between px-5"
-              style={{ top: 'calc(env(safe-area-inset-top, 0px) + 20px)' }}>
-              <button onClick={handleEndEarly}
-                className="flex items-center gap-1.5 text-white/65 hover:text-white/95 transition-colors">
-                <ChevronLeft className="w-5 h-5" />
-                <span className="text-base font-medium">Salir</span>
-              </button>
-              <span className="text-white/60 text-lg font-mono tracking-widest">{mm}:{ss}</span>
-            </div>
-
-            {/* Center: book cover */}
-            <div className="flex-1 flex flex-col items-center justify-center gap-4 px-8">
+            {/* Book cover */}
+            <div className="flex-1 flex flex-col items-center justify-center gap-3 min-h-0">
               {selectedBook?.coverUrl ? (
                 <img src={selectedBook.coverUrl} alt=""
-                  className="rounded-2xl"
-                  style={{ width: 150, height: 220, objectFit: 'cover',
-                    boxShadow: '0 20px 60px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.08)' }} />
+                  className="rounded-2xl flex-shrink-0"
+                  style={{
+                    width: 140, height: 210, objectFit: 'cover',
+                    boxShadow: '0 20px 60px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.08)',
+                  }}
+                />
               ) : (
-                <div className="rounded-2xl flex items-center justify-center"
-                  style={{ width: 150, height: 220,
+                <div className="rounded-2xl flex items-center justify-center flex-shrink-0"
+                  style={{
+                    width: 140, height: 210,
                     background: 'rgba(110,231,183,0.08)',
-                    border: '1px solid rgba(110,231,183,0.2)' }}>
+                    border: '1px solid rgba(110,231,183,0.2)',
+                  }}>
                   <BookOpen className="w-14 h-14 text-emerald-400/40" />
                 </div>
               )}
               {selectedBook && (
-                <p className="text-white/55 text-sm text-center leading-snug max-w-[200px]">
+                <p className="text-white/55 text-sm text-center leading-snug max-w-[180px]">
                   {selectedBook.title}
                 </p>
               )}
             </div>
 
             {/* Sound picker */}
-            <div className="px-5 pb-8 w-full">
+            <div className="pt-4">
               <p className="text-xs font-semibold text-white/35 uppercase tracking-widest mb-2.5 text-center">Sonido</p>
               <div className="grid grid-cols-4 gap-2 max-w-sm mx-auto">
                 {SOUNDS.map(({ id, label, Icon }) => {
@@ -379,7 +413,20 @@ const ReadingSessionModal = ({ onClose, onSessionComplete, readingBooks }) => {
                 })}
               </div>
             </div>
-          </>
+
+            {/* Terminar button */}
+            <div className="pt-4">
+              <button onClick={handleEndEarly}
+                className="w-full py-4 rounded-2xl font-semibold text-base transition-opacity active:opacity-80"
+                style={{
+                  backgroundColor: 'rgba(255,255,255,0.1)',
+                  color: 'rgba(255,255,255,0.65)',
+                  border: '1px solid rgba(255,255,255,0.15)',
+                }}>
+                Terminar sesión
+              </button>
+            </div>
+          </div>
         );
       })()}
 

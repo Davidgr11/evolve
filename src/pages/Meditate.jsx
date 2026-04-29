@@ -5,7 +5,7 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 import {
   ChevronLeft, Loader2, Play, Square,
   CloudRain, Waves, TreePine, Flame, Music2, VolumeX, Wind, Droplets,
-  GripVertical, X, Sparkles,
+  GripVertical, X, Sparkles, Heart,
 } from 'lucide-react';
 import {
   DndContext, closestCenter, PointerSensor, TouchSensor, useSensor, useSensors,
@@ -59,13 +59,26 @@ const GROUP_COLORS = {
   'estoicismo':  { from: '#78350f', to: '#d97706' },
 };
 
-const getTimeSuggestedTheme = () => {
-  const h = new Date().getHours();
-  if (h >= 5  && h < 10) return { id: 'morning',      label: 'Inicio del día'          };
-  if (h >= 10 && h < 14) return { id: 'focus-work',   label: 'Enfoque y productividad' };
-  if (h >= 17 && h < 21) return { id: 'arriving-home',label: 'Llegada a casa'          };
-  if (h >= 21)           return { id: 'evening',      label: 'Cierre del día'          };
-  return null;
+const CUSTOM_MONTHLY_LIMIT = 10;
+
+const getCustomMonthKey = () => {
+  const d = new Date();
+  return `meditationCustom_${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+};
+
+const getCustomUsed = () => parseInt(localStorage.getItem(getCustomMonthKey()) || '0', 10);
+const incrementCustomUsed = () => {
+  const key = getCustomMonthKey();
+  localStorage.setItem(key, String(getCustomUsed() + 1));
+};
+
+const getThemeColor = (themeId) => {
+  for (const g of THEME_GROUPS) {
+    if (g.themes.some(t => t.id === themeId)) {
+      return GROUP_COLORS[g.id] || { from: '#374151', to: '#6b7280' };
+    }
+  }
+  return { from: '#374151', to: '#6b7280' };
 };
 
 // ── Phrase selection ───────────────────────────────────────────────────────────
@@ -283,7 +296,33 @@ const RING_CIRC = 2 * Math.PI * RING_R;
 
 // ── SortableGroup ──────────────────────────────────────────────────────────────
 
-const SortableGroup = ({ group, onPlay, suggestedThemeId }) => {
+const ThemeCard = ({ theme, from, to, isFavorite, onPlay, onToggleFavorite }) => (
+  <div
+    className="flex-shrink-0 w-36 rounded-2xl relative select-none"
+    style={{ background: `linear-gradient(140deg, ${from}, ${to})`, minHeight: 88 }}
+  >
+    <div className="p-3 pt-3 pr-10">
+      <p className="text-[13px] font-semibold text-white leading-snug">{theme.label}</p>
+    </div>
+    <button
+      onClick={e => { e.stopPropagation(); onToggleFavorite(theme.id); }}
+      className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center transition-colors"
+    >
+      <Heart
+        className="w-3.5 h-3.5 transition-all"
+        style={{ color: isFavorite ? '#fca5a5' : 'rgba(255,255,255,0.45)', fill: isFavorite ? '#fca5a5' : 'none' }}
+      />
+    </button>
+    <button
+      onClick={() => onPlay(theme.id, theme.label)}
+      className="absolute bottom-2.5 right-2.5 w-8 h-8 rounded-full bg-white/20 hover:bg-white/35 active:bg-white/45 flex items-center justify-center transition-colors"
+    >
+      <Play className="w-3.5 h-3.5 text-white fill-white" />
+    </button>
+  </div>
+);
+
+const SortableGroup = ({ group, onPlay, favorites, onToggleFavorite }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: group.id });
   const style = {
@@ -308,26 +347,15 @@ const SortableGroup = ({ group, onPlay, suggestedThemeId }) => {
 
       <div className="flex gap-2.5 overflow-x-auto pb-1 scrollbar-hide">
         {group.themes.map(t => (
-          <div
+          <ThemeCard
             key={t.id}
-            className="flex-shrink-0 w-36 rounded-2xl relative select-none"
-            style={{ background: `linear-gradient(140deg, ${from}, ${to})`, minHeight: 88 }}
-          >
-            {suggestedThemeId === t.id && (
-              <span className="absolute top-2 left-2.5 text-[10px] font-bold text-white/95 bg-white/25 rounded-full px-1.5 py-0.5 leading-tight">
-                ⭐ Ahora
-              </span>
-            )}
-            <div className="p-3 pt-3 pr-10">
-              <p className="text-[13px] font-semibold text-white leading-snug">{t.label}</p>
-            </div>
-            <button
-              onClick={() => onPlay(t.id, t.label)}
-              className="absolute bottom-2.5 right-2.5 w-8 h-8 rounded-full bg-white/20 hover:bg-white/35 active:bg-white/45 flex items-center justify-center transition-colors"
-            >
-              <Play className="w-3.5 h-3.5 text-white fill-white" />
-            </button>
-          </div>
+            theme={t}
+            from={from}
+            to={to}
+            isFavorite={favorites.includes(t.id)}
+            onPlay={onPlay}
+            onToggleFavorite={onToggleFavorite}
+          />
         ))}
       </div>
     </div>
@@ -353,6 +381,11 @@ const Meditate = () => {
       return valid ? stored : current;
     } catch { return THEME_GROUPS.map(g => g.id); }
   });
+  const [favorites, setFavorites] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('meditationFavorites') || '[]'); }
+    catch { return []; }
+  });
+  const [customUsed, setCustomUsed] = useState(getCustomUsed);
 
   // Modals
   const [soundModal, setSoundModal]       = useState(false);
@@ -366,6 +399,7 @@ const Meditate = () => {
   // Session state
   const [isLoading, setIsLoading]   = useState(false);
   const [todayCount, setTodayCount] = useState(0);
+  const [todayMins, setTodayMins]   = useState(0);
   const [elapsed, setElapsed]       = useState(0);
   const [totalSecs, setTotalSecs]   = useState(0);
   const [phrase, setPhrase]         = useState('');
@@ -392,7 +426,6 @@ const Meditate = () => {
   const ttsSrcRef       = useRef(null);
 
   const breathStep = step === 'session' ? getBreathStep(elapsed) : BREATH[0];
-  const timeSuggestion = getTimeSuggestedTheme();
   const orderedGroups = groupOrder
     .map(id => THEME_GROUPS.find(g => g.id === id))
     .filter(Boolean);
@@ -420,11 +453,23 @@ const Meditate = () => {
     localStorage.setItem('meditationSound', id);
   }, []);
 
+  const toggleFavorite = useCallback((themeId) => {
+    setFavorites(prev => {
+      const next = prev.includes(themeId) ? prev.filter(id => id !== themeId) : [...prev, themeId];
+      localStorage.setItem('meditationFavorites', JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
   useEffect(() => {
     if (!user) return;
     const todayStr = toLocalDateStr(new Date());
     getDoc(doc(db, `users/${user.uid}/wellbeing`, 'data')).then(snap => {
-      if (snap.exists()) setTodayCount((snap.data().meditations?.[todayStr] || []).length);
+      if (snap.exists()) {
+        const meds = snap.data().meditations?.[todayStr] || [];
+        setTodayCount(meds.length);
+        setTodayMins(meds.reduce((s, m) => s + (m.mins || 0), 0));
+      }
     });
   }, [user]);
 
@@ -518,6 +563,7 @@ const Meditate = () => {
       cleaned[todayStr] = [...todayMeds, { at: new Date().toISOString(), mins: durationMins, themeId: tid, themeLabel }];
       await setDoc(ref, { meditations: cleaned }, { merge: true });
       setTodayCount(c => c + 1);
+      setTodayMins(m => m + durationMins);
     } catch { /* non-critical */ }
   }, [user]);
 
@@ -618,6 +664,12 @@ const Meditate = () => {
       }
 
       setIsLoading(false);
+      setDurationModal(null);
+      setCustomModal(false);
+      if (isCustom) {
+        incrementCustomUsed();
+        setCustomUsed(getCustomUsed());
+      }
       setCompletedMeta({ mins: startDuration.mins, themeLabel });
       beginSession(rawPhrases, startDuration.secs, buffers, ctx, () => saveMeditation(themeLabel, startDuration.mins, tid));
     } catch {
@@ -754,42 +806,47 @@ const Meditate = () => {
 
       {/* Today count */}
       <div className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-primary-50 dark:bg-gray-800/60 border border-primary-200 dark:border-gray-700">
-          <div className="w-9 h-9 rounded-full bg-primary-100 dark:bg-gray-700 flex items-center justify-center flex-shrink-0 text-lg">🧘</div>
-          <div>
-            <p className="text-sm font-bold text-primary-600 dark:text-primary-400">
-              {todayCount === 0
-                ? 'Sin sesiones hoy'
-                : todayCount === 1
-                ? '1 sesión completada hoy'
-                : `${todayCount} sesiones hoy`}
-            </p>
-            <p className="text-xs text-primary-600/70 dark:text-primary-400/70 mt-0.5">
-              {todayCount === 0
-                ? 'Empieza tu primera sesión del día'
-                : todayCount >= 2
-                ? '¡Excelente práctica!'
-                : 'Sigue construyendo el hábito'}
-            </p>
-          </div>
+        <div className="w-9 h-9 rounded-full bg-primary-100 dark:bg-gray-700 flex items-center justify-center flex-shrink-0 text-lg">🧘</div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-bold text-primary-600 dark:text-primary-400">
+            {todayCount === 0
+              ? 'Sin sesiones hoy'
+              : todayCount === 1
+              ? '1 sesión completada hoy'
+              : `${todayCount} sesiones hoy`}
+          </p>
+          <p className="text-xs text-primary-600/70 dark:text-primary-400/70 mt-0.5">
+            {todayCount === 0
+              ? 'Empieza tu primera sesión del día'
+              : `${todayMins} min meditados · ${todayCount >= 3 ? '¡Excelente práctica!' : 'Sigue construyendo el hábito'}`}
+          </p>
         </div>
+      </div>
 
-      {/* Time-based suggestion */}
-      {timeSuggestion && (
-        <div className="flex items-center justify-between px-4 py-3 rounded-2xl bg-primary-50 dark:bg-gray-800/60 border border-primary-200 dark:border-gray-700">
-          <div className="flex items-center gap-2.5">
-            <span className="text-xl">⭐</span>
-            <div>
-              <p className="text-[11px] font-bold text-primary-600 dark:text-primary-400 uppercase tracking-wider">Sugerida para ahora</p>
-              <p className="text-sm font-semibold text-primary-600 dark:text-primary-400">{timeSuggestion.label}</p>
-            </div>
+      {/* Favorites */}
+      {favorites.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider px-0.5">
+            ❤️ Favoritos
+          </p>
+          <div className="flex gap-2.5 overflow-x-auto pb-1 scrollbar-hide">
+            {favorites.map(themeId => {
+              const theme = findTheme(themeId);
+              if (!theme) return null;
+              const { from, to } = getThemeColor(themeId);
+              return (
+                <ThemeCard
+                  key={themeId}
+                  theme={theme}
+                  from={from}
+                  to={to}
+                  isFavorite
+                  onPlay={(id, label) => setDurationModal({ themeId: id, themeLabel: label })}
+                  onToggleFavorite={toggleFavorite}
+                />
+              );
+            })}
           </div>
-          <button
-            onClick={() => setDurationModal({ themeId: timeSuggestion.id, themeLabel: timeSuggestion.label })}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary-500 hover:bg-primary-600 active:bg-primary-600 text-white text-sm font-semibold transition-colors flex-shrink-0"
-          >
-            <Play className="w-3.5 h-3.5 fill-white" />
-            Iniciar
-          </button>
         </div>
       )}
 
@@ -802,7 +859,8 @@ const Meditate = () => {
                 key={group.id}
                 group={group}
                 onPlay={(themeId, themeLabel) => setDurationModal({ themeId, themeLabel })}
-                suggestedThemeId={timeSuggestion?.id}
+                favorites={favorites}
+                onToggleFavorite={toggleFavorite}
               />
             ))}
           </div>
@@ -811,13 +869,11 @@ const Meditate = () => {
 
       {/* ── Custom meditation modal ── */}
       {customModal && (
-        <>
-          <div
-            className="fixed inset-0 z-40 liquid-glass-overlay"
-            onClick={() => { if (!isLoading) { setCustomModal(false); } }}
-          />
-          <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-            <div className="liquid-glass-panel rounded-3xl p-6 space-y-4 w-full max-w-sm">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center px-4 liquid-glass-overlay"
+          onClick={() => { if (!isLoading) setCustomModal(false); }}
+        >
+          <div className="liquid-glass-panel rounded-3xl p-6 space-y-4 w-full max-w-sm" onClick={e => e.stopPropagation()}>
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h3 className="font-bold text-gray-900 dark:text-gray-100">Meditación personalizada</h3>
@@ -859,30 +915,34 @@ const Meditate = () => {
                 </div>
               </div>
 
-              <button
-                onClick={() => handleStart('custom', selectedDuration)}
-                disabled={isLoading || !customText.trim()}
-                className="btn-primary w-full py-4 text-base font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
-              >
-                {isLoading
-                  ? <><Loader2 className="w-5 h-5 animate-spin" /> Preparando sesión...</>
-                  : <><Wind className="w-5 h-5" /> Comenzar</>
-                }
-              </button>
-            </div>
+              {customUsed >= CUSTOM_MONTHLY_LIMIT ? (
+                <div className="text-center py-2">
+                  <p className="text-sm font-semibold text-red-500 dark:text-red-400">Límite mensual alcanzado</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Reinicia el {new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1).toLocaleDateString('es-MX', { day: 'numeric', month: 'long' })}</p>
+                </div>
+              ) : (
+                <button
+                  onClick={() => handleStart('custom', selectedDuration)}
+                  disabled={isLoading || !customText.trim()}
+                  className="btn-primary w-full py-4 text-base font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {isLoading
+                    ? <><Loader2 className="w-5 h-5 animate-spin" /> Preparando sesión...</>
+                    : <><Wind className="w-5 h-5" /> Comenzar · {CUSTOM_MONTHLY_LIMIT - customUsed} restantes</>
+                  }
+                </button>
+              )}
           </div>
-        </>
+        </div>
       )}
 
       {/* ── Duration picker modal ── */}
       {durationModal && (
-        <>
-          <div
-            className="fixed inset-0 z-40 liquid-glass-overlay"
-            onClick={() => { if (!isLoading) setDurationModal(null); }}
-          />
-          <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-            <div className="liquid-glass-panel rounded-3xl p-6 space-y-5 w-full max-w-sm">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center px-4 liquid-glass-overlay"
+          onClick={() => { if (!isLoading) setDurationModal(null); }}
+        >
+          <div className="liquid-glass-panel rounded-3xl p-6 space-y-5 w-full max-w-sm" onClick={e => e.stopPropagation()}>
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h3 className="font-bold text-gray-900 dark:text-gray-100">Duración</h3>
@@ -922,20 +982,17 @@ const Meditate = () => {
                   : <><Wind className="w-5 h-5" /> Comenzar</>
                 }
               </button>
-            </div>
           </div>
-        </>
+        </div>
       )}
 
       {/* ── Sound preference modal ── */}
       {soundModal && (
-        <>
-          <div
-            className="fixed inset-0 z-40 liquid-glass-overlay"
-            onClick={() => { stopPreview(); setSoundModal(false); }}
-          />
-          <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
-            <div className="liquid-glass-panel rounded-3xl p-6 space-y-4 w-full max-w-sm">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center px-4 liquid-glass-overlay"
+          onClick={() => { stopPreview(); setSoundModal(false); }}
+        >
+          <div className="liquid-glass-panel rounded-3xl p-6 space-y-4 w-full max-w-sm" onClick={e => e.stopPropagation()}>
               <div className="flex items-center justify-between">
                 <h3 className="font-bold text-gray-900 dark:text-gray-100">Sonido ambiente</h3>
                 <button
@@ -1004,9 +1061,8 @@ const Meditate = () => {
                   );
                 })}
               </div>
-            </div>
           </div>
-        </>
+        </div>
       )}
     </div>
   );

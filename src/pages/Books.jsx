@@ -12,6 +12,7 @@ import {
   Loader2, RefreshCw, Trash2, Edit, ChevronDown, ChevronUp, Pencil,
 } from 'lucide-react';
 import ConfirmModal from '../components/ConfirmModal';
+import ReadingSessionModal from '../components/ReadingSessionModal';
 import { callClaude, searchGoogleBooks } from '../utils/cloudApi';
 import confetti from 'canvas-confetti';
 
@@ -130,14 +131,23 @@ const Books = () => {
   // Single modal for all AI results
   const [aiModal, setAiModal] = useState(null);
 
+  const [showSessionModal, setShowSessionModal] = useState(false);
+  const [readingMinutesYear, setReadingMinutesYear] = useState(0);
+  const [readingMinutesMonth, setReadingMinutesMonth] = useState(0);
+
   useEffect(() => { loadData(); }, [user]);
   useEffect(() => { setCurrentPage(1); }, [filterStatus, searchQuery, sortBy]);
 
   const loadData = async () => {
     try {
-      const [snap, goalSnap] = await Promise.all([
+      const year = new Date().getFullYear();
+      const month = String(new Date().getMonth() + 1).padStart(2, '0');
+      const curMonthPrefix = `${year}-${month}`;
+
+      const [snap, goalSnap, sessionsSnap] = await Promise.all([
         getDocs(collection(db, `users/${user.uid}/books`)),
         getDoc(doc(db, `users/${user.uid}/data`, 'books')),
+        getDocs(collection(db, `users/${user.uid}/readingSessions`)),
       ]);
       const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       setBooks(data);
@@ -147,6 +157,14 @@ const Books = () => {
         setAnnualGoal(g);
         setGoalInput(String(g));
       }
+      let totalYear = 0, totalMonth = 0;
+      sessionsSnap.forEach(d => {
+        const s = d.data();
+        if (s.date && s.date.startsWith(String(year))) totalYear += s.minutes || 0;
+        if (s.date && s.date.startsWith(curMonthPrefix)) totalMonth += s.minutes || 0;
+      });
+      setReadingMinutesYear(totalYear);
+      setReadingMinutesMonth(totalMonth);
     } catch (err) { console.error(err); }
     finally { setLoading(false); }
   };
@@ -364,10 +382,14 @@ const Books = () => {
 
         {/* Header */}
         <div className="flex justify-between items-center">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 leading-tight">Crecimiento</h1>
-          <button onClick={() => handleAiSuggestions([])} className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/70 dark:bg-gray-800/70 border border-blue-100 dark:border-blue-800 text-blue-600 dark:text-blue-400 hover:bg-white dark:hover:bg-gray-800 transition-colors font-medium shadow-sm" style={{ fontSize: 14 }}>
-            <Sparkles className="w-3.5 h-3.5" />
-            Sugerencias
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 leading-tight">Lectura</h1>
+          <button
+            onClick={() => setShowSessionModal(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-white font-medium shadow-sm transition-opacity active:opacity-80"
+            style={{ backgroundColor: THEME_HEX[colorTheme] ?? '#3b82f6', fontSize: 14 }}
+          >
+            <BookOpen className="w-3.5 h-3.5" />
+            Empezar Sesión
           </button>
         </div>
 
@@ -396,60 +418,76 @@ const Books = () => {
           </div>
         )}
 
-        {/* ── Libros ── */}
-        <p className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Libros</p>
+        {/* ── Estadísticas ── */}
+        <p className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Estadísticas</p>
 
         {/* Stats panel */}
         <div className="px-4 py-4 liquid-glass-panel rounded-2xl space-y-4">
-          <div className="space-y-4">
-            {/* Annual goal */}
-            <div>
-              {(() => {
-                const hex = THEME_HEX[colorTheme] ?? '#3b82f6';
-                return (
-                  <>
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-end gap-3">
-                        <span className="text-4xl font-bold leading-none" style={{ color: hex }}>{booksThisYear}</span>
-                        <span className="text-lg text-gray-400 dark:text-gray-500 mb-0.5">/ {annualGoal} libros</span>
-                        {booksThisYear >= annualGoal && <span className="text-sm mb-0.5">🎉</span>}
-                        <button onClick={() => { setGoalInput(String(annualGoal)); setShowGoalModal(true); }} className="mb-0.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                      <button onClick={openAddModal} className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white/70 dark:bg-gray-800/70 border border-blue-100 dark:border-blue-800 text-blue-600 dark:text-blue-400 hover:bg-white dark:hover:bg-gray-800 transition-colors text-sm font-medium shadow-sm flex-shrink-0">
-                        <Plus className="w-4 h-4" />
-                        Añadir
-                      </button>
-                    </div>
-                    <div className="h-3 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
-                      <div
-                        className="h-full rounded-full transition-all duration-500"
-                        style={{ width: `${Math.min(100, (booksThisYear / annualGoal) * 100)}%`, backgroundColor: hex }}
-                      />
-                    </div>
-                  </>
-                );
-              })()}
-            </div>
-
-            <div className="flex gap-3 pt-1">
-              <div className="flex-1 text-center">
-                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100 leading-none">{readBooks.length}</p>
-                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1 uppercase tracking-wide">Total leídos</p>
-              </div>
-              {topGenre && (
-                <>
-                  <div className="w-px bg-gray-100 dark:bg-gray-700" />
-                  <div className="flex-1 text-center">
-                    <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 leading-tight">{topGenre}</p>
-                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-1 uppercase tracking-wide">Género top</p>
+          {/* Annual goal */}
+          {(() => {
+            const hex = THEME_HEX[colorTheme] ?? '#3b82f6';
+            return (
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-end gap-3">
+                    <span className="text-4xl font-bold leading-none" style={{ color: hex }}>{booksThisYear}</span>
+                    <span className="text-lg text-gray-400 dark:text-gray-500 mb-0.5">/ {annualGoal} libros</span>
+                    {booksThisYear >= annualGoal && <span className="text-sm mb-0.5">🎉</span>}
+                    <button onClick={() => { setGoalInput(String(annualGoal)); setShowGoalModal(true); }} className="mb-0.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
                   </div>
-                </>
-              )}
-            </div>
-          </div>
+                </div>
+                <div className="h-3 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all duration-500"
+                    style={{ width: `${Math.min(100, (booksThisYear / annualGoal) * 100)}%`, backgroundColor: hex }}
+                  />
+                </div>
+              </div>
+            );
+          })()}
 
+          {/* Reading stats row */}
+          <div className="flex gap-3 pt-1">
+            <div className="flex-1 text-center">
+              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100 leading-none">{readBooks.length}</p>
+              <p className="text-xs text-gray-400 dark:text-gray-500 mt-1 uppercase tracking-wide">Total leídos</p>
+            </div>
+            <div className="w-px bg-gray-100 dark:bg-gray-700" />
+            <div className="flex-1 text-center">
+              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100 leading-none">
+                {readingMinutesMonth >= 60
+                  ? `${Math.round(readingMinutesMonth / 60)}h`
+                  : `${readingMinutesMonth}m`}
+              </p>
+              <p className="text-xs text-gray-400 dark:text-gray-500 mt-1 uppercase tracking-wide">Este mes</p>
+            </div>
+            {topGenre && (
+              <>
+                <div className="w-px bg-gray-100 dark:bg-gray-700" />
+                <div className="flex-1 text-center">
+                  <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 leading-tight">{topGenre}</p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-1 uppercase tracking-wide">Género top</p>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* ── Libros subheading + actions ── */}
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Libros</p>
+          <div className="flex items-center gap-2">
+            <button onClick={openAddModal} className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white/70 dark:bg-gray-800/70 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-white dark:hover:bg-gray-800 transition-colors text-xs font-medium shadow-sm">
+              <Plus className="w-3.5 h-3.5" />
+              Añadir
+            </button>
+            <button onClick={() => handleAiSuggestions([])} className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white/70 dark:bg-gray-800/70 border border-blue-100 dark:border-blue-800 text-blue-600 dark:text-blue-400 hover:bg-white dark:hover:bg-gray-800 transition-colors text-xs font-medium shadow-sm">
+              <Sparkles className="w-3.5 h-3.5" />
+              Sugerencias
+            </button>
+          </div>
         </div>
 
         {/* Filter tabs */}
@@ -619,6 +657,14 @@ const Books = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ── Reading Session Modal ── */}
+      {showSessionModal && (
+        <ReadingSessionModal
+          readingBooks={books.filter(b => b.status === 'reading')}
+          onClose={() => { setShowSessionModal(false); loadData(); }}
+        />
       )}
 
       {/* ── AI Modal ── */}

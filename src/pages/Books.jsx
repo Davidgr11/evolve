@@ -438,16 +438,28 @@ const Books = () => {
         {/* Stats panel */}
         {(() => {
           const hex = THEME_HEX[colorTheme] ?? '#3b82f6';
-          const hrs = Math.floor(readingMinutesYear / 60);
-          const minsRem = readingMinutesYear % 60;
           const progressPct = Math.min(100, (booksThisYear / annualGoal) * 100);
 
-          const milestone = readingMinutesYear >= 3000 ? '📚 Lector legendario'
-            : readingMinutesYear >= 1500 ? '🔥 Lector avanzado'
-            : readingMinutesYear >= 600  ? '⭐ Lector constante'
-            : readingMinutesYear >= 60   ? '🌱 Empezando'
-            : readingMinutesYear > 0     ? '💡 Primera sesión'
-            : null;
+          // Reading pace formula
+          // Default: 500 min/book (250 pages × 2 min/page)
+          // Calibrated from user's actual data once ≥2 books are finished with minutes logged
+          const DEFAULT_MIN_PER_BOOK = 500;
+          const minPerBook = (booksThisYear >= 2 && readingMinutesYear > 0)
+            ? Math.round(readingMinutesYear / booksThisYear)
+            : DEFAULT_MIN_PER_BOOK;
+          const totalMinEstimated = annualGoal * minPerBook;
+          const minRemaining = Math.max(0, totalMinEstimated - readingMinutesYear);
+          const today = new Date();
+          const endOfYear = new Date(currentYear, 11, 31);
+          const daysRemaining = Math.max(1, Math.ceil((endOfYear - today) / (1000 * 60 * 60 * 24)));
+          const dailyPace = Math.ceil(minRemaining / daysRemaining);
+          const goalMet = minRemaining <= 0;
+
+          const hrs = Math.floor(readingMinutesYear / 60);
+          const minsRem = readingMinutesYear % 60;
+          const readingLabel = readingMinutesYear >= 60
+            ? `${hrs}h${minsRem > 0 ? ` ${minsRem}m` : ''}`
+            : `${readingMinutesYear}m`;
 
           return (
             <div className="px-4 py-4 liquid-glass-panel rounded-2xl space-y-4">
@@ -489,33 +501,33 @@ const Books = () => {
                 </div>
               </div>
 
-              {/* Gamified reading time */}
-              <div className="relative overflow-hidden rounded-2xl px-4 py-3"
+              {/* Motivational daily pace card */}
+              <div className="relative overflow-hidden rounded-2xl px-4 py-3.5"
                 style={{ background: `linear-gradient(135deg, ${hex}18, ${hex}08)`, border: `1px solid ${hex}22` }}>
                 <div className="absolute -right-3 -top-3 w-16 h-16 rounded-full opacity-25 pointer-events-none"
                   style={{ background: `radial-gradient(circle, ${hex}, transparent)` }} />
-                <p className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1.5">Lectura este año</p>
-                <div className="flex items-baseline gap-1.5">
-                  {readingMinutesYear >= 60 ? (
-                    <>
-                      <span className="text-4xl font-bold leading-none" style={{ color: hex }}>{hrs}</span>
-                      <span className="text-lg text-gray-400 dark:text-gray-500 font-medium">h</span>
-                      {minsRem > 0 && (
-                        <>
-                          <span className="text-2xl font-bold leading-none text-gray-700 dark:text-gray-300">{minsRem}</span>
-                          <span className="text-sm text-gray-400 dark:text-gray-500 font-medium">min</span>
-                        </>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      <span className="text-4xl font-bold leading-none" style={{ color: hex }}>{readingMinutesYear}</span>
-                      <span className="text-lg text-gray-400 dark:text-gray-500 font-medium">min</span>
-                    </>
-                  )}
-                </div>
-                {milestone && (
-                  <p className="text-xs font-semibold mt-1" style={{ color: `${hex}bb` }}>{milestone}</p>
+
+                {goalMet ? (
+                  <>
+                    <p className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1.5">Ritmo de lectura</p>
+                    <p className="text-xl font-bold" style={{ color: hex }}>¡Meta lograda! 🎉</p>
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                      {readingMinutesYear > 0 ? `Llevas ${readingLabel} este año` : 'Sigue leyendo para mantener el ritmo'}
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-1.5">Para cumplir tu meta</p>
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="text-4xl font-bold leading-none" style={{ color: hex }}>~{dailyPace}</span>
+                      <span className="text-lg text-gray-400 dark:text-gray-500 font-medium">min/día</span>
+                    </div>
+                    <p className="text-xs text-gray-400 dark:text-gray-500 mt-1.5 leading-snug">
+                      {readingMinutesYear > 0
+                        ? `Llevas ${readingLabel} · ${daysRemaining} días restantes`
+                        : `${daysRemaining} días restantes · estimado`}
+                    </p>
+                  </>
                 )}
               </div>
 

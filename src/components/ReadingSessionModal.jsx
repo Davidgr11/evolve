@@ -342,7 +342,7 @@ const ReadingSessionModal = ({ onClose, onSessionComplete, readingBooks }) => {
         const mm = String(Math.floor(remainingSecs / 60)).padStart(2, '0');
         const ss = String(remainingSecs % 60).padStart(2, '0');
         return (
-          <div className="flex-1 flex flex-col items-center justify-center gap-6 px-5"
+          <div className="flex-1 flex flex-col items-center justify-center gap-8 px-5"
             style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 20px)', paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 20px)' }}>
 
             {/* Timer + progress bar */}

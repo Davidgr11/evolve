@@ -1328,9 +1328,9 @@ Plain text, sin markdown, en español.`;
         </div>
 
         <ResponsiveContainer width="100%" height={300}>
-          <RadarChart data={radarData} outerRadius="62%" margin={{ top: 34, right: 50, bottom: 34, left: 50 }}>
+          <RadarChart data={radarData} outerRadius="55%" margin={{ top: 34, right: 50, bottom: 34, left: 50 }}>
             <PolarGrid stroke="rgba(107,114,128,0.15)" />
-            <PolarAngleAxis dataKey="pilar" tick={({ x, y, payload, textAnchor, cy }) => {
+            <PolarAngleAxis dataKey="pilar" radius="74%" tick={({ x, y, payload, textAnchor, cy }) => {
               const p = PILLARS.find(pl => pl.label === payload.value);
               const score = p ? scores[p.key] : null;
               const hex = THEME_PALETTE[colorTheme]?.hex ?? '#3b82f6';

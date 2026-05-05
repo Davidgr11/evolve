@@ -479,7 +479,7 @@ Da una interpretación corta y personalizada (2-3 oraciones) de lo que estos nú
                   const barColor = score === null ? (document.documentElement.classList.contains('dark') ? '#374151' : '#e5e7eb') : score >= 70 ? '#4ade80' : score >= 40 ? '#fbbf24' : '#f87171';
                   return (
                     <div key={date} className="flex-1 flex flex-col justify-end items-center" style={{ gap: 3 }}>
-                      <span className="text-sm text-gray-400 font-medium leading-none">{score !== null ? score : '–'}</span>
+                      <span className="text-sm text-gray-400 font-medium leading-none">{score !== null ? `${score}%` : '–'}</span>
                       <div className="w-full rounded-sm" style={{ height: barH, backgroundColor: barColor }} />
                       <span className="text-sm text-gray-400 capitalize leading-none">{label.slice(0, 3)}</span>
                     </div>
@@ -1321,7 +1321,7 @@ Plain text, sin markdown, en español.`;
             </div>
             <div className="flex items-center gap-1 -mt-0.5">
               <Heart className="w-3 h-3 text-pink-400" fill="currentColor" />
-              <p className="text-xs text-gray-400 dark:text-gray-500">bienestar · últimos 7 días</p>
+              <p className="text-xs text-gray-400 dark:text-gray-500">Promedio global de los últimos 7 días</p>
             </div>
           </div>
           <button
@@ -1334,17 +1334,21 @@ Plain text, sin markdown, en español.`;
         </div>
 
         <ResponsiveContainer width="100%" height={300}>
-          <RadarChart data={radarData} outerRadius="62%" margin={{ top: 30, right: 44, bottom: 30, left: 44 }}>
+          <RadarChart data={radarData} outerRadius="52%" margin={{ top: 34, right: 50, bottom: 34, left: 50 }}>
             <PolarGrid stroke="rgba(107,114,128,0.15)" />
-            <PolarAngleAxis dataKey="pilar" tick={({ x, y, payload, textAnchor }) => {
+            <PolarAngleAxis dataKey="pilar" tick={({ x, y, payload, textAnchor, cy }) => {
               const p = PILLARS.find(pl => pl.label === payload.value);
               const score = p ? scores[p.key] : null;
               const hex = THEME_PALETTE[colorTheme]?.hex ?? '#3b82f6';
+              // For labels above center: score line goes UP (away from polygon); below center: score goes DOWN
+              const isAbove = cy !== undefined && y < cy - 8;
+              const nameY = y;
+              const scoreY = isAbove ? y - 18 : y + 18;
               return (
                 <g onClick={() => p && setOpenPillarModal(p.key)} style={{ cursor: 'pointer' }}>
-                  <text x={x} y={y} textAnchor={textAnchor} fill="#6b7280" fontSize={14} textDecoration="underline">{payload.value}</text>
+                  <text x={x} y={nameY} textAnchor={textAnchor} fill="#6b7280" fontSize={14} textDecoration="underline">{payload.value}</text>
                   {score !== null && (
-                    <text x={x} y={y + 18} textAnchor={textAnchor} fill={hex} fontSize={14} fontWeight="bold">{score}</text>
+                    <text x={x} y={scoreY} textAnchor={textAnchor} fill={hex} fontSize={14} fontWeight="bold">{score}%</text>
                   )}
                 </g>
               );

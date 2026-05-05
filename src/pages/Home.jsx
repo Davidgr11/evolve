@@ -10,7 +10,7 @@ import {
 } from 'recharts';
 import {
   Salad, Zap, Moon, Smile, BookOpen, Users,
-  ChevronRight, ChevronDown, ChevronUp, Sparkles, CheckCircle, AlertCircle, X, Loader2, ChevronLeft, Info,
+  ChevronRight, ChevronDown, ChevronUp, Sparkles, CheckCircle, AlertCircle, X, Loader2, ChevronLeft,
   Plus, Edit, Trash2, TrendingUp, LogOut, Pencil, GripVertical, Eye, Bell,
 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
@@ -50,7 +50,7 @@ const PILLARS = [
   { key: 'nutricion',   label: 'Nutrición',   icon: Salad,    color: 'text-green-500',  desc: 'Promedio de los últimos 7 días con datos: alimentación del plan (50%) e hidratación (50%), tomados del check-in diario. Días sin check-in no se cuentan.' },
   { key: 'ejercicio',   label: 'Actividad',   icon: Zap,      color: 'text-orange-500', desc: 'Si hoy completaste alguna rutina sin meta fija, el score es 100 automáticamente. Si no, se promedian solo las rutinas con meta semanal: se mide qué tan cerca estás de cumplir la frecuencia esperada según tu última sesión.' },
   { key: 'sueno',       label: 'Sueño',       icon: Moon,     color: 'text-purple-500', desc: 'Promedio de los últimos 7 días: hábitos nocturnos (sin pantallas, horario fijo, cena ligera) en 60% + nivel de descanso al despertar en 40%.' },
-  { key: 'emocional',   label: 'Emocional',   icon: Smile,    color: 'text-blue-500',   desc: 'Sesiones de meditación registradas en la pestaña Medita (80%) + calificación de tu reflexión escrita en el check-in vespertino (20%).' },
+  { key: 'emocional',   label: 'Emocional',   icon: Smile,    color: 'text-blue-500',   desc: 'Promedio de los últimos 7 días con sesiones de meditación: 0 sesiones = 0, 1 sesión = 75, 2 o más = 100. Los días sin meditación no se cuentan.' },
   { key: 'crecimiento', label: 'Crecimiento', icon: BookOpen, color: 'text-amber-500',  desc: 'Aprendizaje diario del check-in de los últimos 7 días (80%) + libros leídos este año vs. tu meta (20%).' },
   { key: 'comunidad',   label: 'Comunidad',   icon: Users,    color: 'text-pink-500',   desc: 'Nivel de socialización de los últimos 7 días con datos: si no socializaste (0), con personas cómodas (65%) o saliste de tu zona de confort (100%).' },
 ];
@@ -73,11 +73,39 @@ const COLOR_THEMES = [
   { id: 'teal',   label: 'Verde Azul', bg: '#0d9488', appBg: '#d0f2f0' },
 ];
 
-const RadarTick = ({ x, y, payload, textAnchor }) => (
-  <text x={x} y={y} textAnchor={textAnchor} fill="#6b7280" fontSize={12} className="select-none">
-    {payload.value}
-  </text>
-);
+// ─── computeDayScoresForPillar ─────────────────────────────────────────────────
+const computeDayScoresForPillar = (pillarKey, allData) => {
+  const { last7 = [], checkIns: cis = {}, meditations = {}, ejercicioScores = {}, todayStr: tStr = '', todayEjercicioScore = null } = allData;
+  const mealMap  = { followed: 100, partial: 60, bad: 20 };
+  const waterMap = { regular: 100, little: 50, none: 0 };
+  return last7.map(d => {
+    const ci = cis[d];
+    let score = null;
+    if (pillarKey === 'nutricion') {
+      if (ci?.mealAdherence != null && ci?.waterIntake != null)
+        score = ((mealMap[ci.mealAdherence] ?? 60) + (waterMap[ci.waterIntake] ?? 50)) / 2;
+      else if (ci?.nutritionAdherence)
+        score = { followed: 100, partial: 60, skip: 20 }[ci.nutritionAdherence] ?? null;
+    } else if (pillarKey === 'sueno') {
+      const h = ci?.sleepHabits;
+      if (h) {
+        const hab = ((h.noDevices ? 1 : 0) + (h.fixedSchedule ? 1 : 0) + (h.noEatingBefore ? 1 : 0)) / 3 * 100;
+        const rest = h.restedness ? (h.restedness - 1) / 4 * 100 : null;
+        score = rest != null ? hab * 0.6 + rest * 0.4 : hab;
+      }
+    } else if (pillarKey === 'emocional') {
+      const count = (meditations[d] || []).length;
+      if (count > 0) score = count >= 2 ? 100 : 75;
+    } else if (pillarKey === 'comunidad') {
+      if (ci?.communityLevel != null) score = ci.communityLevel === 2 ? 100 : ci.communityLevel === 1 ? 65 : 0;
+    } else if (pillarKey === 'crecimiento') {
+      if (ci?.growth != null) score = ci.growth !== 'none' ? 100 : 0;
+    } else if (pillarKey === 'ejercicio') {
+      score = d === tStr ? todayEjercicioScore : (ejercicioScores[d] ?? null);
+    }
+    return { date: d, score: score !== null ? Math.round(score) : null };
+  });
+};
 
 // ─── Goal card ─────────────────────────────────────────────────────────────────
 const GoalCard = ({ goal, onClick }) => {
@@ -258,65 +286,20 @@ const SleepCheckinModal = ({ existing, onSave, onClose }) => {
 const CheckinModal = ({ existing, onSave, onClose }) => {
   const alreadyDone = !!existing?.savedAt;
 
-  const [step, setStep]                 = useState(1);
-  const [mealAdherence, setMeal]        = useState(existing?.mealAdherence ?? null);
-  const [waterIntake, setWater]         = useState(existing?.waterIntake ?? null);
-  const [communityLevel, setCommunity]  = useState(existing?.communityLevel ?? null);
-  const [emotionText, setEmotionText]   = useState('');
-  const [growth, setGrowth]             = useState(existing?.growth ?? null);
-  const [coachResponse, setCoachResponse] = useState(existing?.aiResponse ?? '');
-  const [saving, setSaving]             = useState(false);
+  const [step, setStep]                = useState(1);
+  const [mealAdherence, setMeal]       = useState(existing?.mealAdherence ?? null);
+  const [waterIntake, setWater]        = useState(existing?.waterIntake ?? null);
+  const [communityLevel, setCommunity] = useState(existing?.communityLevel ?? null);
+  const [growth, setGrowth]            = useState(existing?.growth ?? null);
 
-  const buildEntry = (extra = {}) => ({
+  const buildEntry = () => ({
     mealAdherence, waterIntake,
     communityLevel,
     growth,
-    emotionText: extra.emotionText ?? '',
-    emotionScore: extra.emotionScore ?? null,
-    aiResponse: extra.aiResponse ?? '',
     savedAt: new Date().toISOString(),
   });
 
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      if (!emotionText.trim()) {
-        onSave(buildEntry());
-        onClose();
-        return;
-      }
-      const socialLabel = SOCIAL_OPTIONS.find(o => o.value === communityLevel)?.label ?? 'no indicó';
-      const prompt = `El usuario describe cómo se sintió hoy y cómo manejó sus emociones.
-
-TEXTO: "${emotionText.trim()}"
-CONTEXTO: socialización: ${socialLabel}
-
-Devuelve SOLO JSON:
-{"score": <0-100>, "response": "<2-3 oraciones empáticas en español, conectando con algo específico de su texto>"}
-
-Criterios para el score:
-90-100: Identifica emociones específicas Y tomó acción concreta (habló, reflexionó, buscó solución)
-70-89: Reconoció emociones con algo de procesamiento
-40-69: Mencionó cómo se sintió con poca reflexión
-10-39: Vago, sin autoconciencia
-0-9: Suprimió o ignoró totalmente`;
-
-      const rawText = await callClaude(prompt, 400);
-      const cleaned = rawText.trim().replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '').trim();
-      const parsed = JSON.parse(cleaned);
-      const entry = buildEntry({ emotionText: emotionText.trim(), emotionScore: parsed.score ?? null, aiResponse: parsed.response ?? '' });
-      setCoachResponse(parsed.response ?? '');
-      onSave(entry);
-    } catch {
-      onSave(buildEntry({ emotionText: emotionText.trim() }));
-      toast.error('No se pudo generar el feedback');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const TOTAL_STEPS = 4;
-  const canGoBack = step > 1 && !saving && !coachResponse;
+  const canGoBack = step > 1;
 
   return (
     <div className="fixed z-50 liquid-glass-overlay" style={{ top: 0, left: 0, right: 0, bottom: 0, margin: 0 }} onClick={onClose}>
@@ -334,7 +317,7 @@ Criterios para el score:
             }
             {!alreadyDone && (
               <div className="flex gap-1.5">
-                {[1, 2, 3, 4].map(d => (
+                {[1, 2, 3].map(d => (
                   <div key={d} className={`h-1.5 rounded-full transition-all ${d === step ? 'w-6 bg-primary-500' : d < step ? 'w-1.5 bg-primary-300' : 'w-1.5 bg-gray-200 dark:bg-gray-700'}`} />
                 ))}
               </div>
@@ -351,15 +334,6 @@ Criterios para el score:
                   <CheckCircle className="w-11 h-11 text-green-500 mx-auto mb-2" />
                   <h3 className="font-bold text-lg text-gray-900 dark:text-gray-100">Check-in de hoy completado</h3>
                 </div>
-                {coachResponse && (
-                  <div className="liquid-glass-panel rounded-xl p-4 border border-primary-200/60 dark:border-primary-700/40">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Sparkles className="w-4 h-4 text-primary-500" />
-                      <span className="text-sm font-semibold text-gray-600 dark:text-gray-400">Tu coach de bienestar</span>
-                    </div>
-                    <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-line text-justify">{coachResponse}</p>
-                  </div>
-                )}
                 <button onClick={onClose} className="btn-secondary w-full py-2.5">Cerrar</button>
               </>
             )}
@@ -434,54 +408,97 @@ Criterios para el score:
                     </button>
                   ))}
                 </div>
-                <button onClick={() => setStep(4)} className="btn-primary w-full py-3 flex items-center justify-center gap-2">
-                  Siguiente <ChevronRight className="w-4 h-4" />
+                <button onClick={() => { onSave(buildEntry()); onClose(); }} className="btn-primary w-full py-3">
+                  Guardar check-in
                 </button>
               </>
             )}
 
-            {/* ── Step 4: Emocional ── */}
-            {!alreadyDone && step === 4 && (
-              <>
-                <h3 className="font-bold text-lg text-gray-900 dark:text-gray-100">Reflexión emocional</h3>
-                <div className="space-y-2">
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
-                    Describir cómo te sentiste — aunque sea una línea — te ayuda a entenderte mejor y obtener feedback personalizado 🌱
-                  </p>
-                  <textarea
-                    className="input-field resize-none"
-                    rows={5}
-                    placeholder="Hoy me sentí... ¿qué emociones tuve? ¿cómo las manejé?"
-                    value={emotionText}
-                    onChange={e => setEmotionText(e.target.value)}
-                    autoFocus
-                  />
-                </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
-                {saving ? (
-                  <div className="flex flex-col items-center py-6 gap-3">
-                    <Loader2 className="w-7 h-7 text-primary-400 animate-spin" />
-                    <p className="text-sm text-gray-400">Guardando{emotionText.trim() ? ' y analizando tu día...' : '...'}</p>
-                  </div>
-                ) : coachResponse ? (
-                  <>
-                    <div className="liquid-glass-panel rounded-xl p-4 border border-primary-200/60 dark:border-primary-700/40">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Sparkles className="w-4 h-4 text-primary-500" />
-                        <span className="text-sm font-semibold text-gray-600 dark:text-gray-400">Tu coach de bienestar</span>
-                      </div>
-                      <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-line text-justify">{coachResponse}</p>
+// ─── Pillar detail modal ──────────────────────────────────────────────────────
+const PillarModal = ({ pillarKey, allData, scores, colorHex, onClose }) => {
+  const [interpreting, setInterpreting] = useState(false);
+  const [interpretation, setInterpretation] = useState('');
+
+  const p = PILLARS.find(pl => pl.key === pillarKey);
+  if (!p) return null;
+
+  const days = computeDayScoresForPillar(pillarKey, allData);
+
+  const handleInterpret = async () => {
+    setInterpreting(true);
+    try {
+      const daysStr = days.map(({ date, score }) => `${date}: ${score !== null ? score : 'sin dato'}`).join(', ');
+      const prompt = `Eres un coach de bienestar. Analiza el desempeño del usuario en el pilar "${p.label}" durante los últimos 7 días.
+
+Puntuación actual: ${scores[pillarKey]}
+Datos diarios: ${daysStr}
+Cómo se calcula: ${p.desc}
+
+Da una interpretación corta y personalizada (2-3 oraciones) de lo que estos números significan, qué está haciendo bien y un consejo concreto. Sin markdown, en español.`;
+      const text = await callClaude(prompt, 300);
+      setInterpretation(text);
+    } catch {
+      toast.error('No se pudo interpretar');
+    } finally {
+      setInterpreting(false);
+    }
+  };
+
+  return (
+    <div className="fixed z-50 liquid-glass-overlay" style={{ top: 0, left: 0, right: 0, bottom: 0, margin: 0 }} onClick={onClose}>
+      <div className="flex items-center justify-center h-full px-4 pb-20">
+        <div className="liquid-glass-panel rounded-2xl w-full max-w-md flex flex-col overflow-hidden" style={{ maxHeight: 'calc(80vh - 5rem)' }} onClick={e => e.stopPropagation()}>
+          <div className="flex items-center justify-between px-5 pt-5 pb-3 flex-shrink-0">
+            <div className="flex items-center gap-2">
+              <p.icon className="w-4 h-4 text-gray-500" />
+              <h3 className="font-bold text-base text-gray-900 dark:text-gray-100">{p.label}</h3>
+            </div>
+            <button onClick={onClose}><X className="w-5 h-5 text-gray-400" /></button>
+          </div>
+          <div className="flex-1 min-h-0 overflow-y-auto px-5 pb-5 space-y-4">
+            <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">{p.desc}</p>
+
+            {/* 7-day CSS bar chart */}
+            <div>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Últimos 7 días</p>
+              <div className="flex gap-1.5" style={{ height: 80 }}>
+                {days.map(({ date, score }) => {
+                  const label = new Date(date + 'T12:00:00').toLocaleDateString('es-MX', { weekday: 'short' });
+                  const barH = score !== null ? Math.max(3, Math.round(score * 0.55)) : 3;
+                  const barColor = score === null ? '#e5e7eb' : score >= 70 ? '#4ade80' : score >= 40 ? '#fbbf24' : '#f87171';
+                  return (
+                    <div key={date} className="flex-1 flex flex-col justify-end items-center" style={{ gap: 2 }}>
+                      <span className="text-[9px] text-gray-400 leading-none">{score !== null ? score : '–'}</span>
+                      <div className="w-full rounded-sm" style={{ height: barH, backgroundColor: barColor }} />
+                      <span className="text-[9px] text-gray-400 capitalize leading-none">{label.slice(0, 3)}</span>
                     </div>
-                    <button onClick={onClose} className="btn-secondary w-full py-2.5">Cerrar</button>
-                  </>
-                ) : (
-                  <button onClick={handleSave} className="btn-primary w-full py-3 flex items-center justify-center gap-2">
-                    {emotionText.trim() ? <><Sparkles className="w-4 h-4" /> Guardar y obtener feedback</> : 'Guardar check-in'}
-                  </button>
-                )}
-              </>
-            )}
+                  );
+                })}
+              </div>
+            </div>
 
+            {!interpretation ? (
+              <button onClick={handleInterpret} disabled={interpreting} className="btn-primary w-full py-3 flex items-center justify-center gap-2">
+                {interpreting
+                  ? <><Loader2 className="w-4 h-4 animate-spin" /> Analizando...</>
+                  : <><Sparkles className="w-4 h-4" /> Interpretar</>}
+              </button>
+            ) : (
+              <div className="liquid-glass-panel rounded-xl p-4 border border-primary-200/60 dark:border-primary-700/40">
+                <div className="flex items-center gap-2 mb-2">
+                  <Sparkles className="w-4 h-4 text-primary-500" />
+                  <span className="text-sm font-semibold text-gray-600 dark:text-gray-400">Interpretación</span>
+                </div>
+                <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{interpretation}</p>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -506,7 +523,7 @@ const Home = () => {
 
   // ── Pillars ──
   const [scores, setScores] = useState({ nutricion: 0, ejercicio: 0, sueno: 0, emocional: 0, crecimiento: 0, comunidad: 0 });
-  const [openInfo, setOpenInfo]           = useState(null);
+  const [openPillarModal, setOpenPillarModal] = useState(null);
   const [loading, setLoading]             = useState(true);
   const [allData, setAllData]             = useState({});
 
@@ -752,17 +769,12 @@ const Home = () => {
         }).filter(v => v !== null);
         if (sleepScores.length) sueno = Math.round(sleepScores.reduce((a, b) => a + b, 0) / sleepScores.length);
 
-        // Emocional: 80% meditation sessions (Meditate tab) + 20% emotionScore from check-in textarea
+        // Emocional: meditation count only — ≥2=100, 1=75, 0=skip
         const meditations = wellbeingSnap.data().meditations || {};
         const emocionalDays = last7.map(d => {
-          const ci = cis[d];
-          const meditationCount = (meditations[d] || []).length;
-          if (meditationCount === 0 && !ci?.savedAt) return null;
-          const meditationScore = meditationCount >= 2 ? 100 : meditationCount === 1 ? 75 : 0;
-          const emotionScore = ci?.emotionScore != null ? ci.emotionScore : null;
-          if (emotionScore != null) return meditationScore * 0.8 + emotionScore * 0.2;
-          if (meditationCount > 0) return meditationScore * 0.8;
-          return null;
+          const count = (meditations[d] || []).length;
+          if (count === 0) return null;
+          return count >= 2 ? 100 : 75;
         }).filter(v => v !== null);
         if (emocionalDays.length) emocional = Math.round(emocionalDays.reduce((a, b) => a + b, 0) / emocionalDays.length);
 
@@ -804,9 +816,13 @@ const Home = () => {
       setScores(computed);
       setTodayCheckin(todayCI);
 
+      const meditationsData = wellbeingSnap.exists() ? (wellbeingSnap.data().meditations || {}) : {};
       setAllData({
         scores: computed,
         checkIns: ciData,
+        meditations: meditationsData,
+        ejercicioScores,
+        todayEjercicioScore,
         routines: routinesSnap.docs.map(d => d.data()),
         foodData: foodSnap.exists() ? foodSnap.data() : null,
         books: booksSnap.docs.map(d => d.data()),
@@ -1212,79 +1228,65 @@ Plain text, sin markdown, en español.`;
       {/* ── Section: Check in ── */}
       {(() => {
         const hour = new Date().getHours();
-        const isSleepWindow = hour >= 6 && hour < 12;
+        const isSleepWindow = hour >= 6;
         const isEveningWindow = hour >= 18;
         const sleepFilled = !!checkIns[todayStr]?.sleepFilledAt;
+        const eveningFilled = !!todayCheckin?.savedAt;
+        const bothDone = sleepFilled && eveningFilled;
+        const showSleepCard = isSleepWindow && !sleepFilled;
+        const showEveningCard = isEveningWindow && !eveningFilled;
+        const showComeBack = !bothDone && !showSleepCard && !showEveningCard;
         return (
           <>
             <div className="flex items-center justify-between">
               <p className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Check in</p>
             </div>
 
-            {/* Morning sleep card */}
-            {isSleepWindow && !sleepFilled && (
-              <button
-                onClick={() => isSleepWindow && !sleepFilled && setShowSleepCheckin(true)}
-                className={`w-full rounded-2xl p-4 flex items-center gap-3 transition-all ${
-                  sleepFilled
-                    ? 'border'
-                    : 'liquid-glass-panel active:scale-[0.99]'
-                }`}
-                style={sleepFilled ? { backgroundColor: (THEME_PALETTE[colorTheme]?.hex ?? '#3b82f6') + '14', borderColor: (THEME_PALETTE[colorTheme]?.hex ?? '#3b82f6') + '40' } : undefined}
-              >
-                {sleepFilled
-                  ? <CheckCircle className="w-5 h-5 flex-shrink-0" style={{ color: THEME_PALETTE[colorTheme]?.hex ?? '#3b82f6' }} />
-                  : <Moon className="w-5 h-5 text-purple-400 flex-shrink-0" />
-                }
-                <div className="text-left min-w-0">
-                  <p className="font-semibold text-sm text-gray-900 dark:text-gray-100">
-                    {sleepFilled ? 'Sueño registrado' : 'Sueño de anoche'}
-                  </p>
-                  <p className="text-sm text-gray-400 dark:text-gray-500 truncate">
-                    {sleepFilled ? 'Hábitos de sueño guardados' : 'Toca para registrar · disponible hasta las 12pm'}
-                  </p>
+            {bothDone && (
+              <div className="flex items-center gap-3 px-4 py-3 rounded-2xl liquid-glass-panel">
+                <CheckCircle className="w-5 h-5 flex-shrink-0" style={{ color: THEME_PALETTE[colorTheme]?.hex ?? '#3b82f6' }} />
+                <div>
+                  <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">Todo bien por aquí</p>
+                  <p className="text-sm text-gray-400 dark:text-gray-500">Registros de hoy completados</p>
                 </div>
-                {!sleepFilled && isSleepWindow && <ChevronRight className="w-4 h-4 text-gray-400 ml-auto flex-shrink-0" />}
-              </button>
+              </div>
             )}
 
-            {/* Evening check-in */}
-            {isEveningWindow ? (
+            {showSleepCard && (
               <button
-                onClick={() => setShowCheckin(true)}
-                className={`w-full rounded-2xl p-4 flex items-center gap-3 transition-all active:scale-[0.99] ${
-                  todayCheckin?.savedAt
-                    ? 'border'
-                    : 'liquid-glass-panel'
-                }`}
-                style={todayCheckin?.savedAt ? { backgroundColor: (THEME_PALETTE[colorTheme]?.hex ?? '#3b82f6') + '14', borderColor: (THEME_PALETTE[colorTheme]?.hex ?? '#3b82f6') + '40' } : undefined}
+                onClick={() => setShowSleepCheckin(true)}
+                className="w-full rounded-2xl p-4 flex items-center gap-3 transition-all liquid-glass-panel active:scale-[0.99]"
               >
-                {todayCheckin?.savedAt
-                  ? <CheckCircle className="w-5 h-5 flex-shrink-0" style={{ color: THEME_PALETTE[colorTheme]?.hex ?? '#3b82f6' }} />
-                  : <div className="w-5 h-5 rounded-full border-2 border-gray-300 dark:border-gray-600 flex-shrink-0" />
-                }
+                <Moon className="w-5 h-5 text-purple-400 flex-shrink-0" />
                 <div className="text-left min-w-0">
-                  <p className="font-semibold text-sm text-gray-900 dark:text-gray-100">
-                    {todayCheckin?.savedAt ? 'Check-in listo' : 'Check-in de hoy'}
-                  </p>
-                  <p className="text-sm text-gray-400 dark:text-gray-500 truncate">
-                    {todayCheckin?.savedAt ? 'Toca para ver tu feedback' : 'Nutrición · crecimiento · emocional'}
-                  </p>
+                  <p className="font-semibold text-sm text-gray-900 dark:text-gray-100">Sueño de anoche</p>
+                  <p className="text-sm text-gray-400 dark:text-gray-500 truncate">Toca para registrar cómo dormiste</p>
                 </div>
                 <ChevronRight className="w-4 h-4 text-gray-400 ml-auto flex-shrink-0" />
               </button>
-            ) : !todayCheckin?.savedAt && (
+            )}
+
+            {showEveningCard && (
+              <button
+                onClick={() => setShowCheckin(true)}
+                className="w-full rounded-2xl p-4 flex items-center gap-3 transition-all liquid-glass-panel active:scale-[0.99]"
+              >
+                <div className="w-5 h-5 rounded-full border-2 border-gray-300 dark:border-gray-600 flex-shrink-0" />
+                <div className="text-left min-w-0">
+                  <p className="font-semibold text-sm text-gray-900 dark:text-gray-100">Check-in de hoy</p>
+                  <p className="text-sm text-gray-400 dark:text-gray-500 truncate">Nutrición · crecimiento · socialización</p>
+                </div>
+                <ChevronRight className="w-4 h-4 text-gray-400 ml-auto flex-shrink-0" />
+              </button>
+            )}
+
+            {showComeBack && (
               <div className="flex items-center gap-3 px-4 py-3 rounded-2xl liquid-glass-panel">
                 <span className="text-2xl">🌙</span>
                 <div>
                   <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">Vuelve más tarde</p>
                   <p className="text-sm text-gray-400 dark:text-gray-500">
-                    {isSleepWindow
-                      ? 'Check-in disponible desde las 6pm'
-                      : hour < 6
-                      ? 'Sueño desde las 6am · Check-in desde las 6pm'
-                      : 'Check-in disponible desde las 6pm'
-                    }
+                    {hour < 6 ? 'Sueño desde las 6am · Check-in desde las 6pm' : 'Check-in disponible desde las 6pm'}
                   </p>
                 </div>
               </div>
@@ -1302,9 +1304,12 @@ Plain text, sin markdown, en español.`;
       <div className="liquid-glass-panel rounded-2xl p-4">
         {/* Top row: global score + analyze button */}
         <div className="flex items-center justify-between mb-1">
-          <div className="flex items-baseline gap-1.5">
-            <span className={`text-3xl font-bold ${THEME_PALETTE[colorTheme]?.text ?? 'text-blue-500'}`}>{overallScore}</span>
-            <span className="text-sm text-gray-400">/ 100</span>
+          <div>
+            <div className="flex items-baseline gap-0.5">
+              <span className={`text-3xl font-bold ${THEME_PALETTE[colorTheme]?.text ?? 'text-blue-500'}`}>{overallScore}</span>
+              <span className={`text-xl font-bold ${THEME_PALETTE[colorTheme]?.text ?? 'text-blue-500'}`}>%</span>
+            </div>
+            <p className="text-xs text-gray-400 dark:text-gray-500 -mt-0.5">tu salud los últimos 7 días</p>
           </div>
           <button
             onClick={handleAiAnalysis}
@@ -1315,10 +1320,22 @@ Plain text, sin markdown, en español.`;
           </button>
         </div>
 
-        <ResponsiveContainer width="100%" height={240}>
-          <RadarChart data={radarData} margin={{ top: 10, right: 22, bottom: 10, left: 22 }}>
+        <ResponsiveContainer width="100%" height={260}>
+          <RadarChart data={radarData} margin={{ top: 24, right: 36, bottom: 24, left: 36 }}>
             <PolarGrid stroke="rgba(107,114,128,0.15)" />
-            <PolarAngleAxis dataKey="pilar" tick={<RadarTick />} />
+            <PolarAngleAxis dataKey="pilar" tick={({ x, y, payload, textAnchor }) => {
+              const p = PILLARS.find(pl => pl.label === payload.value);
+              const score = p ? scores[p.key] : null;
+              const hex = THEME_PALETTE[colorTheme]?.hex ?? '#3b82f6';
+              return (
+                <g onClick={() => p && setOpenPillarModal(p.key)} style={{ cursor: 'pointer' }}>
+                  <text x={x} y={y} textAnchor={textAnchor} fill="#6b7280" fontSize={11}>{payload.value}</text>
+                  {score !== null && (
+                    <text x={x} y={y + 14} textAnchor={textAnchor} fill={hex} fontSize={11} fontWeight="bold">{score}</text>
+                  )}
+                </g>
+              );
+            }} />
             <PolarRadiusAxis domain={[0, 100]} tick={false} axisLine={false} />
             <Radar dataKey="score" stroke={THEME_PALETTE[colorTheme]?.hex ?? '#3b82f6'} fill={THEME_PALETTE[colorTheme]?.hex ?? '#3b82f6'} fillOpacity={0.22} strokeWidth={2} />
           </RadarChart>
@@ -1330,35 +1347,18 @@ Plain text, sin markdown, en español.`;
             const Icon = p.icon;
             const score = scores[p.key];
             return (
-              <div key={p.key} className="flex items-center gap-1.5">
+              <button
+                key={p.key}
+                onClick={() => setOpenPillarModal(p.key)}
+                className="flex items-center gap-1.5 text-left hover:opacity-70 transition-opacity"
+              >
                 <Icon className="w-3.5 h-3.5 text-gray-600 dark:text-gray-400 flex-shrink-0" />
                 <span className="text-sm text-gray-500 dark:text-gray-400 flex-1">{p.label}</span>
-                <button
-                  onClick={() => setOpenInfo(openInfo === p.key ? null : p.key)}
-                  className="flex-shrink-0 text-gray-300 dark:text-gray-600 hover:text-gray-400 dark:hover:text-gray-500 transition-colors mr-0.5"
-                  aria-label={`Qué es ${p.label}`}
-                >
-                  <Info className="w-3 h-3" />
-                </button>
                 <span className={`text-sm font-bold ${THEME_PALETTE[colorTheme]?.text ?? 'text-blue-500'}`}>{score}</span>
-              </div>
+              </button>
             );
           })}
         </div>
-
-        {/* Info tooltip */}
-        {openInfo && (() => {
-          const p = PILLARS.find(pl => pl.key === openInfo);
-          return p ? (
-            <div className="mt-3 px-3 py-2.5 rounded-xl bg-gray-50 dark:bg-gray-800/60 border border-gray-100 dark:border-gray-700/50">
-              <div className="flex items-center gap-1.5 mb-1">
-                <p.icon className="w-3.5 h-3.5 text-gray-600 dark:text-gray-400 flex-shrink-0" />
-                <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">{p.label}</span>
-              </div>
-              <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">{p.desc}</p>
-            </div>
-          ) : null;
-        })()}
       </div>
 
       {/* ── Section: Metas ── */}
@@ -1424,6 +1424,17 @@ Plain text, sin markdown, en español.`;
           existing={todayCheckin}
           onSave={handleSaveCheckin}
           onClose={() => setShowCheckin(false)}
+        />
+      )}
+
+      {/* ── Pillar modal ── */}
+      {openPillarModal && (
+        <PillarModal
+          pillarKey={openPillarModal}
+          allData={allData}
+          scores={scores}
+          colorHex={THEME_PALETTE[colorTheme]?.hex ?? '#3b82f6'}
+          onClose={() => setOpenPillarModal(null)}
         />
       )}
 

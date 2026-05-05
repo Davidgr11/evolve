@@ -75,38 +75,94 @@ const sendEveningReminders = async (message) => {
   }
 };
 
+const sendMeditationReminders = async () => {
+  const today = getTodayMX();
+  const tokensSnap = await admin.firestore().collection('fcmTokens').get();
+  for (const tokenDoc of tokensSnap.docs) {
+    const uid = tokenDoc.id;
+    const wellbeingSnap = await admin.firestore().doc(`users/${uid}/wellbeing/data`).get();
+    const todayMeds = wellbeingSnap.data()?.meditations?.[today] || [];
+    if (todayMeds.length === 0) {
+      await sendPushToUser(uid, '🧘 Hora de meditar', 'Todavía no has meditado hoy — unos minutos pueden hacer la diferencia.');
+    }
+  }
+};
+
 // ── Morning sleep reminders ───────────────────────────────────────────────────
 
+// 7am every day
 exports.sleepReminder7am = onSchedule(
   { schedule: '0 7 * * *', timeZone: 'America/Mexico_City', region: 'us-central1' },
-  async () => sendSleepReminders('¿Cómo dormiste anoche? Regístralo antes de las 12pm')
+  async () => sendSleepReminders('¿Cómo dormiste anoche? Tómate un momento para registrarlo')
 );
 
-exports.sleepReminder8am = onSchedule(
-  { schedule: '0 8 * * *', timeZone: 'America/Mexico_City', region: 'us-central1' },
-  async () => sendSleepReminders('Aún puedes registrar tu sueño de anoche')
+// 8:30am weekdays (Mon–Fri)
+exports.sleepReminder8_30amWeekdays = onSchedule(
+  { schedule: '30 8 * * 1-5', timeZone: 'America/Mexico_City', region: 'us-central1' },
+  async () => sendSleepReminders('Recuerda registrar tu sueño de anoche')
 );
 
-exports.sleepReminder9am = onSchedule(
-  { schedule: '0 9 * * *', timeZone: 'America/Mexico_City', region: 'us-central1' },
-  async () => sendSleepReminders('Último aviso — registra tu sueño antes de las 12pm')
+// 9am weekends (Sat–Sun)
+exports.sleepReminder9amWeekends = onSchedule(
+  { schedule: '0 9 * * 0,6', timeZone: 'America/Mexico_City', region: 'us-central1' },
+  async () => sendSleepReminders('Recuerda registrar tu sueño de anoche')
 );
 
 // ── Evening check-in reminders ────────────────────────────────────────────────
 
-exports.checkinReminder7pm = onSchedule(
-  { schedule: '0 19 * * *', timeZone: 'America/Mexico_City', region: 'us-central1' },
-  async () => sendEveningReminders('¿Cómo fue tu día? Completa tu check-in')
-);
-
 exports.checkinReminder8pm = onSchedule(
   { schedule: '0 20 * * *', timeZone: 'America/Mexico_City', region: 'us-central1' },
-  async () => sendEveningReminders('Tu check-in de hoy sigue pendiente')
+  async () => sendEveningReminders('¿Cómo fue tu día? Completa tu check-in de hoy')
 );
 
-exports.checkinReminder9pm = onSchedule(
-  { schedule: '0 21 * * *', timeZone: 'America/Mexico_City', region: 'us-central1' },
+exports.checkinReminder9_30pm = onSchedule(
+  { schedule: '30 21 * * *', timeZone: 'America/Mexico_City', region: 'us-central1' },
   async () => sendEveningReminders('Último recordatorio — completa tu check-in antes de dormir')
+);
+
+// ── Nutrition reminders ───────────────────────────────────────────────────────
+
+// Sunday 10am — shopping list
+exports.nutritionSundayReminder = onSchedule(
+  { schedule: '0 10 * * 0', timeZone: 'America/Mexico_City', region: 'us-central1' },
+  async () => {
+    const tokensSnap = await admin.firestore().collection('fcmTokens').get();
+    for (const tokenDoc of tokensSnap.docs) {
+      await sendPushToUser(tokenDoc.id, '🛒 Lista del súper', 'Es domingo — revisa tu lista y prepárate para comer bien toda la semana.');
+    }
+  }
+);
+
+// 1st of every month 9am — log weight + validate plan
+exports.nutritionMonthlyReminder = onSchedule(
+  { schedule: '0 9 1 * *', timeZone: 'America/Mexico_City', region: 'us-central1' },
+  async () => {
+    const tokensSnap = await admin.firestore().collection('fcmTokens').get();
+    for (const tokenDoc of tokensSnap.docs) {
+      await sendPushToUser(tokenDoc.id, '📊 Nuevo mes', 'Recuerda registrar tu peso y validar si tu plan de alimentación sigue vigente.');
+    }
+  }
+);
+
+// ── Activity reminder ─────────────────────────────────────────────────────────
+
+// Saturday 8am
+exports.activitySaturdayReminder = onSchedule(
+  { schedule: '0 8 * * 6', timeZone: 'America/Mexico_City', region: 'us-central1' },
+  async () => {
+    const tokensSnap = await admin.firestore().collection('fcmTokens').get();
+    for (const tokenDoc of tokensSnap.docs) {
+      await sendPushToUser(tokenDoc.id, '💪 ¡Sábado activo!', 'Es un buen día para mover el cuerpo. ¿Qué rutina harás hoy?');
+    }
+  }
+);
+
+// ── Meditation reminder ───────────────────────────────────────────────────────
+
+// 6pm daily — only if user hasn't meditated today
+exports.meditationReminder6pm = onSchedule(
+  { schedule: '0 18 * * *', timeZone: 'America/Mexico_City', region: 'us-central1' },
+  async () => sendMeditationReminders()
 );
 
 // ── Test notification ─────────────────────────────────────────────────────────

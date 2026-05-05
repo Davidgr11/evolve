@@ -908,7 +908,7 @@ SUGERENCIA: [nombre corto]: [descripción breve de ingredientes, máx 20 palabra
                     </div>
                     {chartData.length > 1 && (
                       <ResponsiveContainer width="100%" height={150}>
-                        <LineChart data={chartData}>
+                        <LineChart data={chartData} margin={{ top: 5, right: 10, bottom: 5, left: -10 }}>
                           <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.08)" />
                           <XAxis dataKey="date" tick={{ fontSize: 10 }} />
                           <YAxis domain={['dataMin - 1', 'dataMax + 1']} tick={{ fontSize: 10 }} />

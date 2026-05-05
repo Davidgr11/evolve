@@ -1328,20 +1328,25 @@ Plain text, sin markdown, en español.`;
         </div>
 
         <ResponsiveContainer width="100%" height={300}>
-          <RadarChart data={radarData} outerRadius="55%" margin={{ top: 34, right: 50, bottom: 34, left: 50 }}>
+          <RadarChart data={radarData} outerRadius="62%" margin={{ top: 38, right: 56, bottom: 38, left: 56 }}>
             <PolarGrid stroke="rgba(107,114,128,0.15)" />
-            <PolarAngleAxis dataKey="pilar" radius="74%" tick={({ x, y, payload, textAnchor, cy }) => {
+            <PolarAngleAxis dataKey="pilar" tick={({ x, y, payload, textAnchor, cx, cy }) => {
               const p = PILLARS.find(pl => pl.label === payload.value);
               const score = p ? scores[p.key] : null;
               const hex = THEME_PALETTE[colorTheme]?.hex ?? '#3b82f6';
+              // Push label 18px outward from chart center so it never sits on the polygon edge
+              const PUSH = 18;
+              const dx = x - (cx ?? 0);
+              const dy = y - (cy ?? 0);
+              const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+              const lx = x + (dx / dist) * PUSH;
+              const ly = y + (dy / dist) * PUSH;
               const isAbove = cy !== undefined && y < cy - 8;
-              const nameY = y;
-              const scoreY = isAbove ? y - 18 : y + 18;
               return (
                 <g onClick={() => p && setOpenPillarModal(p.key)} style={{ cursor: 'pointer' }}>
-                  <text x={x} y={nameY} textAnchor={textAnchor} fill="#6b7280" fontSize={14} textDecoration="underline">{payload.value}</text>
+                  <text x={lx} y={ly} textAnchor={textAnchor} fill="#6b7280" fontSize={14} textDecoration="underline">{payload.value}</text>
                   {score !== null && (
-                    <text x={x} y={scoreY} textAnchor={textAnchor} fill={hex} fontSize={14}>{score}%</text>
+                    <text x={lx} y={isAbove ? ly - 18 : ly + 18} textAnchor={textAnchor} fill={hex} fontSize={14}>{score}%</text>
                   )}
                 </g>
               );

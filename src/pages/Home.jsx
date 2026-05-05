@@ -10,7 +10,7 @@ import {
 } from 'recharts';
 import {
   Salad, Zap, Moon, Smile, BookOpen, Users,
-  ChevronRight, ChevronDown, ChevronUp, Sparkles, CheckCircle, AlertCircle, X, Loader2, ChevronLeft,
+  ChevronRight, ChevronDown, ChevronUp, Sparkles, CheckCircle, AlertCircle, X, Loader2, ChevronLeft, Heart,
   Plus, Edit, Trash2, TrendingUp, LogOut, Pencil, GripVertical, Eye, Bell,
 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
@@ -51,7 +51,7 @@ const PILLARS = [
   { key: 'ejercicio',   label: 'Actividad',   icon: Zap,      color: 'text-orange-500', desc: 'Si hoy completaste alguna rutina sin meta fija, el score es 100 automáticamente. Si no, se promedian solo las rutinas con meta semanal: se mide qué tan cerca estás de cumplir la frecuencia esperada según tu última sesión.' },
   { key: 'sueno',       label: 'Sueño',       icon: Moon,     color: 'text-purple-500', desc: 'Promedio de los últimos 7 días: hábitos nocturnos (sin pantallas, horario fijo, cena ligera) en 60% + nivel de descanso al despertar en 40%.' },
   { key: 'emocional',   label: 'Emocional',   icon: Smile,    color: 'text-blue-500',   desc: 'Promedio de los últimos 7 días con sesiones de meditación: 0 sesiones = 0, 1 sesión = 75, 2 o más = 100. Los días sin meditación no se cuentan.' },
-  { key: 'crecimiento', label: 'Crecimiento', icon: BookOpen, color: 'text-amber-500',  desc: 'Aprendizaje diario del check-in de los últimos 7 días (80%) + libros leídos este año vs. tu meta (20%).' },
+  { key: 'crecimiento', label: 'Crecimiento', icon: BookOpen, color: 'text-amber-500',  desc: 'Cada día con check-in: si aprendiste algo nuevo suma 80 puntos, si no suma 0. A eso se añade tu progreso en la meta de libros del año (20%). Por eso aunque hayas aprendido algo cada día, el score no llega a 100 si vas retrasado en tu meta de libros.' },
   { key: 'comunidad',   label: 'Comunidad',   icon: Users,    color: 'text-pink-500',   desc: 'Nivel de socialización de los últimos 7 días con datos: si no socializaste (0), con personas cómodas (65%) o saliste de tu zona de confort (100%).' },
 ];
 
@@ -99,7 +99,11 @@ const computeDayScoresForPillar = (pillarKey, allData) => {
     } else if (pillarKey === 'comunidad') {
       if (ci?.communityLevel != null) score = ci.communityLevel === 2 ? 100 : ci.communityLevel === 1 ? 65 : 0;
     } else if (pillarKey === 'crecimiento') {
-      if (ci?.growth != null) score = ci.growth !== 'none' ? 100 : 0;
+      if (ci?.growth != null) {
+        const rawGrowth = ci.growth !== 'none' ? 100 : 0;
+        const booksScore = allData.booksScore ?? 0;
+        score = rawGrowth * 0.8 + booksScore * 0.2;
+      }
     } else if (pillarKey === 'ejercicio') {
       score = d === tStr ? todayEjercicioScore : (ejercicioScores[d] ?? null);
     }
@@ -463,21 +467,21 @@ Da una interpretación corta y personalizada (2-3 oraciones) de lo que estos nú
             <button onClick={onClose}><X className="w-5 h-5 text-gray-400" /></button>
           </div>
           <div className="flex-1 min-h-0 overflow-y-auto px-5 pb-5 space-y-4">
-            <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed">{p.desc}</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed text-justify">{p.desc}</p>
 
             {/* 7-day CSS bar chart */}
             <div>
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Últimos 7 días</p>
-              <div className="flex gap-1.5" style={{ height: 80 }}>
+              <p className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Últimos 7 días</p>
+              <div className="flex gap-2" style={{ height: 120 }}>
                 {days.map(({ date, score }) => {
                   const label = new Date(date + 'T12:00:00').toLocaleDateString('es-MX', { weekday: 'short' });
-                  const barH = score !== null ? Math.max(3, Math.round(score * 0.55)) : 3;
-                  const barColor = score === null ? '#e5e7eb' : score >= 70 ? '#4ade80' : score >= 40 ? '#fbbf24' : '#f87171';
+                  const barH = score !== null ? Math.max(4, Math.round(score * 0.72)) : 4;
+                  const barColor = score === null ? (document.documentElement.classList.contains('dark') ? '#374151' : '#e5e7eb') : score >= 70 ? '#4ade80' : score >= 40 ? '#fbbf24' : '#f87171';
                   return (
-                    <div key={date} className="flex-1 flex flex-col justify-end items-center" style={{ gap: 2 }}>
-                      <span className="text-[9px] text-gray-400 leading-none">{score !== null ? score : '–'}</span>
+                    <div key={date} className="flex-1 flex flex-col justify-end items-center" style={{ gap: 3 }}>
+                      <span className="text-sm text-gray-400 font-medium leading-none">{score !== null ? score : '–'}</span>
                       <div className="w-full rounded-sm" style={{ height: barH, backgroundColor: barColor }} />
-                      <span className="text-[9px] text-gray-400 capitalize leading-none">{label.slice(0, 3)}</span>
+                      <span className="text-sm text-gray-400 capitalize leading-none">{label.slice(0, 3)}</span>
                     </div>
                   );
                 })}
@@ -496,7 +500,7 @@ Da una interpretación corta y personalizada (2-3 oraciones) de lo que estos nú
                   <Sparkles className="w-4 h-4 text-primary-500" />
                   <span className="text-sm font-semibold text-gray-600 dark:text-gray-400">Interpretación</span>
                 </div>
-                <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">{interpretation}</p>
+                <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed text-justify">{interpretation}</p>
               </div>
             )}
           </div>
@@ -817,12 +821,19 @@ const Home = () => {
       setTodayCheckin(todayCI);
 
       const meditationsData = wellbeingSnap.exists() ? (wellbeingSnap.data().meditations || {}) : {};
+      const booksGoalForData = booksGoalSnap.exists() ? (booksGoalSnap.data().annualGoal || 12) : 12;
+      const booksThisYearForData = booksSnap.docs.filter(d => {
+        const b = d.data();
+        return b.status === 'read' && b.finishedDate && new Date(b.finishedDate).getFullYear() === new Date().getFullYear();
+      }).length;
+      const booksScoreForData = Math.min(100, Math.round(booksThisYearForData / booksGoalForData * 100));
       setAllData({
         scores: computed,
         checkIns: ciData,
         meditations: meditationsData,
         ejercicioScores,
         todayEjercicioScore,
+        booksScore: booksScoreForData,
         routines: routinesSnap.docs.map(d => d.data()),
         foodData: foodSnap.exists() ? foodSnap.data() : null,
         books: booksSnap.docs.map(d => d.data()),
@@ -1298,7 +1309,6 @@ Plain text, sin markdown, en español.`;
       {/* ── Section: Mis Pilares ── */}
       <div className="flex items-baseline gap-2">
         <p className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Mis Pilares</p>
-        <span className="text-xs text-gray-400 dark:text-gray-500">últimos 7 días</span>
       </div>
 
       <div className="liquid-glass-panel rounded-2xl p-4">
@@ -1306,10 +1316,13 @@ Plain text, sin markdown, en español.`;
         <div className="flex items-center justify-between mb-1">
           <div>
             <div className="flex items-baseline gap-0.5">
-              <span className={`text-3xl font-bold ${THEME_PALETTE[colorTheme]?.text ?? 'text-blue-500'}`}>{overallScore}</span>
-              <span className={`text-xl font-bold ${THEME_PALETTE[colorTheme]?.text ?? 'text-blue-500'}`}>%</span>
+              <span className={`text-[20px] font-bold ${THEME_PALETTE[colorTheme]?.text ?? 'text-blue-500'}`}>{overallScore}</span>
+              <span className={`text-base font-bold ${THEME_PALETTE[colorTheme]?.text ?? 'text-blue-500'}`}>%</span>
             </div>
-            <p className="text-xs text-gray-400 dark:text-gray-500 -mt-0.5">tu salud los últimos 7 días</p>
+            <div className="flex items-center gap-1 -mt-0.5">
+              <Heart className="w-3 h-3 text-pink-400" fill="currentColor" />
+              <p className="text-xs text-gray-400 dark:text-gray-500">bienestar · últimos 7 días</p>
+            </div>
           </div>
           <button
             onClick={handleAiAnalysis}
@@ -1320,8 +1333,8 @@ Plain text, sin markdown, en español.`;
           </button>
         </div>
 
-        <ResponsiveContainer width="100%" height={260}>
-          <RadarChart data={radarData} margin={{ top: 24, right: 36, bottom: 24, left: 36 }}>
+        <ResponsiveContainer width="100%" height={300}>
+          <RadarChart data={radarData} outerRadius="62%" margin={{ top: 30, right: 44, bottom: 30, left: 44 }}>
             <PolarGrid stroke="rgba(107,114,128,0.15)" />
             <PolarAngleAxis dataKey="pilar" tick={({ x, y, payload, textAnchor }) => {
               const p = PILLARS.find(pl => pl.label === payload.value);
@@ -1329,9 +1342,9 @@ Plain text, sin markdown, en español.`;
               const hex = THEME_PALETTE[colorTheme]?.hex ?? '#3b82f6';
               return (
                 <g onClick={() => p && setOpenPillarModal(p.key)} style={{ cursor: 'pointer' }}>
-                  <text x={x} y={y} textAnchor={textAnchor} fill="#6b7280" fontSize={11}>{payload.value}</text>
+                  <text x={x} y={y} textAnchor={textAnchor} fill="#6b7280" fontSize={14} textDecoration="underline">{payload.value}</text>
                   {score !== null && (
-                    <text x={x} y={y + 14} textAnchor={textAnchor} fill={hex} fontSize={11} fontWeight="bold">{score}</text>
+                    <text x={x} y={y + 18} textAnchor={textAnchor} fill={hex} fontSize={14} fontWeight="bold">{score}</text>
                   )}
                 </g>
               );
@@ -1340,25 +1353,7 @@ Plain text, sin markdown, en español.`;
             <Radar dataKey="score" stroke={THEME_PALETTE[colorTheme]?.hex ?? '#3b82f6'} fill={THEME_PALETTE[colorTheme]?.hex ?? '#3b82f6'} fillOpacity={0.22} strokeWidth={2} />
           </RadarChart>
         </ResponsiveContainer>
-
-        {/* Score list */}
-        <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 mt-2 px-1">
-          {PILLARS.map(p => {
-            const Icon = p.icon;
-            const score = scores[p.key];
-            return (
-              <button
-                key={p.key}
-                onClick={() => setOpenPillarModal(p.key)}
-                className="flex items-center gap-1.5 text-left hover:opacity-70 transition-opacity"
-              >
-                <Icon className="w-3.5 h-3.5 text-gray-600 dark:text-gray-400 flex-shrink-0" />
-                <span className="text-sm text-gray-500 dark:text-gray-400 flex-1">{p.label}</span>
-                <span className={`text-sm font-bold ${THEME_PALETTE[colorTheme]?.text ?? 'text-blue-500'}`}>{score}</span>
-              </button>
-            );
-          })}
-        </div>
+        <p className="text-xs text-gray-400 dark:text-gray-500 text-center -mt-2 mb-1">Toca una categoría para ver detalles</p>
       </div>
 
       {/* ── Section: Metas ── */}

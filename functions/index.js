@@ -122,6 +122,17 @@ exports.checkinReminder9_30pm = onSchedule(
 
 // ── Nutrition reminders ───────────────────────────────────────────────────────
 
+// Sunday 3pm — reading reminder
+exports.readingReminder3pmSunday = onSchedule(
+  { schedule: '0 15 * * 0', timeZone: 'America/Mexico_City', region: 'us-central1' },
+  async () => {
+    const tokensSnap = await admin.firestore().collection('fcmTokens').get();
+    for (const tokenDoc of tokensSnap.docs) {
+      await sendPushToUser(tokenDoc.id, '📚 Hora de leer', 'Dedica unos minutos a tu libro de hoy — cada página cuenta.');
+    }
+  }
+);
+
 // Sunday 10am — shopping list
 exports.nutritionSundayReminder = onSchedule(
   { schedule: '0 10 * * 0', timeZone: 'America/Mexico_City', region: 'us-central1' },

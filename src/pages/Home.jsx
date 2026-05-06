@@ -50,7 +50,7 @@ const PILLARS = [
   { key: 'nutricion',   label: 'Nutrición',   icon: Salad,    color: 'text-green-500',  desc: 'Promedio de los últimos 7 días con datos: alimentación del plan (50%) e hidratación (50%), tomados del check-in diario. Días sin check-in no se cuentan.' },
   { key: 'ejercicio',   label: 'Actividad',   icon: Zap,      color: 'text-orange-500', desc: 'Si hoy completaste alguna rutina sin meta fija, el score es 100 automáticamente. Si no, se promedian solo las rutinas con meta semanal: se mide qué tan cerca estás de cumplir la frecuencia esperada según tu última sesión.' },
   { key: 'sueno',       label: 'Sueño',       icon: Moon,     color: 'text-purple-500', desc: 'Promedio de los últimos 7 días: hábitos nocturnos (sin pantallas, horario fijo, cena ligera) en 60% + nivel de descanso al despertar en 40%.' },
-  { key: 'emocional',   label: 'Emocional',   icon: Smile,    color: 'text-blue-500',   desc: 'Promedio de los últimos 7 días con sesiones de meditación: 0 sesiones = 0, 1 sesión = 75, 2 o más = 100. Los días sin meditación no se cuentan.' },
+  { key: 'emocional',   label: 'Emocional',   icon: Smile,    color: 'text-blue-500',   desc: 'Promedio de los últimos 7 días: 2 o más sesiones = 100%, 1 sesión = 75%, ninguna = 0%. Todos los días cuentan, medites o no.' },
   { key: 'crecimiento', label: 'Crecimiento', icon: BookOpen, color: 'text-amber-500',  desc: 'Cada día con check-in: si aprendiste algo nuevo suma 80 puntos, si no suma 0. A eso se añade tu progreso en la meta de libros del año (20%). Por eso aunque hayas aprendido algo cada día, el score no llega a 100 si vas retrasado en tu meta de libros.' },
   { key: 'comunidad',   label: 'Comunidad',   icon: Users,    color: 'text-pink-500',   desc: 'Nivel de socialización de los últimos 7 días con datos: si no socializaste (0), con personas cómodas (65%) o saliste de tu zona de confort (100%).' },
 ];
@@ -95,7 +95,7 @@ const computeDayScoresForPillar = (pillarKey, allData) => {
       }
     } else if (pillarKey === 'emocional') {
       const count = (meditations[d] || []).length;
-      if (count > 0) score = count >= 2 ? 100 : 75;
+      score = count >= 2 ? 100 : count === 1 ? 75 : 0;
     } else if (pillarKey === 'comunidad') {
       if (ci?.communityLevel != null) score = ci.communityLevel === 2 ? 100 : ci.communityLevel === 1 ? 65 : 0;
     } else if (pillarKey === 'crecimiento') {
@@ -777,10 +777,9 @@ const Home = () => {
         const meditations = wellbeingSnap.data().meditations || {};
         const emocionalDays = last7.map(d => {
           const count = (meditations[d] || []).length;
-          if (count === 0) return null;
-          return count >= 2 ? 100 : 75;
-        }).filter(v => v !== null);
-        if (emocionalDays.length) emocional = Math.round(emocionalDays.reduce((a, b) => a + b, 0) / emocionalDays.length);
+          return count >= 2 ? 100 : count === 1 ? 75 : 0;
+        });
+        emocional = Math.round(emocionalDays.reduce((a, b) => a + b, 0) / emocionalDays.length);
 
         // Comunidad: 7-day avg of communityLevel from check-in
         const comunidadDays = last7.map(d => {

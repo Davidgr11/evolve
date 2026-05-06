@@ -807,7 +807,7 @@ const Meditate = () => {
       {(() => {
         const GOAL = 2;
         const fillPct = Math.min(todayCount / GOAL, 1);
-        const R = 42;
+        const R = 36;
         const CIRC = 2 * Math.PI * R;
         const strokeOffset = CIRC * (1 - fillPct);
         const hex = THEME_HEX[colorTheme] ?? '#3b82f6';
@@ -816,34 +816,30 @@ const Meditate = () => {
           : todayCount >= GOAL ? 'Gran constancia hoy'
           : 'Sigue construyendo el hábito';
         return (
-          <div className="liquid-glass-panel rounded-2xl p-4">
-            <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">Hoy</p>
-            <div className="flex items-center gap-4">
-              {/* Ring */}
-              <div className="relative flex-shrink-0" style={{ width: 84, height: 84 }}>
-                <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 100 100">
-                  <circle cx="50" cy="50" r={R} fill="none" stroke="currentColor" strokeWidth="9"
-                    className="text-gray-100 dark:text-gray-700" />
-                  {todayCount > 0 && (
-                    <circle cx="50" cy="50" r={R} fill="none"
-                      stroke={hex} strokeWidth="9" strokeLinecap="round"
-                      strokeDasharray={CIRC} strokeDashoffset={strokeOffset}
-                      style={{ transition: 'stroke-dashoffset 0.8s cubic-bezier(0.34,1.56,0.64,1)' }}
-                    />
-                  )}
-                </svg>
-                <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span className="text-xl font-bold text-gray-900 dark:text-gray-100 leading-none">{todayCount}</span>
-                  <span className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">/ {GOAL}</span>
-                </div>
-              </div>
-              {/* Right side */}
-              <div className="flex flex-col gap-1">
-                {todayMins > 0 && (
-                  <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">{todayMins} min meditados</p>
+          <div className="liquid-glass-panel rounded-2xl px-4 py-3 flex items-center gap-3">
+            {/* Compact ring */}
+            <div className="relative flex-shrink-0" style={{ width: 52, height: 52 }}>
+              <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r={R} fill="none" stroke="currentColor" strokeWidth="10"
+                  className="text-gray-100 dark:text-gray-700" />
+                {todayCount > 0 && (
+                  <circle cx="50" cy="50" r={R} fill="none"
+                    stroke={hex} strokeWidth="10" strokeLinecap="round"
+                    strokeDasharray={CIRC} strokeDashoffset={strokeOffset}
+                    style={{ transition: 'stroke-dashoffset 0.8s cubic-bezier(0.34,1.56,0.64,1)' }}
+                  />
                 )}
-                <p className="text-sm text-gray-400 dark:text-gray-500">{motivPhrase}</p>
+              </svg>
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <span className="text-sm font-bold text-gray-900 dark:text-gray-100 leading-none">{todayCount}/{GOAL}</span>
               </div>
+            </div>
+            {/* Text */}
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 leading-snug">{motivPhrase}</p>
+              {todayMins > 0 && (
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{todayMins} min meditados hoy</p>
+              )}
             </div>
           </div>
         );

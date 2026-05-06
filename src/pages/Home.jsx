@@ -1282,10 +1282,10 @@ Plain text, sin markdown, en español.`;
                 onClick={() => setShowCheckin(true)}
                 className="w-full rounded-2xl p-4 flex items-center gap-3 transition-all liquid-glass-panel active:scale-[0.99]"
               >
-                <div className="w-5 h-5 rounded-full border-2 border-gray-300 dark:border-gray-600 flex-shrink-0" />
+                <Smile className="w-5 h-5 text-amber-400 flex-shrink-0" />
                 <div className="text-left min-w-0">
                   <p className="font-semibold text-sm text-gray-900 dark:text-gray-100">Check-in de hoy</p>
-                  <p className="text-sm text-gray-400 dark:text-gray-500 truncate">Nutrición · crecimiento · socialización</p>
+                  <p className="text-sm text-gray-400 dark:text-gray-500 truncate">Toca para registrar tu día</p>
                 </div>
                 <ChevronRight className="w-4 h-4 text-gray-400 ml-auto flex-shrink-0" />
               </button>
